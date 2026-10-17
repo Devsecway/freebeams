@@ -343,6 +343,10 @@ func TestFTSQuery(t *testing.T) {
 	}
 }
 
+func vr(chapter, start, end int) models.VerseRange {
+	return models.VerseRange{Chapter: chapter, VerseStart: start, VerseEnd: end}
+}
+
 func kjvSample() []models.Verse {
 	return []models.Verse{
 		{Book: 43, Chapter: 3, Verse: 16, Text: "For God so loved the world, that he gave his only begotten Son"},
@@ -405,16 +409,16 @@ func TestBiblesAndVerses(t *testing.T) {
 		p    models.Passage
 		want []string
 	}{
-		{"single", models.Passage{Book: 43, Ranges: []models.VerseRange{{3, 16, 16}}}, []string{"43 3:16"}},
-		{"range", models.Passage{Book: 43, Ranges: []models.VerseRange{{3, 16, 18}}}, []string{"43 3:16", "43 3:17", "43 3:18"}},
-		{"whole chapter", models.Passage{Book: 19, Ranges: []models.VerseRange{{23, 0, 0}}}, []string{"19 23:1", "19 23:2"}},
-		{"to end of chapter", models.Passage{Book: 43, Ranges: []models.VerseRange{{3, 17, 0}}}, []string{"43 3:17", "43 3:18", "43 3:36"}},
-		{"cross chapter", models.Passage{Book: 43, Ranges: []models.VerseRange{{3, 36, 0}, {4, 1, 2}}}, []string{"43 3:36", "43 4:1", "43 4:2"}},
-		{"missing skipped", models.Passage{Book: 43, Ranges: []models.VerseRange{{3, 15, 19}}}, []string{"43 3:16", "43 3:17", "43 3:18"}},
-		{"canonical order, no dups", models.Passage{Book: 43, Ranges: []models.VerseRange{{4, 3, 3}, {3, 18, 18}, {3, 16, 18}}}, []string{"43 3:16", "43 3:17", "43 3:18", "43 4:3"}},
-		{"reversed range", models.Passage{Book: 43, Ranges: []models.VerseRange{{3, 18, 16}}}, []string{"43 3:16", "43 3:17", "43 3:18"}},
-		{"missing chapter", models.Passage{Book: 43, Ranges: []models.VerseRange{{30, 0, 0}}}, nil},
-		{"missing book", models.Passage{Book: 2, Ranges: []models.VerseRange{{1, 1, 3}}}, nil},
+		{"single", models.Passage{Book: 43, Ranges: []models.VerseRange{vr(3, 16, 16)}}, []string{"43 3:16"}},
+		{"range", models.Passage{Book: 43, Ranges: []models.VerseRange{vr(3, 16, 18)}}, []string{"43 3:16", "43 3:17", "43 3:18"}},
+		{"whole chapter", models.Passage{Book: 19, Ranges: []models.VerseRange{vr(23, 0, 0)}}, []string{"19 23:1", "19 23:2"}},
+		{"to end of chapter", models.Passage{Book: 43, Ranges: []models.VerseRange{vr(3, 17, 0)}}, []string{"43 3:17", "43 3:18", "43 3:36"}},
+		{"cross chapter", models.Passage{Book: 43, Ranges: []models.VerseRange{vr(3, 36, 0), vr(4, 1, 2)}}, []string{"43 3:36", "43 4:1", "43 4:2"}},
+		{"missing skipped", models.Passage{Book: 43, Ranges: []models.VerseRange{vr(3, 15, 19)}}, []string{"43 3:16", "43 3:17", "43 3:18"}},
+		{"canonical order, no dups", models.Passage{Book: 43, Ranges: []models.VerseRange{vr(4, 3, 3), vr(3, 18, 18), vr(3, 16, 18)}}, []string{"43 3:16", "43 3:17", "43 3:18", "43 4:3"}},
+		{"reversed range", models.Passage{Book: 43, Ranges: []models.VerseRange{vr(3, 18, 16)}}, []string{"43 3:16", "43 3:17", "43 3:18"}},
+		{"missing chapter", models.Passage{Book: 43, Ranges: []models.VerseRange{vr(30, 0, 0)}}, nil},
+		{"missing book", models.Passage{Book: 2, Ranges: []models.VerseRange{vr(1, 1, 3)}}, nil},
 		{"no ranges", models.Passage{Book: 43}, nil},
 	}
 	for _, tc := range tests {
@@ -432,12 +436,12 @@ func TestBiblesAndVerses(t *testing.T) {
 			}
 		})
 	}
-	vs, _ := st.Verses(ctx, kjv.ID, models.Passage{Book: 1, Ranges: []models.VerseRange{{1, 1, 1}}})
+	vs, _ := st.Verses(ctx, kjv.ID, models.Passage{Book: 1, Ranges: []models.VerseRange{vr(1, 1, 1)}})
 	if len(vs) != 1 || vs[0].Text != "In the beginning God created the heaven and the earth." {
 		t.Fatalf("Gen 1:1 = %+v", vs)
 	}
 	// Bibles are isolated from each other.
-	vs, _ = st.Verses(ctx, asv.ID, models.Passage{Book: 43, Ranges: []models.VerseRange{{3, 0, 0}}})
+	vs, _ = st.Verses(ctx, asv.ID, models.Passage{Book: 43, Ranges: []models.VerseRange{vr(3, 0, 0)}})
 	if !reflect.DeepEqual(refs(vs), []string{"43 3:16"}) {
 		t.Fatalf("ASV John 3 = %v", refs(vs))
 	}
