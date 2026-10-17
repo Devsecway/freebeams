@@ -2,7 +2,10 @@ module freeworship
 
 go 1.26.1
 
-require graphics.gd v0.0.0-20260618124756-e71c1a978ca2
+require (
+	github.com/google/uuid v1.6.0
+	graphics.gd v0.0.0-20260618124756-e71c1a978ca2
+)
 
 require (
 	github.com/tetratelabs/wazero v1.8.2 // indirect
