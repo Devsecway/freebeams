@@ -23,8 +23,11 @@ type Deck struct {
 }
 
 // Frame is everything the output renderer needs to draw one moment of output.
-// Two Frames compare equal (==) only if nothing visible changed; Seq increases
-// on every change so renderers can detect updates cheaply.
+// Seq is the presenter's State.Seq, which increases on every visible change to
+// preview OR live. A renderer may skip work when Seq is unchanged, but a new
+// Seq does not guarantee that this particular frame's content changed. Compare
+// the content (slide, mode, theme) before starting a transition. Frames hold a
+// copied *Slide, so do not compare them with ==.
 type Frame struct {
 	Seq   uint64     `json:"seq"`
 	Mode  OutputMode `json:"mode"`
