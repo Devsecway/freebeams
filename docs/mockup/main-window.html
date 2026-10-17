@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FreeWorship main window mockup</title>
+<style>
+/* Palette extracted from EasyWorship 8 `_sd.resources` (dark) */
+:root{
+  --bk0:#202020; --bk1:#2C2C2C; --bk2:#363636; --bk3:#484848;
+  --text:#B9B9B9; --text-sb:#F0F0F0;
+  --hl:#3A6DCE; --hl-hot:#4B8CE9; --hl-text:#F9F9F9; --hl-inact:#626262;
+  --hl2:#395792; --hl2-hot:#436AA2;
+  --split:#000; --border-bl:#101010; --selline:#4D4D4D; --lib:#202020;
+  --toolbar:linear-gradient(#6E6E6E,#4C4C4C);
+  --mini:linear-gradient(#343434,#292929);
+  --tabbar1:linear-gradient(#6E6E6E,#424242);
+  --minibtn:linear-gradient(#515151,#3D3D3D 50%,#424242);
+  --minibtn-hot:linear-gradient(#606060,#4A4A4A 50%,#505050);
+  --minibtn-sel:linear-gradient(#363636,#303030 50%,#363636);
+  --div-lead:#242424; --div-trail:#8F8F8F;
+}
+body.light{
+  --bk0:#F9F9F9; --bk1:#F9F9F9; --bk2:#F0F0F0; --bk3:#D0D0D0;
+  --text:#2A2A2A; --text-sb:#000;
+  --hl:#529AEF; --hl-hot:#62AAFF; --hl-inact:#CECECE; --hl2:#CCE4F7; --hl2-hot:#E5F1FB;
+  --split:#AAAAAA; --border-bl:#D4D4D4; --selline:#D0D0D0; --lib:#DEDEE7;
+  --toolbar:linear-gradient(#F7F3F7,#CECFCE);
+  --mini:linear-gradient(#E5E5E5,#F4F4F4);
+  --tabbar1:linear-gradient(#F7F7F7,#CECECE);
+  --minibtn:linear-gradient(#E6E6E6,#D2D2D2 50%,#E6E6E6);
+  --minibtn-hot:linear-gradient(#F0F0F0,#E6E6E6 50%,#F0F0F0);
+  --minibtn-sel:linear-gradient(#DCDCDC,#C8C8C8 50%,#DCDCDC);
+  --div-lead:#A0A0A0; --div-trail:#FFFFFF;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#111;font:13px -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;color:var(--text);
+  display:flex;flex-direction:column;align-items:center;padding:16px;gap:10px}
+.bar{color:#aaa;font-size:12px;display:flex;gap:12px;align-items:center}
+.bar button{font:inherit;padding:3px 10px}
+.win{width:1440px;height:900px;max-width:100%;display:flex;flex-direction:column;background:var(--bk2);
+  border:1px solid #000;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px #0008}
+.titlebar{height:28px;background:var(--bk1);display:flex;align-items:center;padding-left:12px;gap:8px;border-bottom:1px solid var(--split);flex:none}
+.titlebar i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.titlebar .t{flex:1;text-align:center;margin-right:60px;color:var(--text);font-size:13px}
+
+/* Main toolbar: 58px, buttons 56x54 */
+.tb{height:58px;flex:none;background:var(--toolbar);display:flex;padding-left:6px;border-bottom:1px solid var(--split)}
+.tbtn{width:56px;height:54px;margin:2px 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:4px;
+  border-radius:4px;color:var(--text-sb);font-size:11px;cursor:default;position:relative}
+body.light .tbtn{color:#2A2A2A}
+.tbtn:hover{background:#ffffff14}
+.tbtn.sel{background:var(--hl)}
+.tbtn svg{width:32px;height:32px;margin-bottom:2px}
+.tbtn.dd::after{content:"▾";position:absolute;right:3px;top:24px;font-size:8px;opacity:.8}
+.tdiv{width:2px;height:50px;margin:4px;border-left:1px solid var(--div-lead);border-right:1px solid var(--div-trail);opacity:.7}
+.grow{flex:1}
+
+/* Splitter layout */
+.main{flex:1;display:flex;flex-direction:column;min-height:0}
+.top{flex:0 0 71%;display:flex;min-height:0}
+.sched{flex:0 0 19.44%;display:flex;flex-direction:column;border-right:1px solid var(--split);min-width:0}
+.pl{flex:1;display:flex;min-width:0}
+.col{flex:1;display:flex;flex-direction:column;min-width:0}
+.col+.col{border-left:1px solid var(--split)}
+
+.mini{height:28px;flex:none;background:var(--mini);border-bottom:1px solid var(--border-bl);display:flex;align-items:center;padding-left:6px;gap:4px}
+.mini .title{font-size:14px;font-weight:600;color:var(--text-sb);opacity:.9;flex:1;white-space:nowrap}
+.mb{height:24px;min-width:24px;background:var(--minibtn);border:1px solid #000;border-radius:4px;display:grid;place-items:center;color:var(--text-sb);font-size:11px}
+body.light .mb{border-color:#A0A0A0;color:#2A2A2A}
+.mb:hover{background:var(--minibtn-hot)}
+.split{display:flex;margin-right:4px}.split .mb:first-child{border-radius:4px 0 0 4px;width:24px}.split .mb:last-child{border-radius:0 4px 4px 0;width:16px;border-left:none;font-size:8px}
+.mdiv{width:2px;height:22px;border-left:1px solid var(--div-lead);border-right:1px solid var(--div-trail);opacity:.5;margin:0 2px}
+
+.list{flex:1;overflow:auto;background:var(--bk1)}
+.row{display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid var(--selline);white-space:nowrap;overflow:hidden}
+.row .th{width:64px;height:36px;flex:none;border-radius:2px;background:linear-gradient(135deg,#1d3557,#457b9d);position:relative}
+.row .meta{min-width:0}.row .meta b{display:block;color:var(--text-sb);font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.row .meta small{opacity:.7}
+.row.sel{background:var(--hl);color:var(--hl-text)}.row.sel b{color:var(--hl-text)}
+.row.live .th::after{content:"";position:absolute;inset:0;border:2px solid red;border-radius:2px}
+
+.slides{flex:0 0 46.38%;overflow:auto;background:var(--bk1);padding:6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;align-content:start;border-bottom:1px solid var(--split)}
+.slide{border-radius:3px;padding:3px;background:transparent}
+.slide.sel{background:var(--hl)}
+.slide .img{aspect-ratio:16/9;background:#000 center/cover;display:flex;align-items:center;justify-content:center;text-align:center;
+  color:#fff;font-size:8px;line-height:1.25;padding:6px;text-shadow:0 1px 2px #000;border-radius:1px}
+.slide .lbl{font-size:11px;padding:2px 2px 0;display:flex;justify-content:space-between}
+.slide.sel .lbl{color:var(--hl-text)}
+.outwrap{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--bk1)}
+.monitor{flex:1;margin:4px;display:flex;align-items:center;justify-content:center;min-height:0}
+.screen{height:100%;max-width:100%;aspect-ratio:16/9;background:#000 center/cover;display:flex;align-items:center;justify-content:center;
+  text-align:center;color:#fff;font-size:15px;line-height:1.3;text-shadow:0 2px 4px #000;font-weight:500;border:1px solid #000}
+.vc{height:22px;margin:0 4px 4px;display:flex;align-items:center;gap:6px;font-size:11px}
+.gut{flex:1;height:6px;border-radius:3px;background:linear-gradient(#262626,#343434 60%,#4C4C4C);border:1px solid #000;overflow:hidden}
+.gut i{display:block;height:100%;width:35%;background:linear-gradient(#66ACFF,#2B5CAF)}
+
+/* Resources */
+.restab{height:37px;flex:none;background:var(--tabbar1);display:flex;align-items:flex-end;padding:2px 0 0 1px;border-top:1px solid var(--split);border-bottom:1px solid #000;cursor:pointer;position:relative}
+.rt{height:33px;margin:1px 0 -1px;display:grid;place-items:center;color:var(--text-sb);font-size:13px;border-radius:5px 5px 0 0;border:1px solid transparent;border-bottom:none}
+body.light .rt{color:#2A2A2A}
+.rt.sel{background:var(--bk2);border-color:#000}
+body.light .rt.sel{border-color:#8C8C8C}
+.rtb{display:flex;align-items:center;gap:2px;margin:0 0 4px 8px}
+.rtb .mb{width:28px;height:27px}
+.res{flex:1;display:flex;min-height:0}
+.lib{flex:0 0 calc(85.42% * .4983);display:flex;flex-direction:column;background:var(--lib);border-right:1px solid var(--split)}
+.items{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--split)}
+.rprev{flex:0 0 14.58%;display:flex;flex-direction:column;background:var(--bk1)}
+.search{height:24px;flex:none;display:flex;align-items:center;gap:6px;padding:0 8px;background:var(--bk0);border-bottom:1px solid var(--border-bl);color:#888}
+.tree{flex:1;overflow:auto;padding:4px 0}
+.tree div{padding:3px 10px;white-space:nowrap}.tree .sel{background:var(--hl2);color:var(--text-sb)}
+.tree .ind{padding-left:26px}
+.foot{height:28px;flex:none;background:var(--mini);border-top:1px solid var(--border-bl);display:flex;align-items:center;padding:3px 8px 1px;gap:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{position:sticky;top:0;background:var(--mini);text-align:left;font-weight:500;padding:3px 8px;border-right:1px solid #000;border-bottom:1px solid #000;color:var(--text-sb)}
+td{padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+tr:nth-child(even) td{background:#ffffff06}
+tr.sel td{background:var(--hl);color:var(--hl-text)}
+.tablewrap{flex:1;overflow:auto;background:var(--bk1)}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span>Mockup built from EasyWorship 8's decoded form geometry and palette. Compare it with the running app.</span>
+  <button onclick="document.body.classList.toggle('light')">Toggle Light / Dark</button>
+</div>
+
+<div class="win">
+  <div class="titlebar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="t">FreeWorship — Sunday Service.fws</span></div>
+
+  <!-- ToolBar_Main -->
+  <div class="tb">
+    <div class="tbtn dd"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="8" y="5" width="16" height="22" rx="1.5"/><path d="M16 11v10M11 16h10"/></svg>New</div>
+    <div class="tbtn dd"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9h9l2 3h13v13H4z"/></svg>Open</div>
+    <div class="tbtn"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 5h16l4 4v18H6z"/><rect x="10" y="5" width="10" height="7"/><rect x="10" y="18" width="12" height="9"/></svg>Save</div>
+    <div class="tbtn"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="16" cy="16" r="11"/><path d="M5 16h22M16 5c-5 6-5 16 0 22M16 5c5 6 5 16 0 22"/></svg>Web</div>
+    <div class="tdiv"></div>
+    <div class="tbtn dd"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="11" y="4" width="10" height="24" rx="2"/><circle cx="16" cy="23" r="1.5"/></svg>Remote</div>
+    <div class="grow"></div>
+    <div class="tbtn"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="7" width="24" height="16" rx="1"/><path d="M13 11l7 4-7 4z" fill="currentColor"/><path d="M12 27h8"/></svg>Go Live</div>
+    <div class="tdiv"></div>
+    <div class="tbtn dd"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 5a7 7 0 0 1 7 7v6l3 4H6l3-4v-6a7 7 0 0 1 7-7zM13 25a3 3 0 0 0 6 0"/></svg>Alerts</div>
+    <div class="tdiv"></div>
+    <div class="tbtn"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="7" width="24" height="16" rx="1"/><path d="M16 10v10M12 13h8"/></svg>Logo</div>
+    <div class="tbtn"><svg viewBox="0 0 32 32" stroke="currentColor" stroke-width="1.6"><rect x="4" y="7" width="24" height="16" rx="1" fill="currentColor" fill-opacity=".9"/></svg>Black</div>
+    <div class="tbtn"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="7" width="24" height="16" rx="1"/><path d="M11 12l10 6M21 12l-10 6"/></svg>Clear</div>
+    <div class="tdiv"></div>
+    <div class="tbtn sel"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="7" width="24" height="16" rx="1"/><circle cx="16" cy="15" r="3" fill="#ff3b30" stroke="none"/><path d="M12 27h8"/></svg>Live</div>
+  </div>
+
+  <div class="main">
+    <div class="top">
+      <!-- Schedule -->
+      <div class="sched">
+        <div class="mini"><span class="title">Schedule</span><div class="mb" style="width:40px">⚙ ▾</div><div class="mdiv"></div><div class="split"><div class="mb">▦</div><div class="mb">▾</div></div></div>
+        <div class="list" id="sched"></div>
+      </div>
+      <div class="pl">
+        <!-- Preview -->
+        <div class="col">
+          <div class="mini"><span class="title">Preview</span><div class="split"><div class="mb">▦</div><div class="mb">▾</div></div></div>
+          <div class="slides" id="prevSlides"></div>
+          <div class="outwrap">
+            <div class="monitor"><div class="screen bg2" id="prevOut"></div></div>
+            <div class="mini" style="border-top:1px solid var(--border-bl)"><span style="margin-left:6px">Preview Output</span></div>
+          </div>
+        </div>
+        <!-- Live -->
+        <div class="col">
+          <div class="mini"><div class="mb" style="width:28px">↶</div><div class="mdiv"></div><span class="title">Live</span><div class="split"><div class="mb">▦</div><div class="mb">▾</div></div></div>
+          <div class="slides" id="liveSlides"></div>
+          <div class="outwrap">
+            <div class="monitor"><div class="screen bg1" id="liveOut"></div></div>
+            <div class="vc"><span>▶</span><span>01:12</span><div class="gut"><i></i></div><span>03:20</span><span>🔊</span></div>
+            <div class="mini" style="border-top:1px solid var(--border-bl)"><div class="mb" style="width:24px">⇄</div><span>Live Output</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SplitterBar_Resources -->
+    <div class="restab">
+      <div class="rt sel" style="width:66px">Songs</div>
+      <div class="rt" style="width:80px">Scriptures</div>
+      <div class="rt" style="width:60px">Media</div>
+      <div class="rt" style="width:100px">Presentations</div>
+      <div class="rt" style="width:70px">Themes</div>
+      <div class="rtb"><div class="mb" title="Add to schedule">＋</div><div class="mdiv"></div><div class="mb" title="Go live">▶</div></div>
+    </div>
+    <div class="res">
+      <div class="lib">
+        <div class="search">🔍 <span>Search Songs</span></div>
+        <div class="tree">
+          <div class="sel">▾ Library</div>
+          <div class="ind">Public Domain Hymns</div>
+          <div class="ind">Christmas</div>
+          <div class="ind">Communion</div>
+          <div>▸ My Collections</div>
+          <div>▸ SongSelect</div>
+        </div>
+        <div class="foot"><div class="mb">＋</div><div class="mb" style="width:40px">⚙ ▾</div></div>
+      </div>
+      <div class="items">
+        <div class="tablewrap"><table>
+          <thead><tr><th>Title</th><th>Author</th><th>Copyright</th><th>CCLI #</th></tr></thead>
+          <tbody id="songs"></tbody>
+        </table></div>
+        <div class="foot"><div class="split"><div class="mb">▦</div><div class="mb">▾</div></div><span class="grow"></span><span style="font-size:11px;opacity:.7">223 songs</span><div class="split" style="margin-left:6px"><div class="mb">＋</div><div class="mb">▾</div></div><div class="mb" style="width:40px">⚙ ▾</div></div>
+      </div>
+      <div class="rprev">
+        <div class="monitor" style="flex:none"><div class="screen bg2" style="width:100%;height:auto;font-size:7px;padding:6px" id="resPrev"></div></div>
+        <div style="padding:2px 8px;font-size:12px;color:var(--text-sb)">Amazing Grace</div>
+        <div class="grow"></div>
+        <div class="foot"><span style="font-size:11px">Verse 1 · 1 / 6</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const bgs = {
+  bg1:"linear-gradient(160deg,#0b1d3a,#3a6073 55%,#16222a)",
+  bg2:"linear-gradient(160deg,#3a1c71,#d76d77 60%,#ffaf7b)",
+};
+document.querySelectorAll('.screen').forEach(s=>{for(const k in bgs) if(s.classList.contains(k)) s.style.backgroundImage=bgs[k]});
+
+const amazing = [
+ ["Verse 1","Amazing grace! How sweet the sound<br>That saved a wretch like me!<br>I once was lost, but now am found;<br>Was blind, but now I see."],
+ ["Verse 2","'Twas grace that taught my heart to fear,<br>And grace my fears relieved;<br>How precious did that grace appear<br>The hour I first believed."],
+ ["Verse 3","Through many dangers, toils and snares,<br>I have already come;<br>'Tis grace hath brought me safe thus far,<br>And grace will lead me home."],
+ ["Verse 4","The Lord has promised good to me,<br>His word my hope secures;<br>He will my shield and portion be,<br>As long as life endures."],
+ ["Verse 5","When we've been there ten thousand years,<br>Bright shining as the sun,<br>We've no less days to sing God's praise<br>Than when we'd first begun."],
+ ["Ending","Praise God, praise God,<br>Praise God, praise God."],
+];
+const abide = [
+ ["Verse 1","Abide with me; fast falls the eventide;<br>The darkness deepens; Lord with me abide."],
+ ["Verse 2","Swift to its close ebbs out life's little day;<br>Earth's joys grow dim; its glories pass away."],
+ ["Verse 3","I need Thy presence every passing hour.<br>What but Thy grace can foil the tempter's power?"],
+ ["Verse 4","Hold Thou Thy cross before my closing eyes;<br>Shine through the gloom and point me to the skies."],
+];
+function fill(id, slides, sel, bg){
+  const el=document.getElementById(id);
+  el.innerHTML=slides.map((s,i)=>`<div class="slide ${i===sel?'sel':''}"><div class="img" style="background-image:${bgs[bg]}">${s[1]}</div><div class="lbl"><span>${s[0]}</span><span>${i+1}</span></div></div>`).join('');
+}
+fill('prevSlides', amazing, 0, 'bg2');
+fill('liveSlides', abide, 1, 'bg1');
+document.getElementById('prevOut').innerHTML=amazing[0][1];
+document.getElementById('liveOut').innerHTML=abide[1][1];
+document.getElementById('resPrev').innerHTML=amazing[0][1];
+
+const sched=[["Welcome loop","Video · 0:30",""],["Abide With Me","Henry F. Lyte","live"],["Amazing Grace","John Newton","sel"],["John 3:16-18","KJV · Scripture",""],["A Mighty Fortress Is Our God","Martin Luther",""],["Announcements","Presentation · 6 slides",""],["A Robe Of White","Haldor Lillenas",""]];
+document.getElementById('sched').innerHTML=sched.map(s=>`<div class="row ${s[2]}"><div class="th"></div><div class="meta"><b>${s[0]}</b><small>${s[1]}</small></div></div>`).join('');
+
+const songs=[["A Heart Like Thine","Judson Van DeVenter","Public Domain"],["A Mighty Fortress Is Our God","Hans Leo Hassler, Martin Luther","Public Domain"],["A New Name In Glory","C. Austin Miles","Public Domain"],["A Robe Of White","Haldor Lillenas","Public Domain"],["Abide With Me","Henry F. Lyte, William H. Monk","Public Domain"],["Amazing Grace","John Newton","Public Domain"],["Blessed Assurance","Fanny Crosby","Public Domain"],["Come Thou Fount","Robert Robinson","Public Domain"],["Great Is Thy Faithfulness","Thomas Chisholm","Public Domain"],["How Great Thou Art","Carl Boberg","Public Domain"]];
+document.getElementById('songs').innerHTML=songs.map(s=>`<tr class="${s[0]==='Amazing Grace'?'sel':''}"><td>${s[0]}</td><td>${s[1]}</td><td>${s[2]}</td><td></td></tr>`).join('');
+</script>
+</body>
+</html>

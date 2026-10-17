@@ -1,0 +1,33 @@
+; Engine configuration file.
+; The UI is built entirely in Go (graphics.gd). No .gd scripts.
+
+config_version=5
+
+[application]
+config/name="FreeWorship"
+run/main_scene="res://main.tscn"
+run/main_loop_type="GoMainLoop"
+; Low-processor mode keeps the operator UI cheap at idle. The app turns it off
+; while the output is animating (video, transitions). See internal/ui.
+run/low_processor_mode=true
+run/low_processor_mode_sleep_usec=16666
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.2118, 0.2118, 0.2118, 1)
+
+[display]
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/size/resizable=true
+window/size/initial_position_type=2
+; Required: real OS windows for the projector output and dialogs.
+window/subwindows/embed_subwindows=false
+window/vsync/vsync_mode=1
+
+[rendering]
+renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.2118, 0.2118, 0.2118, 1)
+
+[physics]
+common/physics_ticks_per_second=1
+common/enable_pause_aware_picking=false

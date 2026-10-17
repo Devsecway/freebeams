@@ -1,0 +1,7 @@
+# Decoded EasyWorship form data: local reference only, never commit or ship
+docs/ew-ui/
+releases/
+.DS_Store
+/freeworship
+.playwright-mcp/
+__pycache__/
