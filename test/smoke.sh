@@ -217,6 +217,17 @@ check "PgDn did not also page the song list" "$LAST" "s[\"songs\"][\"selected\"]
 act "release focus" focus '{"target":"none"}' 's["focus"] == "none"'
 act "Enter (no focus) goes live with the preview" native-key '{"name":"enter"}' 's["live"]["title"] == "Amazing Grace" and s["live"]["index"] == s["preview"]["index"]'
 
+# Review #10: keys typed while the (windowed) output window has keyboard
+# focus are hotkeys too. The main window's focused list must not matter.
+act "go live with slide 3" go-live '{"slide":2}' 's["live"]["index"] == 2'
+act "focus the song list (main window)" focus '{"target":"song-list"}' 's["focus"] == "list"'
+SEL="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["songs"]["selected"])' "$LAST")"
+act "Left in the output window is Prev" native-key '{"name":"left","window":"output"}' "s[\"live\"][\"index\"] == 1 and s[\"songs\"][\"selected\"] == $SEL"
+act "Ctrl+B in the output window is Black" native-key '{"name":"b","ctrl":true,"window":"output"}' 's["mode"] == "black"'
+act "Cmd+B in the output window toggles back" native-key '{"name":"b","meta":true,"window":"output"}' 's["mode"] == "normal"'
+act "Up in the output window is not the song list's Up" native-key '{"name":"up","window":"output"}' "s[\"songs\"][\"selected\"] == $SEL"
+act "release focus again" focus '{"target":"none"}' 's["focus"] == "none"'
+
 # ---- scripture ---------------------------------------------------------------------
 act "reference jn 3:16" reference '{"text":"jn 3:16"}' 's["preview"]["title"] == "John 3:16" and "For God so loved" in s["preview"]["text"]'
 act "scripture live" go-live '' 's["live"]["title"] == "John 3:16" and "For God so loved" in s["live"]["text"] and "(KJV)" in s["live"]["footer"]'
@@ -232,12 +243,37 @@ act "reference 1 cor 13" reference '{"text":"1 cor 13"}' 's["preview"]["title"] 
 act "reference ps 23:1-3" reference '{"text":"ps 23:1-3"}' 's["preview"]["title"] == "Psalms 23:1-3" and s["preview"]["count"] == 3 and s["preview"]["footer"] == "Psalms 23:1 (KJV)"'
 act "reference in another Bible" reference '{"text":"jn 3:16","bible":"RVA"}' 's["scripture"]["bible"] == "RVA" and "(RVA)" in s["preview"]["footer"]'
 act "back to KJV" reference '{"text":"John 3:16-18","bible":"KJV"}' 's["scripture"]["bible"] == "KJV" and s["preview"]["count"] == 3'
+# Review #13: after the deck changes above (13, 3, 1, then 3 slides) the
+# first Preview tile (selected, #3a6dce) must sit at the grid padding, not
+# at the grid's top-left corner.
+wait_idle
+shot grid-deck-change main
+pixel "first preview tile is not drawn at the grid corner" "$OUT/grid-deck-change.png" lacks 3a6dce 0.196 0.1008 0.31 0.1067
+pixel "first preview tile is at the grid padding" "$OUT/grid-deck-change.png" has 3a6dce 0.196 0.108 0.31 0.1114 500
+
+# Review #2: the verse Go Live sends is the highlighted one, also after
+# moving in the Preview grid (not the last clicked verse row).
+act "the passage goes live at verse 16" go-live '{"slide":0}' 's["live"]["title"] == "John 3:16-18" and s["live"]["index"] == 0'
+act "select preview slide 3 (John 3:18)" select-preview-slide '{"i":2}' 's["scripture"]["selected"] == 2 and s["resource"]["caption"] == "John 3:18 · 3 / 3"'
+act "resource Go Live sends the highlighted verse" resource-go-live '' 's["live"]["title"] == "John 3:16-18" and s["live"]["index"] == 2 and s["live"]["label"] == "John 3:18" and s["scripture"]["selected"] == 2'
+act "move the preview back to slide 2" select-preview-slide '{"i":1}' 's["scripture"]["selected"] == 1 and s["resource"]["caption"] == "John 3:17 · 2 / 3"'
+act "Go Live again follows the preview" resource-go-live '' 's["live"]["index"] == 1 and s["live"]["label"] == "John 3:17"'
+# Review #1: the verse list has no use for Backspace, so it is still Prev.
+act "focus the verse list" focus '{"target":"verse-list"}' 's["focus"] == "list"'
+act "Backspace in the verse list is Prev" native-key '{"name":"backspace"}' 's["live"]["index"] == 0 and s["schedule"]["items"] == []'
+act "release focus (verses)" focus '{"target":"none"}' 's["focus"] == "none"'
+
 act "missing verses report an error" reference '{"text":"jn 3:99"}' 'not r["ok"] and "no verses" in r["error"].lower()'
 LAST="$(state)"
 check "scripture status shows No verses found" "$LAST" 's["scripture"]["error"] and "No verses found" in s["scripture"]["status"]'
+# Review #5: a failed lookup clears the old passage; adding then does nothing.
+check "the failed lookup cleared the passage" "$LAST" 's["scripture"]["verses"] == 0 and not s["scripture"].get("passage") and s["resource"]["title"] == ""'
+act "add-to-schedule after a failed lookup adds nothing" add-to-schedule '{"source":"scripture"}' 'not r["ok"] and "nothing to add" in r["error"].lower()'
+LAST="$(state)"
+check "the schedule is unchanged and the status says why" "$LAST" 's["schedule"]["items"] == [] and "Nothing to add" in s["scripture"]["status"]'
 act "unparseable reference reports an error" reference '{"text":"jn 99:1"}' 'not r["ok"] and "out of range" in r["error"]'
 LAST="$(state)"
-check "scripture status shows the parse error" "$LAST" 's["scripture"]["error"] and "out of range" in s["scripture"]["status"]'
+check "scripture status shows the parse error" "$LAST" 's["scripture"]["error"] and "out of range" in s["scripture"]["status"] and s["scripture"]["verses"] == 0'
 
 # ---- black / clear / logo -----------------------------------------------------------------
 act "black on" black '' 's["mode"] == "black"'
@@ -269,13 +305,40 @@ act "PgUp: go live with the previous item" key '{"name":"pageup"}' 's["schedule"
 act "Down: next item into preview" key '{"name":"down"}' 's["schedule"]["selected"] == 1 and s["preview"]["title"] == "John 3:16" and s["schedule"]["live"] == 0'
 wait_idle
 shot schedule-main main
+
+# Review #3: the selected row follows Preview, so after Preview gets library
+# content, clicking the previously selected row loads it again.
+act "click schedule row 0" click-schedule '{"index":0}' 's["schedule"]["selected"] == 0 and s["preview"]["title"] == "Amazing Grace" and s["focus"] == "list"'
+act "preview library content" reference '{"text":"jn 3:17"}' 's["preview"]["title"] == "John 3:17" and s["schedule"]["selected"] == -1'
+act "clicking row 0 again loads it again" click-schedule '{"index":0}' 's["schedule"]["selected"] == 0 and s["preview"]["title"] == "Amazing Grace"'
+# Review #1: Backspace (a MacBook's delete key) in the focused schedule
+# removes the selected item; it is not Prev.
+act "next slide on the live item" next '' 's["live"]["title"] == "Amazing Grace" and s["live"]["index"] == 1'
+act "click schedule row 1" click-schedule '{"index":1}' 's["schedule"]["selected"] == 1 and s["preview"]["title"] == "John 3:16" and s["focus"] == "list"'
+act "Backspace in the schedule removes the item (not Prev)" native-key '{"name":"backspace"}' 's["schedule"]["items"] == ["Amazing Grace"] and s["live"]["title"] == "Amazing Grace" and s["live"]["index"] == 1'
+act "look up jn 3:16 again" reference '{"text":"jn 3:16"}' 's["scripture"]["passage"] == "John 3:16"'
+act "add it back" add-to-schedule '{"source":"scripture"}' 's["schedule"]["items"] == ["Amazing Grace", "John 3:16"] and s["schedule"]["live"] == 0'
 act "move item" move-schedule '{"from":1,"to":0}' 's["schedule"]["items"] == ["John 3:16", "Amazing Grace"] and s["schedule"]["live"] == 1'
 act "move back" move-schedule '{"from":0,"to":1}' 's["schedule"]["items"] == ["Amazing Grace", "John 3:16"]'
 act "save schedule" save-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["path"].endswith("smoke-schedule.fws") and s["schedule"]["title"] == "smoke-schedule"'
 [ -s "$SCHED" ] || fail "schedule file $SCHED was not written"
 check "title without dirty marker" "$LAST" 's["windowTitle"] == "FreeWorship — smoke-schedule"'
+# Review #7: saving to another file is a Save As: the schedule takes its name.
+act "Save As renames the schedule" save-schedule "{\"path\":\"$OUT/smoke-renamed.fws\"}" 's["schedule"]["title"] == "smoke-renamed" and s["schedule"]["path"].endswith("smoke-renamed.fws") and not s["schedule"]["dirty"]'
+check "window title follows Save As" "$LAST" 's["windowTitle"] == "FreeWorship — smoke-renamed"'
+act "Save to the same file keeps the name" save-schedule '{}' 's["schedule"]["title"] == "smoke-renamed"'
 act "new schedule" new-schedule '' 's["schedule"]["items"] == [] and s["schedule"]["title"] == "Untitled"'
-act "open schedule" open-schedule "{\"path\":\"$SCHED\"}" 'len(s["schedule"]["items"]) == 2 and s["schedule"]["items"] == ["Amazing Grace", "John 3:16"] and not s["schedule"]["dirty"]'
+act "open schedule" open-schedule "{\"path\":\"$SCHED\"}" 'len(s["schedule"]["items"]) == 2 and s["schedule"]["items"] == ["Amazing Grace", "John 3:16"] and not s["schedule"]["dirty"] and s["schedule"]["title"] == "smoke-schedule"'
+# Review #4: a failed open is shown to the operator (an error dialog), and
+# the current schedule stays.
+printf 'not a schedule {' >"$OUT/corrupt.fws"
+act "opening a corrupt schedule fails" open-schedule "{\"path\":\"$OUT/corrupt.fws\"}" 'not r["ok"]'
+wait_idle
+check "the error is shown in a dialog" "$LAST" 's["focus"] == "dialog" and s["dialog"]["message"]["title"] == "Open Schedule" and "corrupt.fws" in s["dialog"]["message"]["message"] and s["schedule"]["title"] == "smoke-schedule" and len(s["schedule"]["items"]) == 2'
+shot error-dialog message
+pixel "error dialog has content" "$OUT/error-dialog.png" notblank
+act "hotkeys are off while the error is shown" key '{"name":"n"}' 'not d["consumed"]'
+act "OK closes the error" dismiss '' 'not s["dialog"].get("message") and s["dialog"]["alerts"] == 0 and s["focus"] != "dialog"'
 act "remove schedule item" remove-schedule '{"index":1}' 's["schedule"]["items"] == ["Amazing Grace"] and s["schedule"]["dirty"]'
 
 # ---- Phase 2 placeholder tab ------------------------------------------------------
@@ -299,11 +362,37 @@ act "delete asks for confirmation" delete-song '{"index":0}' 's["focus"] == "dia
 wait_idle
 shot delete-confirm dialog
 act "dismiss the dialog" dismiss '' 's["focus"] != "dialog"'
+# Review #1: Backspace (a MacBook's delete key) in the song list asks to
+# delete the selected song, like Delete; it is not Prev.
+act "focus the song list for delete" focus '{"target":"song-list"}' 's["focus"] == "list" and s["songs"]["selected"] == 0'
+LIVEIDX="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["live"]["index"])' "$LAST")"
+act "Backspace in the song list asks to delete" native-key '{"name":"backspace"}' "s[\"focus\"] == \"dialog\" and s[\"dialog\"][\"confirm\"] == \"Delete Song\" and s[\"live\"][\"index\"] == $LIVEIDX"
+act "cancel the delete" dismiss '' 's["focus"] != "dialog" and s["songs"]["results"] == 1'
 act "delete confirmed" delete-song '{"index":0,"confirm":true}' 'r["ok"]'
 wait_idle
 check "song deleted" "$LAST" "s[\"songs\"][\"results\"] == 0 and s[\"songCount\"] == $SONGS"
 
 # ---- closing the window ------------------------------------------------------------
+# Review #9: closing while the song editor is open asks first; Cancel keeps
+# the editor (and the app) open.
+act "open the song editor again" editor '{"mode":"new"}' 's["dialog"]["editor"]'
+act "close the window with the editor open" close '' 'r["ok"]'
+wait_idle
+check "closing with the editor open asks first" "$LAST" 's["dialog"]["confirm"] == "Quit FreeWorship" and s["dialog"]["editor"]'
+app_running || fail "the app quit with the song editor open"
+shot quit-editor-confirm dialog
+act "Cancel keeps the editor open" dismiss '' 's["dialog"]["editor"] and not s["dialog"].get("confirm")'
+# OK discards the editor, then asks about the unsaved schedule (the question
+# moves from over the editor to over the main window).
+act "close the window again" close '' 'r["ok"]'
+wait_idle
+check "asks about the editor again" "$LAST" 's["dialog"]["confirm"] == "Quit FreeWorship" and s["dialog"]["editor"]'
+act "OK discards the editor" accept '' 'r["ok"]'
+wait_idle
+check "then asks about the unsaved schedule" "$LAST" 's["dialog"]["confirm"] == "Quit FreeWorship" and not s["dialog"]["editor"] and s["schedule"]["dirty"]'
+app_running || fail "the app quit without asking about the unsaved schedule"
+act "cancel quitting (editor discarded)" dismiss '' 's["focus"] != "dialog" and not s["dialog"]["editor"]'
+LAST="$(state)"
 check "schedule has unsaved changes" "$LAST" 's["schedule"]["dirty"]'
 act "close the window with unsaved changes" close '' 'r["ok"]'
 wait_idle
