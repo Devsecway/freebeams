@@ -48,6 +48,20 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - New OS windows: `Window.New()` added under the root; `embed_subwindows=false` is set in `project.godot`.
 - Low-processor mode is on. Call `OS.SetLowProcessorUsageMode(false)` while a transition or video is animating, and turn it back on afterwards.
 
+## graphics.gd gotchas (learned the hard way)
+- Go references to RefCounted objects created on the main thread are released at the end of the frame, unless they are
+  reachable from a live extension instance's fields. Package-level caches must pin them with `Object.Leak`.
+- A reference that *is* reachable from an extension struct is reported as leaked at exit. Don't store resources the
+  engine already owns (e.g. `LabelSettings`); fetch them with getters (`Label.LabelSettings()`).
+- `Object.Free` does nothing on an `Object.Leak`-pinned RefCounted. Release it with `Object.Call(obj, "call", "unreference")`.
+  A bare `Object.Call(obj, "unreference")` with no args panics.
+- `Viewport.GetTexture().GetImage()` returns the *previous* frame. Wait a frame (or on state such as
+  `render.SlideView.TransitionProgress()`) before capturing.
+- `Tween.TweenProperty` is not exposed on the simple API. Animate from `Process` instead.
+- `SceneTree.Get(node)` is the equivalent of `GetTree()`.
+- Call `render.ReleaseCaches()` at shutdown to keep the exit log free of leak warnings.
+- There is no `timeout` command on macOS. Run `gd run` directly, and have demos quit themselves.
+
 ## Conventions
 - Errors are wrapped with context (`fmt.Errorf("load song %d: %w", id, err)`). No panics in library code.
 - Table-driven tests. Tests that need the local EasyWorship install (`/Users/Shared/Softouch/...`) call `t.Skip` when it is absent.
