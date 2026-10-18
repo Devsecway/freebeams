@@ -51,36 +51,7 @@ func parseLabel(line string) (label, bool) {
 	if m[2] != "" {
 		n, _ = strconv.Atoi(m[2])
 	}
-	return label{kind: kind, number: n, text: sectionLabel(kind, n)}, true
-}
-
-// sectionLabel mirrors models.SectionLabel ("Verse 2", "Chorus", "Pre-Chorus").
-// It is duplicated here so the importer does not depend on the models package
-// implementation being present.
-func sectionLabel(kind models.SectionKind, n int) string {
-	var name string
-	switch kind {
-	case models.SectionVerse:
-		name = "Verse"
-	case models.SectionChorus:
-		name = "Chorus"
-	case models.SectionPreChorus:
-		name = "Pre-Chorus"
-	case models.SectionBridge:
-		name = "Bridge"
-	case models.SectionTag:
-		name = "Tag"
-	case models.SectionIntro:
-		name = "Intro"
-	case models.SectionEnding:
-		name = "Ending"
-	default:
-		name = "Other"
-	}
-	if n > 0 {
-		return name + " " + strconv.Itoa(n)
-	}
-	return name
+	return label{kind: kind, number: n, text: models.SectionLabel(kind, n)}, true
 }
 
 // parseLyrics splits EasyWorship lyric text into sections.
@@ -122,10 +93,10 @@ func parseLyrics(text string) []models.Section {
 		case cur != nil:
 			sec.Kind, sec.Number, sec.Label = cur.kind, cur.number, cur.text
 		case hasLabels:
-			sec.Kind, sec.Label = models.SectionVerse, sectionLabel(models.SectionVerse, 0)
+			sec.Kind, sec.Label = models.SectionVerse, models.SectionLabel(models.SectionVerse, 0)
 		default:
 			autoNum++
-			sec.Kind, sec.Number, sec.Label = models.SectionVerse, autoNum, sectionLabel(models.SectionVerse, autoNum)
+			sec.Kind, sec.Number, sec.Label = models.SectionVerse, autoNum, models.SectionLabel(models.SectionVerse, autoNum)
 		}
 		out = append(out, sec)
 		stanza = nil
