@@ -71,6 +71,13 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - graphics.gd buffers void engine calls, and `_gui_input` does not flush that buffer when the handler returns. Follow
   `AcceptEvent()` / `SetInputAsHandled()` with any getter to force the flush (see `internal/ui/events.go`
   `acceptEvent` / `setInputHandled`). Otherwise Godot moves focus before the accept lands.
+- Container sort handlers (`NotificationSortChildren`) must end with a getter (`flushCalls` in `internal/ui/events.go`).
+  Otherwise the buffered `FitChildInRect` calls are flushed inside a child's own `Draw`. Godot then moves the child
+  mid-draw and drops the redraw that updates its canvas transform, so the child keeps rendering at its old offset.
+- Programmatic Tree selection: wrap it in `quietly` (`internal/ui/events.go`). It blocks the Tree's signals and flushes
+  before unblocking, so `item_selected` is never reported as a user action.
+- Godot gives a window only one exclusive child. A dialog opened over another dialog must be that dialog's child
+  (`MainWindow.dialogHost` reparents it on popup).
 - `PropagateNotification` and `Input.ParseInputEvent` deliver after the current Go call returns.
 - A synthesized key event needs `unicode` set to type into a LineEdit.
 - Changing a Tree selection in code (`set_selected`/`deselect_all`) needs `QueueRedraw()` to show.
