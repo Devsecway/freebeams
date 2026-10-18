@@ -1,0 +1,376 @@
+package app
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"freeworship/internal/app/core"
+	"freeworship/internal/control"
+	"freeworship/internal/models"
+	"freeworship/internal/render"
+	"freeworship/internal/ui"
+
+	"graphics.gd/classdb/SceneTree"
+)
+
+// answer replies to a control command (nil cmd: nothing to do): with err at
+// once, or with the state after this frame's render pass (so the reply
+// reflects the projected view, e.g. the output window really being open).
+func (a *App) answer(cmd *control.Command, err error) {
+	if cmd == nil {
+		return
+	}
+	if err != nil {
+		cmd.RespondErr(err)
+		return
+	}
+	a.replies = append(a.replies, func() { cmd.RespondJSON(a.state()) })
+}
+
+// flushReplies sends the replies queued by answer.
+func (a *App) flushReplies() {
+	rs := a.replies
+	a.replies = nil
+	for _, r := range rs {
+		r()
+	}
+}
+
+// state builds the GET /state document.
+func (a *App) state() core.State {
+	return core.BuildState(core.StateInput{
+		Presenter:        a.pres.State,
+		Schedule:         a.sched,
+		ScheduleSelected: a.schedSel,
+		OutputOpen:       a.out.IsOpen(),
+		OutputFullscreen: a.out.Fullscreen(),
+		OutputScreen:     a.out.Screen(),
+		Screens:          len(render.Screens()),
+		Songs: core.SongsState{
+			Count: a.songCount, Query: a.songQuery, Results: len(a.songs), Selected: a.songSel,
+			Current: songTitle(a.song), CountText: a.songsStatus,
+		},
+		Bibles:        a.bibles,
+		BibleSelected: a.bibleSel,
+		Scripture: core.ScriptureState{
+			Reference: a.reference, Passage: deckTitle(a.scriptureDeck), Verses: len(a.verseRows),
+			Selected: a.verseSelection(), Status: a.scriptStatus, Error: a.scriptErr,
+		},
+		Import:        a.importState,
+		LastError:     a.lastError,
+		WindowTitle:   a.win.WindowTitle(),
+		Tab:           a.win.Resources.Tab(),
+		Focus:         a.focus(),
+		Pending:       a.pending,
+		Transitioning: a.transitioning(),
+		Idle:          !a.busy(),
+	})
+}
+
+func songTitle(s *models.Song) string {
+	if s == nil {
+		return ""
+	}
+	return s.Title
+}
+
+func deckTitle(d *models.Deck) string {
+	if d == nil {
+		return ""
+	}
+	return d.Title
+}
+
+// actionArgs is the union of every action's JSON body.
+type actionArgs struct {
+	Q      string `json:"q"`
+	Index  *int   `json:"index"`
+	Title  string `json:"title"`
+	Text   string `json:"text"`
+	Bible  string `json:"bible"`
+	I      *int   `json:"i"`
+	Slide  *int   `json:"slide"`
+	Kind   string `json:"kind"`
+	N      int    `json:"n"`
+	On     *bool  `json:"on"`
+	Source string `json:"source"`
+	From   *int   `json:"from"`
+	To     *int   `json:"to"`
+	Path   string `json:"path"`
+	Name   string `json:"name"`
+	Ctrl   bool   `json:"ctrl"`
+	Meta   bool   `json:"meta"`
+	Shift  bool   `json:"shift"`
+	Alt    bool   `json:"alt"`
+	Tab    string `json:"tab"`
+
+	// UI-driving hooks (hooks.go).
+	Target    string `json:"target"`
+	Mode      string `json:"mode"`
+	ID        int64  `json:"id"`
+	Author    string `json:"author"`
+	Copyright string `json:"copyright"`
+	CCLI      string `json:"ccli"`
+	Lyrics    string `json:"lyrics"`
+	Confirm   bool   `json:"confirm"`
+}
+
+var errArgs = errors.New("missing or invalid arguments")
+
+// sectionKinds maps `jump {kind}` names to section kinds.
+var sectionKinds = map[string]models.SectionKind{
+	"verse": models.SectionVerse, "v": models.SectionVerse,
+	"chorus": models.SectionChorus, "c": models.SectionChorus,
+	"bridge": models.SectionBridge, "b": models.SectionBridge,
+	"prechorus": models.SectionPreChorus, "pre-chorus": models.SectionPreChorus, "r": models.SectionPreChorus,
+	"tag": models.SectionTag, "t": models.SectionTag,
+	"intro": models.SectionIntro, "i": models.SectionIntro,
+	"ending": models.SectionEnding, "e": models.SectionEnding,
+}
+
+// handleCommand executes a control command on the main thread. Commands that
+// start background work are answered when the work completes.
+func (a *App) handleCommand(cmd *control.Command) {
+	defer func() {
+		if r := recover(); r != nil {
+			cmd.RespondErr(fmt.Errorf("panic handling %s: %v", cmd.Action, r))
+		}
+	}()
+	var args actionArgs
+	if len(cmd.Data) > 0 {
+		if err := json.Unmarshal(cmd.Data, &args); err != nil {
+			cmd.RespondErr(fmt.Errorf("%s: bad JSON body: %w", cmd.Action, err))
+			return
+		}
+	}
+	p := a.pres
+	ok := func() { a.answer(cmd, nil) }
+
+	switch cmd.Action {
+	case "state":
+		ok()
+	case "screenshot":
+		a.screenshot(cmd)
+	case "wait-idle":
+		a.waiters = append(a.waiters, cmd)
+
+	// Songs.
+	case "search-songs":
+		a.win.Songs.SetSearchText(args.Q)
+		a.searchSongs(args.Q, cmd)
+	case "select-song":
+		i := -1
+		switch {
+		case args.Index != nil:
+			i = *args.Index
+		case args.Title != "":
+			i = core.FindSong(a.songs, args.Title)
+		}
+		if i < 0 || i >= len(a.songs) {
+			cmd.RespondErr(fmt.Errorf("select-song: no song matches %s", string(cmd.Data)))
+			return
+		}
+		a.win.Resources.SetTab(ui.TabSongs)
+		a.selectSong(i, songPreview, cmd)
+
+	// Scriptures.
+	case "reference":
+		if args.Bible != "" {
+			i := core.FindBible(a.bibles, args.Bible)
+			if i < 0 {
+				cmd.RespondErr(fmt.Errorf("reference: Bible %q is not installed", args.Bible))
+				return
+			}
+			a.bibleSel = i
+		}
+		a.win.Resources.SetTab(ui.TabScriptures)
+		a.win.Scriptures.SetReferenceText(args.Text)
+		a.lookupReference(args.Text, cmd)
+	case "select-preview-slide":
+		i := args.I
+		if i == nil {
+			i = args.Index
+		}
+		if i == nil {
+			cmd.RespondErr(errArgs)
+			return
+		}
+		p.SelectPreviewSlide(*i)
+		ok()
+
+	// Presenting.
+	case "go-live":
+		if args.Slide != nil {
+			a.liveChange(func() { p.GoLiveSlide(*args.Slide) })
+		} else {
+			a.goLive()
+		}
+		ok()
+	case "next":
+		p.Next()
+		ok()
+	case "prev":
+		p.Prev()
+		ok()
+	case "first":
+		p.First()
+		ok()
+	case "last":
+		p.Last()
+		ok()
+	case "jump":
+		kind := strings.ToLower(args.Kind)
+		if kind == "slide" || kind == "s" {
+			if args.N <= 0 {
+				cmd.RespondErr(errArgs)
+				return
+			}
+			p.SelectLiveSlide(args.N - 1)
+			ok()
+			return
+		}
+		k, found := sectionKinds[kind]
+		if !found {
+			cmd.RespondErr(fmt.Errorf("jump: unknown kind %q", args.Kind))
+			return
+		}
+		if !p.JumpToSection(k, args.N) {
+			cmd.RespondErr(fmt.Errorf("jump: no %s %d in the live item", k, args.N))
+			return
+		}
+		ok()
+	case "black":
+		p.ToggleBlack()
+		ok()
+	case "clear":
+		p.ToggleClear()
+		ok()
+	case "logo":
+		p.ToggleLogo()
+		ok()
+	case "output":
+		on := !p.State.OutputEnabled
+		if args.On != nil {
+			on = *args.On
+		}
+		a.setOutput(on)
+		ok()
+	case "go-back":
+		a.goBack()
+		ok()
+
+	// Schedule.
+	case "add-to-schedule":
+		switch args.Source {
+		case "song":
+			if a.song == nil {
+				cmd.RespondErr(errors.New("add-to-schedule: no song selected"))
+				return
+			}
+			a.addSongToSchedule(*a.song)
+			ok()
+		case "scripture":
+			a.addScriptureToSchedule(cmd)
+		default:
+			cmd.RespondErr(fmt.Errorf("add-to-schedule: source must be \"song\" or \"scripture\", got %q", args.Source))
+		}
+	case "select-schedule":
+		if args.Index == nil || *args.Index < 0 || *args.Index >= len(a.sched.Items) {
+			cmd.RespondErr(errArgs)
+			return
+		}
+		a.selectScheduleItem(*args.Index)
+		ok()
+	case "remove-schedule":
+		if args.Index == nil || !a.removeScheduleItem(*args.Index) {
+			cmd.RespondErr(errArgs)
+			return
+		}
+		ok()
+	case "move-schedule":
+		if args.From == nil || args.To == nil || !a.moveScheduleItem(*args.From, *args.To) {
+			cmd.RespondErr(errArgs)
+			return
+		}
+		ok()
+	case "save-schedule":
+		path := args.Path
+		if path == "" {
+			path = a.sched.Path
+		}
+		if path == "" {
+			cmd.RespondErr(errors.New("save-schedule: no path"))
+			return
+		}
+		a.answer(cmd, a.saveSchedule(path))
+	case "open-schedule":
+		if args.Path == "" {
+			cmd.RespondErr(errArgs)
+			return
+		}
+		a.answer(cmd, a.openSchedule(args.Path))
+	case "new-schedule":
+		a.newSchedule()
+		ok()
+
+	// Keys and UI.
+	case "key":
+		name := core.NormalizeKeyName(args.Name)
+		if name == "" {
+			cmd.RespondErr(errArgs)
+			return
+		}
+		ev := core.KeyEvent{Key: name, Ctrl: args.Ctrl, Meta: args.Meta, Shift: args.Shift, Alt: args.Alt}
+		consumed := a.handleKey(ev)
+		a.replies = append(a.replies, func() {
+			cmd.RespondJSON(struct {
+				Consumed bool       `json:"consumed"`
+				State    core.State `json:"state"`
+			}{consumed, a.state()})
+		})
+	case "tab":
+		tabs := map[string]int{"songs": ui.TabSongs, "scriptures": ui.TabScriptures, "media": ui.TabMedia,
+			"presentations": ui.TabPresentations, "themes": ui.TabThemes}
+		t, found := tabs[strings.ToLower(args.Tab)]
+		if !found {
+			cmd.RespondErr(errArgs)
+			return
+		}
+		a.win.Resources.SetTab(t)
+		ok()
+	case "quit":
+		a.quitNext = true
+		cmd.RespondJSON(map[string]bool{"quitting": true})
+	default:
+		if !a.handleHook(cmd, args) {
+			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
+		}
+	}
+}
+
+// screenshot answers GET /screenshot?window=main|output with a PNG.
+func (a *App) screenshot(cmd *control.Command) {
+	var (
+		png []byte
+		err error
+	)
+	switch cmd.Query["window"] {
+	case "", "main":
+		png, err = render.WindowScreenshot(SceneTree.Get(a.AsNode()).Root())
+	case "editor":
+		png, err = render.WindowScreenshot(a.win.Editor.AsWindow())
+	case "dialog":
+		png, err = render.WindowScreenshot(a.win.Confirm.AsWindow())
+	case "output":
+		png, err = a.out.Screenshot()
+	default:
+		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|dialog)", cmd.Query["window"])
+	}
+	if err != nil {
+		cmd.RespondErr(err)
+		return
+	}
+	cmd.Respond(control.Result{OK: true, PNG: png})
+}
