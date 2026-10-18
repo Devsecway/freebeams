@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 )
@@ -94,17 +95,42 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "library.db"), nil
 }
 
-// Close closes the database. The Store must not be used afterwards.
+// optimizeTimeout bounds the PRAGMA optimize that Close runs. Optimize may
+// need the write lock, and with the busy timeout it would otherwise wait up to
+// 10s behind another writer (e.g. a cancelled import) and stall shutdown.
+const optimizeTimeout = 500 * time.Millisecond
+
+// Close closes the database. The Store must not be used afterwards. Callers
+// must first stop their own work on the store: database/sql's Close waits for
+// open transactions.
 func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	// Best effort: refresh query planner statistics.
-	_, _ = s.db.Exec(`PRAGMA optimize`)
+	s.optimize()
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("close store %q: %w", s.path, err)
 	}
 	return nil
+}
+
+// optimize refreshes the query planner statistics (best effort, bounded). It
+// runs on its own connection with a short busy timeout: SQLite's busy handler
+// ignores context cancellation (sqlite3_interrupt) while it sleeps, so only a
+// short busy_timeout keeps a locked database from stalling Close.
+func (s *Store) optimize() {
+	ctx, cancel := context.WithTimeout(context.Background(), optimizeTimeout)
+	defer cancel()
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	ms := optimizeTimeout.Milliseconds()
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf(`PRAGMA busy_timeout = %d`, ms)); err != nil {
+		return
+	}
+	_, _ = conn.ExecContext(ctx, `PRAGMA optimize`)
 }
 
 // Path returns the absolute path of the database file.

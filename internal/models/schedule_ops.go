@@ -116,6 +116,40 @@ func (s *Schedule) Save(path string) error {
 	return nil
 }
 
+// SaveAs writes the schedule to a new file and names the schedule after it
+// (Title becomes the file name without its extension), like File → Save As.
+// Otherwise it is Save. On failure the schedule is left unchanged.
+func (s *Schedule) SaveAs(path string) error {
+	c := *s
+	c.Title = titleFromPath(path)
+	if err := c.Save(path); err != nil {
+		return err
+	}
+	*s = c
+	return nil
+}
+
+// repairIDs gives every item a unique, non-empty ID. Hand-made or merged
+// files can lack ids or repeat them, and the app identifies items (the live
+// one, the selected one) by ID. The first item keeps a repeated id; later
+// ones get new ids. It reports whether any id changed.
+func (s *Schedule) repairIDs() bool {
+	seen := make(map[string]bool, len(s.Items))
+	changed := false
+	for i := range s.Items {
+		id := strings.TrimSpace(s.Items[i].ID)
+		if id == "" || seen[id] {
+			id = NewItemID()
+		}
+		if id != s.Items[i].ID {
+			s.Items[i].ID = id
+			changed = true
+		}
+		seen[id] = true
+	}
+	return changed
+}
+
 // writeFileAtomic writes data to a temp file next to path and renames it into
 // place, so readers never see a partially written file.
 func writeFileAtomic(path string, data []byte) (err error) {
@@ -149,6 +183,8 @@ func writeFileAtomic(path string, data []byte) (err error) {
 //
 // A missing or zero version is read as version 1. The returned schedule has
 // Path set and Dirty cleared; an empty Title is taken from the file name.
+// Items without an id, or with an id an earlier item already uses, get a new
+// id (the file on disk is only rewritten by the next save).
 func LoadSchedule(path string) (*Schedule, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -168,6 +204,7 @@ func LoadSchedule(path string) (*Schedule, error) {
 	if strings.TrimSpace(s.Title) == "" {
 		s.Title = titleFromPath(path)
 	}
+	s.repairIDs()
 	s.Path, s.Dirty = path, false
 	return &s, nil
 }

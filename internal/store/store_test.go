@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"freeworship/internal/models"
 )
@@ -582,5 +583,42 @@ func TestConcurrentWrites(t *testing.T) {
 	}
 	if n, _ := st.CountSongs(ctx); n != workers*each {
 		t.Fatalf("CountSongs = %d, want %d", n, workers*each)
+	}
+}
+
+// TestCloseIsBoundedWhileAnotherWriterHoldsTheLock: Close's PRAGMA optimize
+// must not wait out the 10s busy timeout behind another connection's write
+// transaction (e.g. an import that is still unwinding at shutdown).
+func TestCloseIsBoundedWhileAnotherWriterHoldsTheLock(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "library.db")
+	a, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 200; i++ { // give optimize something to analyze
+		if err := a.SaveSong(ctx, sampleSong(fmt.Sprintf("Song %d", i), "Author", verse(1, "line"))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := a.SearchSongs(ctx, "song", 0); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	tx, err := b.db.BeginTx(ctx, nil) // BEGIN IMMEDIATE: holds the write lock
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	start := time.Now()
+	if err := a.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("Close took %v while another writer held the lock, want < 3s", d)
 	}
 }

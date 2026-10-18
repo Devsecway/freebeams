@@ -311,6 +311,110 @@ func TestLoadSchedule(t *testing.T) {
 	}
 }
 
+// TestLoadScheduleRepairsIDs: hand-made files may lack item ids or repeat
+// them; every loaded item gets a unique id, and valid ids are kept.
+func TestLoadScheduleRepairsIDs(t *testing.T) {
+	item := func(id string) string {
+		return `{"id":"` + id + `","kind":"song","title":"t","theme":{},"slides":[]}`
+	}
+	noID := `{"kind":"song","title":"t","theme":{},"slides":[]}`
+	tests := []struct {
+		name  string
+		items []string
+		keep  map[int]string // index -> id that must be kept
+	}{
+		{"valid ids are kept", []string{item("a"), item("b")}, map[int]string{0: "a", 1: "b"}},
+		{"missing ids", []string{noID, item("b"), noID}, map[int]string{1: "b"}},
+		{"blank id", []string{item("  "), item("b")}, map[int]string{1: "b"}},
+		{"duplicates keep the first", []string{item("a"), item("a"), item("b"), item("a")}, map[int]string{0: "a", 2: "b"}},
+		{"two missing ids get distinct ids", []string{noID, noID}, nil},
+		{"empty", nil, nil},
+	}
+	dir := t.TempDir()
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(dir, "s"+string(rune('a'+i))+".fws")
+			content := `{"version":1,"title":"x","items":[` + strings.Join(tt.items, ",") + `]}`
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			s, err := LoadSchedule(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(s.Items) != len(tt.items) {
+				t.Fatalf("%d items, want %d", len(s.Items), len(tt.items))
+			}
+			seen := map[string]bool{}
+			for j, it := range s.Items {
+				if strings.TrimSpace(it.ID) == "" || seen[it.ID] {
+					t.Errorf("item %d id %q is empty or repeated (%s)", j, it.ID, ids(s))
+				}
+				seen[it.ID] = true
+				if want, ok := tt.keep[j]; ok && it.ID != want {
+					t.Errorf("item %d id %q, want kept %q", j, it.ID, want)
+				}
+				if s.IndexOf(it.ID) != j {
+					t.Errorf("IndexOf(%q) = %d, want %d", it.ID, s.IndexOf(it.ID), j)
+				}
+			}
+			if s.Dirty {
+				t.Error("a repaired schedule opens clean")
+			}
+		})
+	}
+}
+
+// TestScheduleSaveAs: Save As names the schedule after the new file; Save
+// keeps a given title.
+func TestScheduleSaveAs(t *testing.T) {
+	dir := t.TempDir()
+	tests := []struct {
+		name      string
+		title     string
+		saveAs    bool
+		file      string
+		wantTitle string
+	}{
+		{"save keeps a real title", "Sunday", false, "other.fws", "Sunday"},
+		{"save names an untitled schedule", "Untitled", false, "first.fws", "first"},
+		{"save as renames", "Sunday", true, "Evening Service.fws", "Evening Service"},
+		{"save as an untitled schedule", "Untitled", true, "named.fws", "named"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := sampleSchedule()
+			s.Title = tt.title
+			path := filepath.Join(dir, tt.file)
+			var err error
+			if tt.saveAs {
+				err = s.SaveAs(path)
+			} else {
+				err = s.Save(path)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if s.Title != tt.wantTitle || s.Path != path || s.Dirty {
+				t.Errorf("after save: title %q path %q dirty %v, want title %q", s.Title, s.Path, s.Dirty, tt.wantTitle)
+			}
+			loaded, err := LoadSchedule(path)
+			if err != nil || loaded.Title != tt.wantTitle {
+				t.Errorf("file title %q (%v), want %q", loaded.Title, err, tt.wantTitle)
+			}
+		})
+	}
+	// A failed Save As leaves the schedule as it was.
+	s := sampleSchedule()
+	s.Title = "Sunday"
+	if err := s.SaveAs(filepath.Join(dir, "missing", "x.fws")); err == nil {
+		t.Fatal("Save As into a missing folder should fail")
+	}
+	if s.Title != "Sunday" || s.Path != "" || !s.Dirty {
+		t.Errorf("failed Save As changed the schedule: %+v", s)
+	}
+}
+
 func TestScheduleJSONShape(t *testing.T) {
 	// The serialised field names are a file-format contract.
 	s := sampleSchedule()
