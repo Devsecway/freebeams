@@ -68,6 +68,12 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - `SystemFont` with no names falls back to Godot's font. Use names `[".AppleSystemUIFont", ...]` for SF. Use `DPITexture` for SVG icons.
 - Separate OS windows (dialogs) need the Theme set explicitly and the parent's content scale copied.
 - The root window's content scale must be set to `DisplayServer.ScreenGetScale()` at startup (HiDPI).
+- graphics.gd buffers void engine calls, and `_gui_input` does not flush that buffer when the handler returns. Follow
+  `AcceptEvent()` / `SetInputAsHandled()` with any getter to force the flush (see `internal/ui/events.go`
+  `acceptEvent` / `setInputHandled`). Otherwise Godot moves focus before the accept lands.
+- `PropagateNotification` and `Input.ParseInputEvent` deliver after the current Go call returns.
+- A synthesized key event needs `unicode` set to type into a LineEdit.
+- Changing a Tree selection in code (`set_selected`/`deselect_all`) needs `QueueRedraw()` to show.
 - There is no `timeout` command on macOS. Run `gd run` directly, and have demos quit themselves.
 
 ## Conventions
