@@ -112,6 +112,25 @@ func (s *Splitter) SetBarControl(bar Control.Instance) {
 	s.render()
 }
 
+// HandleCenter returns the global position of the drag handle's centre: the
+// custom bar when one is set (its left end, clear of the tab buttons), else
+// the grab area over the 1px bar. Used to drive real drags in tests.
+func (s *Splitter) HandleCenter() (Vector2.XY, bool) {
+	h := s.grab
+	if s.bar != (Control.Instance{}) {
+		h = s.bar
+	}
+	if !h.AsCanvasItem().IsVisibleInTree() {
+		return Vector2.Zero, false
+	}
+	r := h.GetGlobalRect()
+	if s.bar != (Control.Instance{}) {
+		// The tab buttons sit at the left; the empty area is to the right.
+		return Vector2.New(r.Position.X+r.Size.X*0.6, r.Position.Y+r.Size.Y/2), true
+	}
+	return Vector2.New(r.Position.X+r.Size.X/2, r.Position.Y+r.Size.Y/2), true
+}
+
 // SetPercent sets the split programmatically (does not call OnChanged).
 func (s *Splitter) SetPercent(p float64) {
 	s.Percent = math.Min(1, math.Max(0, p))

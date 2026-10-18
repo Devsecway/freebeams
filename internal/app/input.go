@@ -47,6 +47,7 @@ func keyEvent(event InputEvent.Instance) (core.KeyEvent, bool) {
 // wherever focus is, except where core.Hotkeys says the focused widget keeps
 // the key (text fields, list navigation).
 func (a *App) Input(event InputEvent.Instance) {
+	a.inputRec.record(event)
 	ev, ok := keyEvent(event)
 	if !ok || a.quitting {
 		return

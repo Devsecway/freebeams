@@ -117,15 +117,19 @@ type actionArgs struct {
 	Tab    string `json:"tab"`
 
 	// UI-driving hooks (hooks.go).
-	Target    string `json:"target"`
-	Mode      string `json:"mode"`
-	ID        int64  `json:"id"`
-	Author    string `json:"author"`
-	Copyright string `json:"copyright"`
-	CCLI      string `json:"ccli"`
-	Lyrics    string `json:"lyrics"`
-	Confirm   bool   `json:"confirm"`
-	Window    string `json:"window"` // native-key: "main" (default) or "output"
+	Target    string  `json:"target"`
+	Mode      string  `json:"mode"`
+	ID        int64   `json:"id"`
+	Author    string  `json:"author"`
+	Copyright string  `json:"copyright"`
+	CCLI      string  `json:"ccli"`
+	Lyrics    string  `json:"lyrics"`
+	Confirm   bool    `json:"confirm"`
+	Window    string  `json:"window"`  // native-key: "main" (default) or "output"
+	Percent   float64 `json:"percent"` // split: the new splitter position (0..1)
+	Delta     float64 `json:"delta"`   // drag-split: logical pixels per frame
+	Steps     int     `json:"steps"`   // drag-split: number of frames to drag
+	Burst     int     `json:"burst"`   // drag-split: mouse motions per frame (default 1)
 }
 
 var errArgs = errors.New("missing or invalid arguments")

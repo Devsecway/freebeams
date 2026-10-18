@@ -8,11 +8,13 @@ import (
 	"freeworship/internal/app/core"
 	"freeworship/internal/control"
 	"freeworship/internal/models"
+	"freeworship/internal/ui"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/Input"
 	"graphics.gd/classdb/InputEventKey"
 	"graphics.gd/classdb/InputEventMouseButton"
+	"graphics.gd/classdb/InputEventMouseMotion"
 	"graphics.gd/classdb/LineEdit"
 	"graphics.gd/classdb/Node"
 	"graphics.gd/classdb/SceneTree"
@@ -94,6 +96,28 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 			return true
 		}
 		a.clickScheduleRow(cmd, *args.Index)
+	case "split":
+		// Move a splitter, as a drag does (layout runs on the next frame).
+		sp := a.splitter(args.Name)
+		if sp == nil {
+			cmd.RespondErr(fmt.Errorf("split: unknown splitter %q", args.Name))
+			return true
+		}
+		sp.SetPercent(args.Percent)
+		a.answer(cmd, nil)
+	case "replay-input":
+		// Re-inject a FREEWORSHIP_INPUT_LOG recording (see inputrec.go).
+		a.replayInput(cmd, args.Path)
+	case "drag-split":
+		// A real mouse drag on a splitter's handle, one motion per frame,
+		// through Godot's input pipeline (press, Steps moves of Delta
+		// pixels along the split axis, release).
+		sp := a.splitter(args.Name)
+		if sp == nil {
+			cmd.RespondErr(fmt.Errorf("drag-split: unknown splitter %q", args.Name))
+			return true
+		}
+		a.dragSplit(cmd, sp, args.Delta, args.Steps, max(args.Burst, 1))
 	case "close":
 		// What the window manager sends when the operator closes the window.
 		root := SceneTree.Get(a.AsNode()).Root()
@@ -106,6 +130,75 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 		return false
 	}
 	return true
+}
+
+// dragSplit presses on sp's handle, moves it by delta logical pixels per
+// frame for steps frames along the split axis, then releases.
+func (a *App) dragSplit(cmd *control.Command, sp *ui.Splitter, delta float64, steps, burst int) {
+	at, ok := sp.HandleCenter()
+	if !ok || steps <= 0 {
+		cmd.RespondErr(errors.New("drag-split: handle not visible or steps <= 0"))
+		return
+	}
+	scale := Window.Get(a.AsNode()).ContentScaleFactor()
+	horizontal := sp.Orientation == ui.SplitHorizontal
+	pos := func(k float64) Vector2.XY {
+		d := float32(delta * k)
+		p := at
+		if horizontal {
+			p.X += d
+		} else {
+			p.Y += d
+		}
+		return Vector2.New(p.X*scale, p.Y*scale)
+	}
+	button := func(pressed bool, p Vector2.XY) {
+		ev := InputEventMouseButton.New()
+		ev.SetButtonIndex(Input.MouseButtonLeft)
+		ev.SetPressed(pressed)
+		if pressed {
+			ev.AsInputEventMouse().SetButtonMask(Input.MouseButtonMaskLeft)
+		}
+		ev.AsInputEventMouse().SetPosition(p)
+		ev.AsInputEventMouse().SetGlobalPosition(p)
+		Input.ParseInputEvent(ev.AsInputEvent())
+	}
+	button(true, pos(0))
+	for k := 1; k <= steps; k++ {
+		k := k
+		a.after(k, func() {
+			// A real trackpad delivers several motions per frame.
+			for b := 1; b <= burst; b++ {
+				p := pos(float64(k-1) + float64(b)/float64(burst))
+				ev := InputEventMouseMotion.New()
+				ev.AsInputEventMouse().SetButtonMask(Input.MouseButtonMaskLeft)
+				ev.AsInputEventMouse().SetPosition(p)
+				ev.AsInputEventMouse().SetGlobalPosition(p)
+				Input.ParseInputEvent(ev.AsInputEvent())
+			}
+		})
+	}
+	a.after(steps+1, func() { button(false, pos(float64(steps))) })
+	a.after(steps+1+nativeKeyFrames, func() { a.answer(cmd, nil) })
+}
+
+// splitter returns the main window splitter called name, or nil.
+func (a *App) splitter(name string) *ui.Splitter {
+	switch name {
+	case "main":
+		return a.win.MainSplit
+	case "top":
+		return a.win.TopSplit
+	case "preview-live":
+		return a.win.PreviewLiveSplit
+	case "preview":
+		return a.win.PreviewSplit
+	case "live":
+		return a.win.LiveSplit
+	case "resource":
+		return a.win.ResourceSplit
+	}
+	return nil
 }
 
 // nativeKeyFrames is how many frames native-key waits before replying: the

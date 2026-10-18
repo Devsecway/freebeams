@@ -59,10 +59,11 @@ type App struct {
 	Node.Extension[App] `gd:"FwApp"`
 
 	// ---- services
-	st     *store.Store
-	ctrl   *control.Server
-	ctx    context.Context
-	cancel context.CancelFunc
+	inputRec *inputRecorder `gd:"-"` // FREEWORSHIP_INPUT_LOG debugging aid
+	st       *store.Store
+	ctrl     *control.Server
+	ctx      context.Context
+	cancel   context.CancelFunc
 
 	// results carries main-thread continuations of async work.
 	results chan func()
@@ -142,6 +143,7 @@ func (a *App) Ready() {
 	a.sched = models.NewSchedule()
 	a.schedSel, a.songSel, a.bibleSel, a.verseSel = -1, -1, -1, -1
 	a.view = newViewCache()
+	a.inputRec = openInputRecorder()
 
 	SceneTree.Get(a.AsNode()).SetAutoAcceptQuit(false)
 	a.buildUI()
