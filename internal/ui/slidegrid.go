@@ -239,6 +239,9 @@ func (f *tileFlow) Notification(what Object.Notification) {
 		t.thumb.AsControl().SetSize(Vector2.New(float32(th.W), float32(th.H)))
 	}
 	f.AsControl().UpdateMinimumSize()
+	// Apply the layout before any tile draws (see flushCalls): a tile moved
+	// from inside its own Draw stays drawn at its old position.
+	flushCalls(f.AsControl())
 }
 
 // slideTile is one thumbnail + label tile.

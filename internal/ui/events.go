@@ -20,6 +20,16 @@ func acceptEvent(c Control.Instance) {
 	_ = c.AsNode().IsInsideTree() // flush
 }
 
+// flushCalls forces graphics.gd to send its buffered void calls to the engine
+// now. Container sort handlers must end with it: otherwise the buffered
+// FitChildInRect / SetPosition calls are flushed by the first getter inside a
+// child's Draw. Godot then moves the child while that child is drawing
+// (pending_update is still set), so the redraw that would refresh its canvas
+// transform is dropped and the child keeps rendering at its old offset.
+func flushCalls(c Control.Instance) {
+	_ = c.AsNode().IsInsideTree()
+}
+
 // setInputHandled marks the viewport's current input as handled, immediately.
 func setInputHandled(vp Viewport.Instance) {
 	vp.SetInputAsHandled()

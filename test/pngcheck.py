@@ -6,6 +6,7 @@
   pngcheck.py FILE has RRGGBB X0 Y0 X1 Y1 [N] # >= N (default 200) pixels of that color
                                               # (+-3 per channel) inside the region given
                                               # as fractions of the width/height
+  pngcheck.py FILE lacks RRGGBB X0 Y0 X1 Y1 [N] # < N (default 1) pixels of that color there
 
 Exit status 0 when the assertion holds; a message on stderr otherwise.
 """
@@ -81,14 +82,16 @@ def main():
             if len(colors) > 50:
                 return
         sys.exit("%s: only %d distinct colors; looks blank" % (path, len(colors)))
-    elif what == "has":
+    elif what in ("has", "lacks"):
         want = tuple(int(sys.argv[3][i:i + 2], 16) for i in (0, 2, 4))
         x0, y0, x1, y1 = (float(v) for v in sys.argv[4:8])
-        need = int(sys.argv[8]) if len(sys.argv) > 8 else 200
+        limit = int(sys.argv[8]) if len(sys.argv) > 8 else (200 if what == "has" else 1)
         n = sum(1 for px in pixels(w, h, bpp, rows, x0, y0, x1, y1)
                 if all(abs(px[i] - want[i]) <= 3 for i in range(3)))
-        if n < need:
-            sys.exit("%s: %d pixels of #%s in the region, want >= %d" % (path, n, sys.argv[3], need))
+        if what == "has" and n < limit:
+            sys.exit("%s: %d pixels of #%s in the region, want >= %d" % (path, n, sys.argv[3], limit))
+        if what == "lacks" and n >= limit:
+            sys.exit("%s: %d pixels of #%s in the region, want < %d" % (path, n, sys.argv[3], limit))
     else:
         sys.exit("unknown check " + what)
 

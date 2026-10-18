@@ -165,6 +165,7 @@ func (s *Splitter) Notification(what Object.Notification) {
 	if what != Container.NotificationSortChildren {
 		return
 	}
+	defer flushCalls(s.AsControl()) // apply the layout now (see flushCalls)
 	sp := s.spec()
 	first, second := sp.Layout()
 	barSize := sp.BarSize()

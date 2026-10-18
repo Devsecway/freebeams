@@ -127,4 +127,5 @@ func (m *MonitorHost) Notification(what Object.Notification) {
 	if m.FitWidth {
 		m.AsControl().UpdateMinimumSize()
 	}
+	flushCalls(m.AsControl()) // apply the layout now (see flushCalls)
 }
