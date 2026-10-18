@@ -36,7 +36,9 @@ const (
 	// FocusDialog: a dialog window is open. No hotkeys.
 	FocusDialog
 	// FocusList: a vertical list (song list, verse list, schedule). The list keeps
-	// Up/Down/Home/End/Enter/Delete for its own navigation; the rest are hotkeys.
+	// Up/Down/Home/End/Enter/Delete/Backspace for its own navigation and
+	// editing; the rest are hotkeys. Backspace falls back to Prev when the list
+	// does not use it (see Hotkeys.Unhandled).
 	FocusList
 	// FocusGrid: the Preview slide grid. It keeps the arrows, Home/End and
 	// Enter (select a preview slide / go live with it).
@@ -132,9 +134,15 @@ var repeatable = map[string]bool{"right": true, "left": true, "up": true, "down"
 
 // passThrough lists, per focus context, the keys the focused widget keeps.
 var passThrough = map[Focus]map[string]bool{
-	FocusList: {"up": true, "down": true, "home": true, "end": true, "enter": true, "delete": true},
+	FocusList: {"up": true, "down": true, "home": true, "end": true, "enter": true, "delete": true, "backspace": true},
 	FocusGrid: {"up": true, "down": true, "left": true, "right": true, "home": true, "end": true, "enter": true},
 }
+
+// fallbackKeys are pass-through keys that are still hotkeys when the focused
+// widget does not consume them. With a list focused, Backspace removes the
+// schedule item or deletes the song (a MacBook's "delete" key sends Backspace);
+// where the list has no use for it (e.g. the verse list) it is still Prev.
+var fallbackKeys = map[string]bool{"backspace": true}
 
 // Hotkeys maps key presses to commands. It is a small state machine: a
 // section key (V, C, B, R, T, I, E) jumps immediately and then waits up to
@@ -242,6 +250,20 @@ func (h *Hotkeys) Handle(ev KeyEvent, focus Focus) (cmd Command, consumed bool) 
 		return Command{}, true
 	}
 	return Command{Action: a}, true
+}
+
+// Unhandled maps a key that Handle passed through to the focused widget, and
+// that the widget did not consume, to its hotkey command. Only fallbackKeys
+// qualify; every other passed-through key belongs to the widget. The app calls
+// it from the unhandled-input stage, after the GUI has seen the key.
+func (h *Hotkeys) Unhandled(ev KeyEvent, focus Focus) Command {
+	if ev.Ctrl || ev.Meta || ev.Alt || !fallbackKeys[ev.Key] || !passThrough[focus][ev.Key] {
+		return Command{}
+	}
+	if ev.Echo && !repeatable[ev.Key] {
+		return Command{}
+	}
+	return Command{Action: plainKeys[ev.Key]}
 }
 
 // digit parses "0".."9".

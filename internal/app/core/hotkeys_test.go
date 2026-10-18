@@ -91,6 +91,7 @@ func TestHotkeys(t *testing.T) {
 			{0, k("end"), FocusList, none, false},
 			{0, k("enter"), FocusList, none, false},
 			{0, k("delete"), FocusList, none, false},
+			{0, k("backspace"), FocusList, none, false}, // remove / delete in the list
 			{0, k("right"), FocusList, cmd(ActNext), true},
 			{0, k("space"), FocusList, cmd(ActNext), true},
 			{0, k("pagedown"), FocusList, cmd(ActGoLiveNext), true},
@@ -182,6 +183,36 @@ func TestHotkeys(t *testing.T) {
 					t.Errorf("step %d %+v (focus %v): got %+v consumed=%v, want %+v consumed=%v",
 						i, s.ev, s.focus, got, eaten, s.want, s.eaten)
 				}
+			}
+		})
+	}
+}
+
+// TestHotkeysUnhandled covers the second chance a passed-through key gets
+// when the focused widget did not consume it.
+func TestHotkeysUnhandled(t *testing.T) {
+	tests := []struct {
+		name  string
+		ev    KeyEvent
+		focus Focus
+		want  Command
+	}{
+		{"backspace in a list that ignored it is Prev", k("backspace"), FocusList, cmd(ActPrev)},
+		{"held backspace does not repeat", repeat("backspace"), FocusList, Command{}},
+		{"cmd+backspace is not ours", meta("backspace"), FocusList, Command{}},
+		{"backspace in a text field never falls back", k("backspace"), FocusText, Command{}},
+		{"backspace in a dialog never falls back", k("backspace"), FocusDialog, Command{}},
+		{"backspace without focus was already a hotkey", k("backspace"), FocusNone, Command{}},
+		{"backspace in the preview grid was already a hotkey", k("backspace"), FocusGrid, Command{}},
+		{"other list keys belong to the list", k("down"), FocusList, Command{}},
+		{"delete has no hotkey", k("delete"), FocusList, Command{}},
+		{"enter in the grid belongs to the grid", k("enter"), FocusGrid, Command{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var h Hotkeys
+			if got := h.Unhandled(tt.ev, tt.focus); got != tt.want {
+				t.Errorf("Unhandled(%+v, %v) = %+v, want %+v", tt.ev, tt.focus, got, tt.want)
 			}
 		})
 	}

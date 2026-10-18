@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"freeworship/internal/models"
@@ -115,6 +116,40 @@ func StepIndex(cur, n, delta int) (int, bool) {
 	return next, true
 }
 
+// SameDeck reports whether two decks show the same thing: the same schedule
+// item (or both library content), title, theme and slides.
+func SameDeck(a, b *models.Deck) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a == b || (a.ItemID == b.ItemID && a.Title == b.Title && a.Theme == b.Theme && reflect.DeepEqual(a.Slides, b.Slides))
+}
+
+// SelectedVerse is the selected verse of the looked-up passage: the one the
+// verse list highlights, the resource preview shows and Go Live sends. While
+// Preview shows the passage itself it is Preview's selected slide (moving in
+// the Preview grid moves the verse selection); otherwise it is lastRow, the
+// verse last chosen in the verse list. -1 when there is no passage.
+func SelectedVerse(passage, preview *models.Deck, previewIndex, lastRow int) int {
+	if passage == nil || len(passage.Slides) == 0 {
+		return -1
+	}
+	if preview != nil && preview.ItemID == "" && SameDeck(passage, preview) {
+		return previewIndex
+	}
+	if lastRow >= len(passage.Slides) {
+		return -1
+	}
+	return lastRow
+}
+
+// ScheduleSelection is the schedule row that matches the Preview deck: the
+// item Preview was loaded from, or -1 when Preview holds library content (a
+// song, a passage) or nothing.
+func ScheduleSelection(s *models.Schedule, preview *models.Deck) int {
+	return LiveItemIndex(s, preview)
+}
+
 // GridLabel is one Preview/Live grid tile label.
 type GridLabel struct {
 	Label  string
@@ -216,7 +251,20 @@ func DefaultBible(bibles []models.Bible) int {
 	return -1
 }
 
-// SongCountText is the Songs footer text.
+// SongsFooter is the Songs footer text for n listed songs. A running import
+// says so. A failed one stays visible next to the count, so a later search
+// cannot hide it.
+func SongsFooter(n int, imp ImportState) string {
+	switch {
+	case imp.Running:
+		return "Importing from EasyWorship…"
+	case imp.Error != "":
+		return SongCountText(n) + " · EasyWorship import failed"
+	}
+	return SongCountText(n)
+}
+
+// SongCountText is the song count ("1 song", "223 songs").
 func SongCountText(n int) string {
 	if n == 1 {
 		return "1 song"

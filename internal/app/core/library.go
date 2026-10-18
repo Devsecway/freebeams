@@ -85,6 +85,25 @@ func AddRecent(list []string, path string, max int) []string {
 	return out
 }
 
+// IsSaveAs reports whether saving to target is a Save As: a file other than
+// the schedule's current one (cur, "" for a never-saved schedule). A Save As
+// renames the schedule after the new file.
+func IsSaveAs(cur, target string) bool {
+	target = WithScheduleExt(target)
+	if target == "" {
+		return false
+	}
+	if cur == "" {
+		return true
+	}
+	a, errA := filepath.Abs(cur)
+	b, errB := filepath.Abs(target)
+	if errA != nil || errB != nil {
+		return filepath.Clean(cur) != filepath.Clean(target)
+	}
+	return a != b
+}
+
 // WithScheduleExt appends ".fws" unless path already ends with it.
 func WithScheduleExt(path string) string {
 	if path == "" || strings.EqualFold(filepath.Ext(path), models.ScheduleFileExt) {

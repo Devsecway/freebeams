@@ -53,6 +53,20 @@ type ScriptureState struct {
 	Error     bool     `json:"error"`
 }
 
+// Alert is an error message for the operator, shown in the message dialog.
+type Alert struct {
+	Title   string `json:"title"`
+	Message string `json:"message"`
+}
+
+// DialogState describes the open dialogs.
+type DialogState struct {
+	Editor  bool   `json:"editor"`            // the song editor is open
+	Confirm string `json:"confirm,omitempty"` // title of the open question
+	Message *Alert `json:"message,omitempty"` // the error message on screen
+	Alerts  int    `json:"alerts"`            // error messages queued (shown one at a time)
+}
+
 // State is the GET /state document.
 type State struct {
 	Seq              uint64         `json:"seq"`
@@ -71,6 +85,7 @@ type State struct {
 	Bibles           []string       `json:"bibles"`
 	Import           ImportState    `json:"import"`
 	LastError        string         `json:"lastError"`
+	Dialog           DialogState    `json:"dialog"`
 	WindowTitle      string         `json:"windowTitle"`
 	Tab              int            `json:"tab"`
 	Focus            string         `json:"focus"`
@@ -95,6 +110,7 @@ type StateInput struct {
 	Scripture        ScriptureState // Bibles/Bible are filled from Bibles/BibleSelected
 	Import           ImportState
 	LastError        string
+	Dialog           DialogState
 	WindowTitle      string
 	Tab              int
 	Focus            Focus
@@ -139,6 +155,7 @@ func BuildState(in StateInput) State {
 		Scripture:        in.Scripture,
 		Import:           in.Import,
 		LastError:        in.LastError,
+		Dialog:           in.Dialog,
 		WindowTitle:      in.WindowTitle,
 		Tab:              in.Tab,
 		Focus:            in.Focus.String(),
