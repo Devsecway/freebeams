@@ -1,0 +1,332 @@
+#!/usr/bin/env bash
+# End-to-end smoke test: launches FreeWorship with `gd run` on a fresh temp
+# library, drives a song and a scripture to live through the control API,
+# saves screenshots to test/out/ and asserts /state along the way.
+#
+#   test/smoke.sh            # needs gd, curl, python3
+#
+# Exit status is non-zero on the first failed check, with a clear message.
+# The app log is kept in test/out/app.log.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/test/out"
+mkdir -p "$OUT"
+rm -f "$OUT"/*.png "$OUT"/*.fws
+LOG="$OUT/app.log"
+: >"$LOG"
+
+LIB="$(mktemp -t freeworship-smoke)"
+SCHED="$OUT/smoke-schedule.fws"
+KEY="testkey"
+EW_SONGS="/Users/Shared/Softouch/Easyworship/Default/v6.1/Databases/Data/Songs.db"
+APP_PID=""
+BASE=""
+
+log() { printf '[smoke] %s\n' "$*"; }
+
+app_pids() {
+	# gd run builds the library and then runs Godot (as itself or a child).
+	[ -n "$APP_PID" ] || return 0
+	echo "$APP_PID"
+	pgrep -P "$APP_PID" 2>/dev/null || true
+}
+
+app_running() {
+	local p
+	for p in $(app_pids); do
+		kill -0 "$p" 2>/dev/null && return 0
+	done
+	return 1
+}
+
+cleanup() {
+	if app_running; then
+		log "stopping the app"
+		for p in $(app_pids); do kill "$p" 2>/dev/null || true; done
+		sleep 1
+		for p in $(app_pids); do kill -9 "$p" 2>/dev/null || true; done
+	fi
+	rm -f "$LIB" "$LIB-wal" "$LIB-shm"
+}
+trap cleanup EXIT
+
+fail() {
+	printf '\n[smoke] FAIL: %s\n' "$1" >&2
+	if [ -n "${2:-}" ]; then printf '[smoke] last response: %s\n' "$2" | head -c 2000 >&2; echo >&2; fi
+	printf '[smoke] app log: %s (last lines below)\n' "$LOG" >&2
+	tail -n 25 "$LOG" >&2
+	exit 1
+}
+
+# post ACTION [JSON] prints the response body.
+post() {
+	curl -sS --max-time 60 -X POST -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+		-d "${2:-}" "$BASE/action/$1" || echo '{"ok":false,"error":"curl failed"}'
+}
+state() { curl -sS --max-time 60 -H "Authorization: Bearer $KEY" "$BASE/state" || echo '{"ok":false}'; }
+
+# check DESCRIPTION RESPONSE PYTHON-EXPR: evaluates EXPR with s = the state in
+# RESPONSE (r = the whole response) and fails the run when it is false.
+check() {
+	python3 - "$2" "$3" <<'PY' || fail "$1" "$2"
+import json, sys
+try:
+    r = json.loads(sys.argv[1])
+except Exception as e:
+    print("not JSON:", e, file=sys.stderr); sys.exit(1)
+d = r.get("data") or {}
+s = d.get("state", d) if isinstance(d, dict) else {}
+try:
+    ok = eval(sys.argv[2], {"r": r, "s": s, "d": d})
+except Exception as e:
+    print("check error:", e, file=sys.stderr); ok = False
+sys.exit(0 if ok else 1)
+PY
+	log "ok: $1"
+}
+
+# act DESCRIPTION ACTION JSON EXPR: post an action and check the result.
+act() {
+	local resp
+	resp="$(post "$2" "$3")"
+	check "$1" "$resp" "$4"
+	LAST="$resp"
+}
+
+# pixel DESCRIPTION FILE ARGS...: a test/pngcheck.py assertion on a screenshot.
+pixel() {
+	local desc="$1"
+	shift
+	python3 "$ROOT/test/pngcheck.py" "$@" || fail "$desc"
+	log "ok: $desc"
+}
+
+wait_idle() { LAST="$(post wait-idle)"; check "app idle" "$LAST" 'r.get("ok") and s.get("idle")'; }
+
+shot() { # NAME WINDOW
+	local f="$OUT/$1.png"
+	curl -sS --max-time 60 -H "Authorization: Bearer $KEY" -o "$f" "$BASE/screenshot?window=$2" || fail "screenshot $1"
+	python3 -c 'import sys; d=open(sys.argv[1],"rb").read(8); sys.exit(0 if d==b"\x89PNG\r\n\x1a\n" else 1)' "$f" ||
+		fail "screenshot $1 is not a PNG: $(head -c 300 "$f")"
+	log "saved $f"
+}
+
+# ---- launch -------------------------------------------------------------------
+command -v gd >/dev/null || fail "gd not found (go install graphics.gd/cmd/gd@latest)"
+log "launching: FREEWORSHIP_LIBRARY=$LIB gd run"
+(
+	cd "$ROOT" || exit 1
+	export FREEWORSHIP_LIBRARY="$LIB" FREEWORSHIP_CONTROL_KEY="$KEY"
+	exec gd run
+) >"$LOG" 2>&1 &
+APP_PID=$!
+
+for _ in $(seq 1 600); do # up to 5 minutes (the first build compiles everything)
+	BASE="$(grep -m1 -o 'Control server: http://[0-9.:]*' "$LOG" | sed 's/^Control server: //')"
+	[ -n "$BASE" ] && break
+	app_running || fail "the app exited before starting the control server"
+	sleep 0.5
+done
+[ -n "$BASE" ] || fail "no 'Control server:' line in the log"
+log "control server at $BASE"
+
+# ---- startup: first-run import ------------------------------------------------------
+for _ in $(seq 1 240); do
+	LAST="$(state)"
+	python3 -c 'import json,sys; s=json.loads(sys.argv[1])["data"]; sys.exit(0 if not s["import"]["running"] else 1)' "$LAST" 2>/dev/null && break
+	sleep 0.5
+done
+check "import finished" "$LAST" 'not s["import"]["running"] and not s["import"].get("error")'
+wait_idle
+if [ -f "$EW_SONGS" ]; then
+	check "EasyWorship songs imported (songCount >= 1)" "$LAST" 's["songCount"] >= 1 and s["songs"]["countText"].endswith("songs")'
+	check "KJV imported" "$LAST" '"KJV" in s["bibles"]'
+	log "library: $(python3 -c 'import json,sys; s=json.loads(sys.argv[1])["data"]; print(s["songCount"], "songs;", s["import"]["summary"])' "$LAST")"
+else
+	log "EasyWorship is not installed: skipping the import assertions"
+fi
+SONGS="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["songCount"])' "$LAST")"
+check "window title shows the schedule" "$LAST" 's["windowTitle"].startswith("FreeWorship") and "Untitled" in s["windowTitle"]'
+shot app-main-start main
+
+act "output on" output '{"on":true}' 's["outputOpen"] and s["outputEnabled"]'
+
+# ---- song ------------------------------------------------------------------------
+act "search amazing" search-songs '{"q":"amazing"}' 's["songs"]["results"] >= 1 and s["songs"]["query"] == "amazing"'
+act "select Amazing Grace" select-song '{"title":"Amazing Grace"}' '"Amazing Grace" in s["preview"]["title"] and s["preview"]["index"] == 0'
+act "go live (crossfade running)" go-live '' 's["live"]["title"] == s["preview"]["title"] and "Amazing grace" in s["live"]["text"] and s["live"]["index"] == 0 and s["transitioning"]'
+wait_idle
+shot song-live-main main
+shot song-live-output output
+check "song row selected" "$LAST" 's["songs"]["current"] == "Amazing Grace" and s["songs"]["selected"] >= 0'
+# The selected song row is drawn highlighted (highlight.2 #395792, unfocused list).
+pixel "selected song row is highlighted" "$OUT/song-live-main.png" has 395792 0.22 0.76 0.58 0.95 30000
+pixel "song output has content" "$OUT/song-live-output.png" notblank
+
+act "next slide" next '' 's["live"]["index"] == 1'
+act "key v (first verse)" key '{"name":"v"}' 'd["consumed"] and s["live"]["label"].startswith("Verse")'
+act "key 2 (Verse 2)" key '{"name":"2"}' 's["live"]["label"] == "Verse 2"'
+act "key End (last slide)" key '{"name":"End"}' 's["live"]["index"] == s["live"]["count"] - 1'
+act "key Home (first slide)" key '{"name":"Home"}' 's["live"]["index"] == 0'
+act "key space (next)" key '{"name":"space"}' 's["live"]["index"] == 1'
+act "key backspace (prev)" key '{"name":"backspace"}' 's["live"]["index"] == 0'
+act "jump chorus or verse 1" jump '{"kind":"verse","n":1}' 's["live"]["label"] == "Verse 1"'
+
+# ---- real key events through Godot's input pipeline (keyName, focus rules) ----------
+act "native Right (next)" native-key '{"name":"right"}' 's["live"]["index"] == 1'
+act "native V" native-key '{"name":"v"}' 's["live"]["label"] == "Verse 1"'
+act "native 3 within 1s (Verse 3)" native-key '{"name":"3"}' 's["live"]["label"] == "Verse 3"'
+act "native Ctrl+B" native-key '{"name":"b","ctrl":true}' 's["mode"] == "black" and s["transitioning"]'
+act "native Cmd+B" native-key '{"name":"b","meta":true}' 's["mode"] == "normal"'
+act "focus the search field" focus '{"target":"song-search"}' 's["focus"] == "text"'
+act "N types into the search field (no hotkey)" native-key '{"name":"n"}' 's["live"]["label"] == "Verse 3"'
+act "Cmd+C in a text field is not Clear" native-key '{"name":"c","meta":true}' 's["mode"] == "normal"'
+act "key Cmd+C with text focus is not consumed" key '{"name":"c","meta":true}' 'not d["consumed"] and s["mode"] == "normal"'
+sleep 0.5
+wait_idle
+check "typed N reached the search (debounced)" "$LAST" 's["songs"]["query"] in ("amazingn", "namazing")'
+act "Backspace edits the text (not Prev)" native-key '{"name":"backspace"}' 's["live"]["label"] == "Verse 3"'
+sleep 0.5
+wait_idle
+check "search back to amazing" "$LAST" 's["songs"]["query"] == "amazing" and s["songs"]["results"] >= 1'
+act "focus the preview grid" focus '{"target":"preview-grid"}' 's["focus"] == "grid" and s["preview"]["index"] == 0'
+act "Right in the preview grid selects the next preview slide" native-key '{"name":"right"}' 's["preview"]["index"] == 1 and s["live"]["label"] == "Verse 3" and s["focus"] == "grid"'
+act "Space in the preview grid is still Next" native-key '{"name":"space"}' 's["live"]["index"] == 3'
+# Enter on a preview tile = the tile's activate (the same callback as double-click).
+act "Enter in the preview grid sends that slide live" native-key '{"name":"enter"}' 's["live"]["index"] == 1 and s["preview"]["index"] == 1'
+act "focus the song list" focus '{"target":"song-list"}' 's["focus"] == "list"'
+act "select Amazing Grace again" select-song '{"title":"Amazing Grace"}' 's["songs"]["current"] == "Amazing Grace"'
+SEL="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["songs"]["selected"])' "$LAST")"
+act "Down in the song list moves the list (not the schedule)" native-key '{"name":"down"}' "s[\"songs\"][\"selected\"] == $SEL + 1"
+wait_idle
+check "the next song is in preview" "$LAST" 's["preview"]["title"] != "Amazing Grace" and s["live"]["title"] == "Amazing Grace"'
+act "Up in the song list" native-key '{"name":"up"}' "s[\"songs\"][\"selected\"] == $SEL"
+wait_idle
+check "Amazing Grace is back in preview" "$LAST" 's["preview"]["title"] == "Amazing Grace" and s["songs"]["current"] == "Amazing Grace"'
+# Space is a hotkey (Next). It must not also reach the focused list, whose
+# ui_accept would activate the row and send the song live again from slide 1.
+act "Space with the song list focused" native-key '{"name":"space"}' 's["live"]["index"] == 2'
+wait_idle
+check "Space did not also activate the song row" "$LAST" 's["live"]["index"] == 2 and s["focus"] == "list"'
+# PgDn is a hotkey (go live with the next schedule item; the schedule is empty
+# here). If it leaked to the focused list, the list would page its selection.
+act "PgDn with the song list focused" native-key '{"name":"pagedown"}' "s[\"songs\"][\"selected\"] == $SEL"
+wait_idle
+check "PgDn did not also page the song list" "$LAST" "s[\"songs\"][\"selected\"] == $SEL and s[\"songs\"][\"current\"] == \"Amazing Grace\""
+act "release focus" focus '{"target":"none"}' 's["focus"] == "none"'
+act "Enter (no focus) goes live with the preview" native-key '{"name":"enter"}' 's["live"]["title"] == "Amazing Grace" and s["live"]["index"] == s["preview"]["index"]'
+
+# ---- scripture ---------------------------------------------------------------------
+act "reference jn 3:16" reference '{"text":"jn 3:16"}' 's["preview"]["title"] == "John 3:16" and "For God so loved" in s["preview"]["text"]'
+act "scripture live" go-live '' 's["live"]["title"] == "John 3:16" and "For God so loved" in s["live"]["text"] and "(KJV)" in s["live"]["footer"]'
+wait_idle
+shot scripture-live-main main
+shot scripture-live-output output
+act "Go Back returns the previous item to live" go-back '' 's["live"]["title"] == "Amazing Grace"'
+act "Go Back again" go-back '' 's["live"]["title"] == "John 3:16"'
+pixel "scripture output has content" "$OUT/scripture-live-output.png" notblank
+act "reference John 3:16-18" reference '{"text":"John 3:16-18"}' 's["scripture"]["verses"] == 3 and s["preview"]["count"] == 3'
+act "select preview slide 2" select-preview-slide '{"i":2}' 's["preview"]["index"] == 2 and "18" in s["preview"]["label"] and s["scripture"]["selected"] == 2'
+act "reference 1 cor 13" reference '{"text":"1 cor 13"}' 's["preview"]["title"] == "1 Corinthians 13" and s["scripture"]["verses"] == 13 and s["preview"]["count"] == 13'
+act "reference ps 23:1-3" reference '{"text":"ps 23:1-3"}' 's["preview"]["title"] == "Psalms 23:1-3" and s["preview"]["count"] == 3 and s["preview"]["footer"] == "Psalms 23:1 (KJV)"'
+act "reference in another Bible" reference '{"text":"jn 3:16","bible":"RVA"}' 's["scripture"]["bible"] == "RVA" and "(RVA)" in s["preview"]["footer"]'
+act "back to KJV" reference '{"text":"John 3:16-18","bible":"KJV"}' 's["scripture"]["bible"] == "KJV" and s["preview"]["count"] == 3'
+act "missing verses report an error" reference '{"text":"jn 3:99"}' 'not r["ok"] and "no verses" in r["error"].lower()'
+LAST="$(state)"
+check "scripture status shows No verses found" "$LAST" 's["scripture"]["error"] and "No verses found" in s["scripture"]["status"]'
+act "unparseable reference reports an error" reference '{"text":"jn 99:1"}' 'not r["ok"] and "out of range" in r["error"]'
+LAST="$(state)"
+check "scripture status shows the parse error" "$LAST" 's["scripture"]["error"] and "out of range" in s["scripture"]["status"]'
+
+# ---- black / clear / logo -----------------------------------------------------------------
+act "black on" black '' 's["mode"] == "black"'
+wait_idle
+shot black-main main
+shot black-output output
+pixel "black output is black" "$OUT/black-output.png" black
+pixel "live monitor is black" "$OUT/black-main.png" has 000000 0.66 0.40 0.93 0.63 290000
+act "black off" black '' 's["mode"] == "normal"'
+act "ctrl+b hotkey" key '{"name":"b","ctrl":true}' 's["mode"] == "black"'
+act "cmd+b hotkey" key '{"name":"b","meta":true}' 's["mode"] == "normal"'
+act "logo on" logo '' 's["mode"] == "logo"'
+wait_idle
+shot logo-output output
+pixel "logo output has content" "$OUT/logo-output.png" notblank
+act "ctrl+l hotkey (logo off)" key '{"name":"l","ctrl":true}' 's["mode"] == "normal"'
+act "ctrl+c hotkey (clear on)" key '{"name":"c","ctrl":true}' 's["mode"] == "clear"'
+act "clear off" clear '' 's["mode"] == "normal"'
+
+# ---- schedule ------------------------------------------------------------------------
+act "add song to schedule" add-to-schedule '{"source":"song"}' 's["schedule"]["items"] == ["Amazing Grace"] and s["schedule"]["dirty"]'
+act "reference jn 3:16 again" reference '{"text":"jn 3:16"}' 's["scripture"]["passage"] == "John 3:16"'
+act "add scripture to schedule" add-to-schedule '{"source":"scripture"}' 's["schedule"]["items"] == ["Amazing Grace", "John 3:16"]'
+check "title has a dirty marker" "$LAST" 's["windowTitle"].endswith(" •")'
+act "select schedule item 0" select-schedule '{"index":0}' 's["preview"]["title"] == "Amazing Grace" and s["schedule"]["selected"] == 0'
+act "schedule item live" go-live '' 's["schedule"]["live"] == 0 and s["live"]["title"] == "Amazing Grace"'
+act "PgDn: go live with the next item" key '{"name":"pagedown"}' 's["schedule"]["live"] == 1 and s["live"]["title"] == "John 3:16"'
+act "PgUp: go live with the previous item" key '{"name":"pageup"}' 's["schedule"]["live"] == 0 and s["live"]["title"] == "Amazing Grace"'
+act "Down: next item into preview" key '{"name":"down"}' 's["schedule"]["selected"] == 1 and s["preview"]["title"] == "John 3:16" and s["schedule"]["live"] == 0'
+wait_idle
+shot schedule-main main
+act "move item" move-schedule '{"from":1,"to":0}' 's["schedule"]["items"] == ["John 3:16", "Amazing Grace"] and s["schedule"]["live"] == 1'
+act "move back" move-schedule '{"from":0,"to":1}' 's["schedule"]["items"] == ["Amazing Grace", "John 3:16"]'
+act "save schedule" save-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["path"].endswith("smoke-schedule.fws") and s["schedule"]["title"] == "smoke-schedule"'
+[ -s "$SCHED" ] || fail "schedule file $SCHED was not written"
+check "title without dirty marker" "$LAST" 's["windowTitle"] == "FreeWorship — smoke-schedule"'
+act "new schedule" new-schedule '' 's["schedule"]["items"] == [] and s["schedule"]["title"] == "Untitled"'
+act "open schedule" open-schedule "{\"path\":\"$SCHED\"}" 'len(s["schedule"]["items"]) == 2 and s["schedule"]["items"] == ["Amazing Grace", "John 3:16"] and not s["schedule"]["dirty"]'
+act "remove schedule item" remove-schedule '{"index":1}' 's["schedule"]["items"] == ["Amazing Grace"] and s["schedule"]["dirty"]'
+
+# ---- Phase 2 placeholder tab ------------------------------------------------------
+act "Media tab" tab '{"tab":"media"}' 's["tab"] == 2'
+wait_idle
+shot media-tab main
+act "Songs tab" tab '{"tab":"songs"}' 's["tab"] == 0'
+
+# ---- song editor / delete -------------------------------------------------------
+act "select Amazing Grace for editing" select-song '{"title":"Amazing Grace"}' 's["songs"]["current"] == "Amazing Grace"'
+act "open the song editor" editor '{"mode":"edit"}' 's["focus"] == "dialog"'
+wait_idle
+shot song-editor editor
+pixel "song editor has content" "$OUT/song-editor.png" notblank
+act "hotkeys are off while a dialog is open" key '{"name":"n"}' 'not d["consumed"]'
+act "close the editor" editor '{"mode":"close"}' 's["focus"] != "dialog"'
+act "save a new song (editor OK path)" save-song '{"title":"Smoke Test Song","author":"FreeWorship","lyrics":"[Verse 1]\nline one\nline two\n\n[Chorus]\nchorus line"}' 's["songs"]["current"] == "Smoke Test Song" and s["preview"]["title"] == "Smoke Test Song" and s["preview"]["count"] == 2'
+wait_idle
+act "the new song is searchable" search-songs '{"q":"smoke test"}' "s[\"songs\"][\"results\"] == 1 and s[\"songCount\"] == $SONGS + 1"
+act "delete asks for confirmation" delete-song '{"index":0}' 's["focus"] == "dialog"'
+wait_idle
+shot delete-confirm dialog
+act "dismiss the dialog" dismiss '' 's["focus"] != "dialog"'
+act "delete confirmed" delete-song '{"index":0,"confirm":true}' 'r["ok"]'
+wait_idle
+check "song deleted" "$LAST" "s[\"songs\"][\"results\"] == 0 and s[\"songCount\"] == $SONGS"
+
+# ---- closing the window ------------------------------------------------------------
+check "schedule has unsaved changes" "$LAST" 's["schedule"]["dirty"]'
+act "close the window with unsaved changes" close '' 'r["ok"]'
+wait_idle
+check "closing with unsaved changes asks first" "$LAST" 's["focus"] == "dialog"'
+app_running || fail "the app quit without asking about unsaved changes"
+shot quit-confirm dialog
+act "cancel quitting" dismiss '' 's["focus"] != "dialog"'
+act "save before closing" save-schedule '{}' 'not s["schedule"]["dirty"]'
+
+# ---- quit ------------------------------------------------------------------------------------
+LAST="$(post close)"
+log "closing the window (clean schedule)"
+for _ in $(seq 1 60); do
+	app_running || break
+	sleep 0.5
+done
+app_running && fail "the app did not exit after quit"
+
+# ---- log hygiene ------------------------------------------------------------------------
+BAD="$(grep -nE 'ERROR|WARNING|leaked|Leaked|panic:|SCRIPT ERROR' "$LOG" || true)"
+if [ -n "$BAD" ]; then
+	printf '%s\n' "$BAD" >&2
+	fail "the app log has errors or warnings"
+fi
+grep -q 'shutting down' "$LOG" || fail "no clean shutdown in the log"
+log "PASS (screenshots in $OUT)"

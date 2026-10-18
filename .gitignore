@@ -6,3 +6,4 @@ releases/
 .playwright-mcp/
 __pycache__/
 .claude/
+test/out/
