@@ -78,16 +78,21 @@ func defaultScreen(screens []ScreenInfo) int {
 type FullscreenStrategy int
 
 const (
-	// Borderless positions a borderless, always-on-top window over the whole
-	// screen rect. On macOS this stays on the current Space (no Spaces
-	// animation) and keeps the operator window usable; it is the default.
-	Borderless FullscreenStrategy = iota
-	// NativeFullscreen uses Window.ModeFullscreen on the target screen (a new
-	// Space on macOS).
+	// ExclusiveFullscreen uses Window.ModeExclusiveFullscreen on the target
+	// screen. It is the default. On macOS the output gets its own Space with
+	// no menu bar, and the menu bar does not slide in when the mouse touches
+	// the top edge. Verified on an HDMI TV: covers the whole screen and leaves
+	// the operator display untouched.
+	ExclusiveFullscreen FullscreenStrategy = iota
+	// NativeFullscreen uses Window.ModeFullscreen (a new Space on macOS). It
+	// also hides the menu bar, but the menu bar reappears when the mouse
+	// touches the top edge of that screen.
 	NativeFullscreen
-	// ExclusiveFullscreen uses Window.ModeExclusiveFullscreen (macOS also
-	// hides the Dock and menu bar while the app is active).
-	ExclusiveFullscreen
+	// Borderless positions a borderless, always-on-top window over the screen
+	// rect. Do not use it on macOS: with "Displays have separate Spaces" (the
+	// default) every display has a menu bar, and the menu bar stays drawn over
+	// the top of the output.
+	Borderless
 )
 
 // Output manages the projector window: one OS window hosting a SlideView.
@@ -100,7 +105,7 @@ type Output struct {
 	// keyboard focus (the windowed single-screen output is focusable), so the
 	// app can run its hotkeys there too. A fullscreen output is unfocusable.
 	OnInput func(ev InputEvent.Instance)
-	// Strategy selects how a secondary display is covered (default Borderless).
+	// Strategy selects how a secondary display is covered (default ExclusiveFullscreen).
 	Strategy FullscreenStrategy
 
 	parent     Node.Instance
