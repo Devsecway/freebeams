@@ -202,12 +202,12 @@ func (g *SlideGrid) GuiInput(ev InputEvent.Instance) {
 	key := k.Keycode()
 	if n, ok := nav[key]; ok {
 		g.userSelect(uicore.Navigate(g.selected, len(g.items), cols, n))
-		g.AsControl().AcceptEvent()
+		acceptEvent(g.AsControl())
 		return
 	}
 	if key == Input.KeyEnter || key == Input.KeyKpEnter {
 		g.userActivate(g.selected)
-		g.AsControl().AcceptEvent()
+		acceptEvent(g.AsControl())
 	}
 }
 
@@ -298,7 +298,7 @@ func (t *slideTile) GuiInput(ev InputEvent.Instance) {
 	if mb.DoubleClick() {
 		t.grid.userActivate(t.index)
 	}
-	t.AsControl().AcceptEvent()
+	acceptEvent(t.AsControl())
 }
 
 func (t *slideTile) Notification(what Object.Notification) {

@@ -237,7 +237,7 @@ func (s *ScheduleList) GuiInput(ev InputEvent.Instance) {
 	default:
 		return
 	}
-	s.AsControl().AcceptEvent()
+	acceptEvent(s.AsControl())
 }
 
 // scheduleRowView draws one schedule row.
@@ -304,7 +304,7 @@ func (v *scheduleRowView) GuiInput(ev InputEvent.Instance) {
 	default:
 		return
 	}
-	v.AsControl().AcceptEvent()
+	acceptEvent(v.AsControl())
 }
 
 func (v *scheduleRowView) Notification(what Object.Notification) {

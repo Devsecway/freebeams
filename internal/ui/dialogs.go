@@ -117,11 +117,11 @@ func (d *dialogWindow) input(ev InputEvent.Instance) {
 	switch k.Keycode() {
 	case Input.KeyEscape:
 		d.close()
-		d.win.AsViewport().SetInputAsHandled()
+		setInputHandled(d.win.AsViewport())
 	case Input.KeyEnter, Input.KeyKpEnter:
 		if k.AsInputEventWithModifiers().IsCommandOrControlPressed() && d.onOK != nil {
 			d.onOK()
-			d.win.AsViewport().SetInputAsHandled()
+			setInputHandled(d.win.AsViewport())
 		}
 	}
 }

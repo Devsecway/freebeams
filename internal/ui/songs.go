@@ -117,7 +117,7 @@ func NewSongLibraryPanel() *SongLibraryPanel {
 		if k, ok := Object.As[InputEventKey.Instance](ev); ok && k.AsInputEvent().IsPressed() &&
 			(k.Keycode() == Input.KeyDelete) && s.selected >= 0 && s.OnDelete != nil {
 			s.OnDelete(s.selected)
-			s.list.AsControl().AcceptEvent()
+			acceptEvent(s.list.AsControl())
 		}
 	})
 
@@ -217,7 +217,12 @@ func (s *SongLibraryPanel) render() {
 
 // selectTreeRow selects top-level row i of a tree (-1 deselects) and scrolls
 // it into view. Callers suppress the resulting item_selected signal.
+//
+// Tree.set_selected / deselect_all do not queue a redraw (Godot 4.6), so a
+// programmatic selection on a tree that has already been drawn stays
+// invisible until something else redraws it. Redraw explicitly.
 func selectTreeRow(t Tree.Instance, i int) {
+	defer t.AsCanvasItem().QueueRedraw()
 	root := t.GetRoot()
 	if root == (TreeItem.Instance{}) || i < 0 || i >= root.GetChildCount() {
 		t.DeselectAll()
