@@ -165,9 +165,9 @@ func (p *parser) symbol(c byte) {
 		// {\*\dest ...}: an optional destination we do not understand. Skip it.
 		p.st.dest = destSkip
 	case '~':
-		p.emitPlain(' ')
+		p.emitPlain('\u00A0')
 	case '_':
-		p.emitPlain('‑')
+		p.emitPlain('\u2011')
 	case '-', ':', '|':
 		// optional hyphen, index subentry, formula: no text
 	case '\\', '{', '}':
@@ -290,25 +290,25 @@ func (p *parser) word(w string, param int, hasParam bool) {
 	case "tab", "cell":
 		p.emitPlain('\t')
 	case "emdash":
-		p.emitPlain('—')
+		p.emitPlain('\u2014')
 	case "endash":
-		p.emitPlain('–')
+		p.emitPlain('\u2013')
 	case "emspace", "enspace", "qmspace":
 		p.emitPlain(' ')
 	case "bullet":
-		p.emitPlain('•')
+		p.emitPlain('\u2022')
 	case "lquote":
-		p.emitPlain('‘')
+		p.emitPlain('\u2018')
 	case "rquote":
-		p.emitPlain('’')
+		p.emitPlain('\u2019')
 	case "ldblquote":
-		p.emitPlain('“')
+		p.emitPlain('\u201C')
 	case "rdblquote":
-		p.emitPlain('”')
+		p.emitPlain('\u201D')
 	case "zwj":
-		p.emitPlain('‍')
+		p.emitPlain('\u200D')
 	case "zwnj":
-		p.emitPlain('‌')
+		p.emitPlain('\u200C')
 	}
 }
 
@@ -388,7 +388,7 @@ func (p *parser) emitRune(r rune) {
 			p.out.WriteRune(utf16.DecodeRune(p.highSurr, r))
 			p.highSurr = 0
 		} else {
-			p.out.WriteRune('�')
+			p.out.WriteRune('\uFFFD')
 		}
 	default:
 		p.flushSurrogate()
@@ -400,7 +400,7 @@ func (p *parser) emitRune(r rune) {
 
 func (p *parser) flushSurrogate() {
 	if p.highSurr != 0 {
-		p.out.WriteRune('�')
+		p.out.WriteRune('\uFFFD')
 		p.highSurr = 0
 	}
 }
