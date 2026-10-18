@@ -5,3 +5,4 @@ releases/
 /freeworship
 .playwright-mcp/
 __pycache__/
+.claude/
