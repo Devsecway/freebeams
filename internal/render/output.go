@@ -13,6 +13,7 @@ import (
 	"graphics.gd/classdb/DisplayServer"
 	"graphics.gd/classdb/Image"
 	"graphics.gd/classdb/Input"
+	"graphics.gd/classdb/InputEvent"
 	"graphics.gd/classdb/Node"
 	"graphics.gd/classdb/Window"
 	"graphics.gd/variant/Vector2i"
@@ -95,6 +96,10 @@ type Output struct {
 	// OnClosed is called when the user closes the output window (not when
 	// Close is called).
 	OnClosed func()
+	// OnInput receives the input events the output window gets while it has
+	// keyboard focus (the windowed single-screen output is focusable), so the
+	// app can run its hotkeys there too. A fullscreen output is unfocusable.
+	OnInput func(ev InputEvent.Instance)
 	// Strategy selects how a secondary display is covered (default Borderless).
 	Strategy FullscreenStrategy
 
@@ -129,6 +134,16 @@ func (o *Output) Screen() int {
 // Fullscreen reports whether the output covers a whole secondary screen
 // (false for the single-screen windowed fallback).
 func (o *Output) Fullscreen() bool { return o.IsOpen() && o.fullscreen }
+
+// WindowID returns the output window's DisplayServer window id (-1 when
+// closed). Input events addressed to it (InputEventFromWindow.window_id)
+// reach OnInput.
+func (o *Output) WindowID() int {
+	if !o.IsOpen() {
+		return -1
+	}
+	return o.win.GetWindowId()
+}
 
 // View returns the output's SlideView (nil when closed).
 func (o *Output) View() *SlideView { return o.view }
@@ -216,6 +231,11 @@ func (o *Output) Open(screen int) {
 		o.closeWindow()
 		if o.OnClosed != nil {
 			o.OnClosed()
+		}
+	})
+	win.OnWindowInput(func(ev InputEvent.Instance) {
+		if o.OnInput != nil {
+			o.OnInput(ev)
 		}
 	})
 	win.OnMouseEntered(func() {

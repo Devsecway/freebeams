@@ -40,7 +40,6 @@ type ScripturePanel struct {
 	verse       int
 	statusText  string
 	statusError bool
-	rendering   bool
 	builtBibles bool
 	builtVerses bool
 }
@@ -59,9 +58,6 @@ func NewScripturePanel() *ScripturePanel {
 	s.bibles.AsControl().SetThemeTypeVariation(vLibraryTree)
 	s.bibles.SetHideRoot(true)
 	s.bibles.OnItemSelected(func() {
-		if s.rendering {
-			return
-		}
 		if i := treeIndex(s.bibles.GetSelected()); i >= 0 {
 			s.bible = i
 			if s.OnBibleChanged != nil {
@@ -78,9 +74,6 @@ func NewScripturePanel() *ScripturePanel {
 	s.verses.SetAllowRmbSelect(true)
 	s.verses.SetAllowReselect(true)
 	s.verses.OnItemSelected(func() {
-		if s.rendering {
-			return
-		}
 		if i := treeIndex(s.verses.GetSelected()); i >= 0 {
 			s.verse = i
 			if s.OnSelect != nil {
@@ -167,35 +160,39 @@ func (s *ScripturePanel) SetStatus(msg string, isError bool) {
 	s.render()
 }
 
+// render projects the panel state. Its programmatic Tree changes run quietly
+// (signals blocked), so they never come back as OnBibleChanged / OnSelect.
 func (s *ScripturePanel) render() {
-	s.rendering = true
-	defer func() { s.rendering = false }()
-	if !s.builtBibles {
-		s.builtBibles = true
-		s.bibles.Clear()
-		root := s.bibles.CreateItem()
-		icon := fwIcon(s.bibles.AsControl(), "bible")
-		for _, b := range s.bibleList {
-			it := root.CreateChild()
-			name := b.Abbrev
-			if b.Name != "" {
-				name = b.Name + " (" + b.Abbrev + ")"
+	quietly(s.bibles.AsControl(), func() {
+		if !s.builtBibles {
+			s.builtBibles = true
+			s.bibles.Clear()
+			root := s.bibles.CreateItem()
+			icon := fwIcon(s.bibles.AsControl(), "bible")
+			for _, b := range s.bibleList {
+				it := root.CreateChild()
+				name := b.Abbrev
+				if b.Name != "" {
+					name = b.Name + " (" + b.Abbrev + ")"
+				}
+				it.SetText(0, name)
+				it.SetIcon(0, icon)
+				it.SetIconMaxWidth(0, 16)
 			}
-			it.SetText(0, name)
-			it.SetIcon(0, icon)
-			it.SetIconMaxWidth(0, 16)
 		}
-	}
-	selectTreeRow(s.bibles, s.bible)
-	if !s.builtVerses {
-		s.builtVerses = true
-		s.verses.Clear()
-		root := s.verses.CreateItem()
-		for _, v := range s.verseRows {
-			root.CreateChild().SetText(0, v)
+		selectTreeRow(s.bibles, s.bible)
+	})
+	quietly(s.verses.AsControl(), func() {
+		if !s.builtVerses {
+			s.builtVerses = true
+			s.verses.Clear()
+			root := s.verses.CreateItem()
+			for _, v := range s.verseRows {
+				root.CreateChild().SetText(0, v)
+			}
 		}
-	}
-	selectTreeRow(s.verses, s.verse)
+		selectTreeRow(s.verses, s.verse)
+	})
 	s.status.SetText(s.statusText)
 	if s.statusError {
 		s.status.AsControl().SetThemeTypeVariation(vError)

@@ -36,6 +36,9 @@ type dialogWindow struct {
 	size    Vector2.XY // logical size
 	onOK    func()
 	onClose func()
+	// host returns the node the window must live under when it opens (see
+	// MainWindow.dialogHost); nil keeps the current parent.
+	host func(self Node.ID) Node.Instance
 }
 
 func newDialogWindow(title string, w, h float32) *dialogWindow {
@@ -88,7 +91,17 @@ func newDialogWindow(title string, w, h float32) *dialogWindow {
 func (d *dialogWindow) setTheme(th Theme.Instance) { d.win.SetTheme(th) }
 
 // popup shows the window centered over its parent window, scaled like it.
+// A dialog opened while another one is open becomes that dialog's child:
+// Godot allows a window only one exclusive child.
 func (d *dialogWindow) popup() {
+	if d.host != nil && !d.win.Visible() {
+		self := d.win.AsNode()
+		if h := d.host(self.ID()); h != (Node.Instance{}) {
+			if p := self.GetParent(); p == (Node.Instance{}) || p.ID() != h.ID() {
+				self.MoreArgs().Reparent(h, false)
+			}
+		}
+	}
 	scale := float32(1)
 	if parent := d.win.AsNode().GetParent(); parent != (Node.Instance{}) {
 		if pw := Window.Get(parent); pw != Window.Nil {
@@ -261,9 +274,10 @@ func (e *SongEditor) save() {
 
 // ConfirmDialog is a simple OK / Cancel question.
 type ConfirmDialog struct {
-	dlg  *dialogWindow
-	msg  Label.Instance
-	onOK func()
+	dlg   *dialogWindow
+	msg   Label.Instance
+	title string
+	onOK  func()
 }
 
 // NewConfirmDialog builds the dialog. Add AsWindow() to the scene tree.
@@ -298,8 +312,82 @@ func (c *ConfirmDialog) SetTheme(th Theme.Instance) { c.dlg.setTheme(th) }
 // Ask shows the question; onOK runs only if the user confirms.
 func (c *ConfirmDialog) Ask(title, message string, onOK func()) {
 	c.onOK = onOK
+	c.title = title
 	c.dlg.win.SetTitle(title)
 	c.msg.SetText(message)
 	c.dlg.popup()
 	c.dlg.ok.AsControl().GrabFocus()
 }
+
+// Visible reports whether the question is on screen.
+func (c *ConfirmDialog) Visible() bool { return c.dlg.win.Visible() }
+
+// Title returns the title of the last question asked.
+func (c *ConfirmDialog) Title() string { return c.title }
+
+// ---- Message dialog ---------------------------------------------------------
+
+// MessageDialog tells the operator about an error: a heading, the message
+// and a single OK button. OnClose runs when the user dismisses it (OK, Esc or
+// the window's close button), not when Hide is called.
+type MessageDialog struct {
+	OnClose func()
+
+	dlg     *dialogWindow
+	heading Label.Instance
+	msg     Label.Instance
+	title   string
+	text    string
+}
+
+// NewMessageDialog builds the dialog. Add AsWindow() to the scene tree.
+func NewMessageDialog() *MessageDialog {
+	m := &MessageDialog{}
+	m.dlg = newDialogWindow("FreeWorship", 480, 210)
+	m.heading = label("", vTitle)
+	m.msg = label("", "")
+	m.msg.SetAutowrapMode(TextServer.AutowrapWordSmart)
+	m.msg.SetClipText(false)
+	m.msg.SetTextOverrunBehavior(TextServer.OverrunNoTrimming)
+	expand(m.msg.AsControl())
+	add(m.dlg.body, m.heading.AsControl(), m.msg.AsControl())
+	add(m.dlg.footer, spacer(), m.dlg.ok.AsControl())
+	Object.Free(m.dlg.cancel) // OK only: the Cancel button never joins the tree
+	m.dlg.cancel = Button.Nil
+	m.dlg.onOK = m.dlg.close
+	m.dlg.onClose = func() {
+		if m.OnClose != nil {
+			m.OnClose()
+		}
+	}
+	m.dlg.win.AsNode().SetName("MessageDialog")
+	return m
+}
+
+// AsWindow returns the dialog window node.
+func (m *MessageDialog) AsWindow() Window.Instance { return m.dlg.win }
+
+// SetTheme sets the dialog's theme.
+func (m *MessageDialog) SetTheme(th Theme.Instance) { m.dlg.setTheme(th) }
+
+// Show displays message under a title ("Open Schedule") until dismissed.
+func (m *MessageDialog) Show(title, message string) {
+	m.title, m.text = title, message
+	m.dlg.win.SetTitle(title)
+	m.heading.SetText(title)
+	m.msg.SetText(message)
+	m.dlg.popup()
+	m.dlg.ok.AsControl().GrabFocus()
+}
+
+// Hide closes the dialog without calling OnClose.
+func (m *MessageDialog) Hide() { m.dlg.hide() }
+
+// Visible reports whether the dialog is on screen.
+func (m *MessageDialog) Visible() bool { return m.dlg.win.Visible() }
+
+// Title and Text return what the dialog shows.
+func (m *MessageDialog) Title() string { return m.title }
+
+// Text returns the message text.
+func (m *MessageDialog) Text() string { return m.text }

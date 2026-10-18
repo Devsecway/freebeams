@@ -4,6 +4,7 @@ import (
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/GUI"
 	"graphics.gd/classdb/Label"
+	"graphics.gd/classdb/Node"
 	"graphics.gd/classdb/PopupMenu"
 	"graphics.gd/classdb/Window"
 	"graphics.gd/variant/Vector2"
@@ -39,6 +40,7 @@ type MainWindow struct {
 	ResourcePreview *MonitorHost      `gd:"-"` // host slot for the resource preview
 	Editor          *SongEditor       `gd:"-"`
 	Confirm         *ConfirmDialog    `gd:"-"`
+	Message         *MessageDialog    `gd:"-"` // errors for the operator
 
 	// Splitters, for persisting their percentages (OnChanged) and restoring
 	// them (SetPercent).
@@ -103,12 +105,82 @@ func NewMainWindow(p Palette) *MainWindow {
 
 	w.Editor = NewSongEditor()
 	w.Confirm = NewConfirmDialog()
-	w.AsNode().AddChild(w.Editor.AsWindow().AsNode())
-	w.AsNode().AddChild(w.Confirm.AsWindow().AsNode())
-	w.Editor.SetTheme(theme)
-	w.Confirm.SetTheme(theme)
+	w.Message = NewMessageDialog()
+	for _, d := range w.dialogs() {
+		d.host = w.dialogHost
+		d.setTheme(theme)
+		w.AsNode().AddChild(d.win.AsNode())
+	}
 	w.render()
 	return w
+}
+
+// dialogs lists the dialog windows.
+func (w *MainWindow) dialogs() []*dialogWindow {
+	return []*dialogWindow{w.Editor.dlg, w.Confirm.dlg, w.Message.dlg}
+}
+
+// dialogHost is where a dialog that is opening must live: under the topmost
+// open dialog, else under the main window. Godot gives a window only one
+// exclusive child, so e.g. the quit question over the song editor must be the
+// editor's child. skip is the opening dialog itself.
+func (w *MainWindow) dialogHost(skip Node.ID) Node.Instance {
+	host := w.AsNode()
+	for {
+		next := Node.Instance{}
+		for _, d := range w.dialogs() {
+			n := d.win.AsNode()
+			if n.ID() == skip || !d.win.Visible() {
+				continue
+			}
+			if p := n.GetParent(); p != (Node.Instance{}) && p.ID() == host.ID() {
+				next = n
+				break
+			}
+		}
+		if next == (Node.Instance{}) {
+			return host
+		}
+		host = next
+	}
+}
+
+// DialogOpen reports whether any dialog is on screen.
+func (w *MainWindow) DialogOpen() bool {
+	for _, d := range w.dialogs() {
+		if d.win.Visible() {
+			return true
+		}
+	}
+	return false
+}
+
+// AcceptDialog presses the topmost dialog's OK button. It reports whether a
+// dialog was open.
+func (w *MainWindow) AcceptDialog() bool {
+	top := w.dialogHost(0)
+	for _, d := range w.dialogs() {
+		if d.win.AsNode().ID() == top.ID() {
+			if d.onOK != nil {
+				d.onOK()
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// DismissDialog closes the topmost dialog as its Cancel / Esc would (the
+// message dialog's OK). It reports whether a dialog was open.
+func (w *MainWindow) DismissDialog() bool {
+	top := w.dialogHost(0)
+	for _, d := range w.dialogs() {
+		if d.win.AsNode().ID() == top.ID() {
+			d.close()
+			return true
+		}
+	}
+	return false
 }
 
 func (w *MainWindow) Ready() { w.render() }
@@ -118,8 +190,9 @@ func (w *MainWindow) SetPalette(p Palette) {
 	w.palette = p
 	theme := BuildTheme(p)
 	w.AsControl().SetTheme(theme)
-	w.Editor.SetTheme(theme)
-	w.Confirm.SetTheme(theme)
+	for _, d := range w.dialogs() {
+		d.setTheme(theme)
+	}
 }
 
 // CurrentPalette returns the active palette.

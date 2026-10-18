@@ -47,7 +47,6 @@ type SongLibraryPanel struct {
 	songs     []models.SongSummary
 	selected  int
 	countText string
-	rendering bool
 	built     bool
 }
 
@@ -93,9 +92,6 @@ func NewSongLibraryPanel() *SongLibraryPanel {
 	s.list.SetColumnExpand(3, false)
 	s.list.SetColumnCustomMinimumWidth(3, 80)
 	s.list.OnItemSelected(func() {
-		if s.rendering {
-			return
-		}
 		if i := treeIndex(s.list.GetSelected()); i >= 0 {
 			s.selected = i
 			if s.OnSelect != nil {
@@ -113,9 +109,15 @@ func NewSongLibraryPanel() *SongLibraryPanel {
 			s.showMenu()
 		}
 	})
+	// Delete, or Backspace (a MacBook's "delete" key), asks to delete the
+	// selected song. With no selection the key is not consumed (Backspace is
+	// then the Prev hotkey).
 	s.list.AsControl().OnGuiInput(func(ev InputEvent.Instance) {
-		if k, ok := Object.As[InputEventKey.Instance](ev); ok && k.AsInputEvent().IsPressed() &&
-			(k.Keycode() == Input.KeyDelete) && s.selected >= 0 && s.OnDelete != nil {
+		k, ok := Object.As[InputEventKey.Instance](ev)
+		if !ok || !k.AsInputEvent().IsPressed() || k.AsInputEvent().IsEcho() {
+			return
+		}
+		if key := k.Keycode(); (key == Input.KeyDelete || key == Input.KeyBackspace) && s.selected >= 0 && s.OnDelete != nil {
 			s.OnDelete(s.selected)
 			acceptEvent(s.list.AsControl())
 		}
@@ -196,27 +198,29 @@ func (s *SongLibraryPanel) SetCountText(text string) {
 // SetSearchText sets the search box text without firing OnSearch.
 func (s *SongLibraryPanel) SetSearchText(q string) { s.search.setText(q) }
 
+// render projects the panel state. Its programmatic Tree changes run quietly
+// (signals blocked), so they never come back as OnSelect.
 func (s *SongLibraryPanel) render() {
-	s.rendering = true
-	defer func() { s.rendering = false }()
-	if !s.built {
-		s.built = true
-		s.list.Clear()
-		root := s.list.CreateItem()
-		for _, song := range s.songs {
-			it := root.CreateChild()
-			it.SetText(0, song.Title)
-			it.SetText(1, song.Author)
-			it.SetText(2, song.Copyright)
-			it.SetText(3, song.CCLI)
+	quietly(s.list.AsControl(), func() {
+		if !s.built {
+			s.built = true
+			s.list.Clear()
+			root := s.list.CreateItem()
+			for _, song := range s.songs {
+				it := root.CreateChild()
+				it.SetText(0, song.Title)
+				it.SetText(1, song.Author)
+				it.SetText(2, song.Copyright)
+				it.SetText(3, song.CCLI)
+			}
 		}
-	}
-	selectTreeRow(s.list, s.selected)
+		selectTreeRow(s.list, s.selected)
+	})
 	s.count.SetText(s.countText)
 }
 
 // selectTreeRow selects top-level row i of a tree (-1 deselects) and scrolls
-// it into view. Callers suppress the resulting item_selected signal.
+// it into view. Callers run it inside quietly, so item_selected is not emitted.
 //
 // Tree.set_selected / deselect_all do not queue a redraw (Godot 4.6), so a
 // programmatic selection on a tree that has already been drawn stays

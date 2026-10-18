@@ -110,6 +110,16 @@ func (s *ScheduleList) SetSelected(i int) {
 // Selected returns the selected row (-1 for none).
 func (s *ScheduleList) Selected() int { return s.selected }
 
+// RowCenter returns the centre of row i in its viewport's coordinates (for
+// automated clicks); false when there is no such row.
+func (s *ScheduleList) RowCenter(i int) (Vector2.XY, bool) {
+	if i < 0 || i >= len(s.views) {
+		return Vector2.Zero, false
+	}
+	r := s.views[i].AsControl().GetGlobalRect()
+	return Vector2.New(r.Position.X+r.Size.X/2, r.Position.Y+r.Size.Y/2), true
+}
+
 // SetThumbnailFactory sets the thumbnail factory (one small 16:9 thumbnail per row).
 func (s *ScheduleList) SetThumbnailFactory(f func(i int) Control.Instance) {
 	s.factory = f

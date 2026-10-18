@@ -3,6 +3,7 @@ package ui
 import (
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/Viewport"
+	"graphics.gd/variant/Object"
 )
 
 // graphics.gd buffers engine calls that return nothing and flushes the buffer
@@ -28,6 +29,21 @@ func acceptEvent(c Control.Instance) {
 // transform is dropped and the child keeps rendering at its old offset.
 func flushCalls(c Control.Instance) {
 	_ = c.AsNode().IsInsideTree()
+}
+
+// quietly runs fn, which changes c programmatically (e.g. a Tree selection),
+// with c's signals blocked, so the change is not reported back as a user
+// action. The buffered calls are flushed before signals are unblocked: they
+// would otherwise reach Godot after the unblock and emit after all.
+func quietly(c Control.Instance, fn func()) {
+	o := Object.Instance(c.AsObject())
+	o.SetSignalsBlocked(true)
+	defer func() {
+		flushCalls(c)
+		o.SetSignalsBlocked(false)
+		flushCalls(c)
+	}()
+	fn()
 }
 
 // setInputHandled marks the viewport's current input as handled, immediately.
