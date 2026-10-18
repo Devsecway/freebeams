@@ -120,7 +120,11 @@ func passageDeck(t *testing.T, ref string, n int) *models.Deck {
 // TestSelectedVerse: the verse Go Live sends is the one the list highlights.
 func TestSelectedVerse(t *testing.T) {
 	pass := passageDeck(t, "jn 3:16-18", 3)
-	copyOf := func(d *models.Deck) *models.Deck { c := *d; c.Slides = append([]models.Slide(nil), d.Slides...); return &c }
+	copyOf := func(d *models.Deck) *models.Deck {
+		c := *d
+		c.Slides = append([]models.Slide(nil), d.Slides...)
+		return &c
+	}
 	other := passageDeck(t, "jn 3:16-17", 2)
 	song := SongDeck(amazingGrace())
 	sched := models.NewSchedule()

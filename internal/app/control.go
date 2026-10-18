@@ -40,6 +40,14 @@ func (a *App) flushReplies() {
 
 // state builds the GET /state document.
 func (a *App) state() core.State {
+	_, resTitle, resCaption := a.resourcePreviewFrame()
+	dialog := core.DialogState{Editor: a.win.Editor.Visible(), Alerts: len(a.alerts)}
+	if a.win.Confirm.Visible() {
+		dialog.Confirm = a.win.Confirm.Title()
+	}
+	if m := a.win.Message; m.Visible() {
+		dialog.Message = &core.Alert{Title: m.Title(), Message: m.Text()}
+	}
 	return core.BuildState(core.StateInput{
 		Presenter:        a.pres.State,
 		Schedule:         a.sched,
@@ -58,8 +66,10 @@ func (a *App) state() core.State {
 			Reference: a.reference, Passage: deckTitle(a.scriptureDeck), Verses: len(a.verseRows),
 			Selected: a.verseSelection(), Status: a.scriptStatus, Error: a.scriptErr,
 		},
+		Resource:      core.ResourceState{Title: resTitle, Caption: resCaption},
 		Import:        a.importState,
 		LastError:     a.lastError,
+		Dialog:        dialog,
 		WindowTitle:   a.win.WindowTitle(),
 		Tab:           a.win.Resources.Tab(),
 		Focus:         a.focus(),
@@ -115,6 +125,7 @@ type actionArgs struct {
 	CCLI      string `json:"ccli"`
 	Lyrics    string `json:"lyrics"`
 	Confirm   bool   `json:"confirm"`
+	Window    string `json:"window"` // native-key: "main" (default) or "output"
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -363,10 +374,12 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(a.win.Editor.AsWindow())
 	case "dialog":
 		png, err = render.WindowScreenshot(a.win.Confirm.AsWindow())
+	case "message":
+		png, err = render.WindowScreenshot(a.win.Message.AsWindow())
 	case "output":
 		png, err = a.out.Screenshot()
 	default:
-		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|dialog)", cmd.Query["window"])
+		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|dialog|message)", cmd.Query["window"])
 	}
 	if err != nil {
 		cmd.RespondErr(err)

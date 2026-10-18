@@ -35,7 +35,8 @@ type viewCache struct {
 	titleDirty  bool
 	resTitle    string
 	resCaption  string
-	toggles     [4]bool // logo, black, clear, live
+	alert       core.Alert // the alert the message dialog shows
+	toggles     [4]bool    // logo, black, clear, live
 	init        bool
 }
 
@@ -61,6 +62,8 @@ func (a *App) buildUI() {
 	a.out = render.NewOutput(a.AsNode())
 	a.out.SetTransitionDuration(render.DefaultTransition)
 	a.out.OnClosed = func() { a.event(func() { a.pres.SetOutputEnabled(false) }) }
+	a.out.OnInput = a.outputInput // hotkeys while the windowed output has focus
+	a.win.Message.OnClose = func() { a.event(a.dismissAlert) }
 
 	// Thumbnails are built while render rebuilds a grid, from the current state.
 	a.win.PreviewGrid.SetThumbnailFactory(func(i int) Control.Instance { return thumbnail(a.pres.State.Preview, i) })
@@ -129,7 +132,7 @@ func (a *App) buildUI() {
 	sc.OnSelect = func(i int) { a.event(func() { a.selectVerse(i, false) }) }
 	sc.OnActivate = func(i int) { a.event(func() { a.selectVerse(i, true) }) }
 	sc.OnAddToSchedule = func() { a.event(func() { a.addScriptureToSchedule(nil) }) }
-	sc.OnGoLive = func() { a.event(func() { a.selectVerse(max(a.verseSel, 0), true) }) }
+	sc.OnGoLive = func() { a.event(a.goLiveVerse) }
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d.
@@ -257,24 +260,48 @@ func (a *App) render() {
 	}
 
 	// Resource preview for the visible tab.
-	var res resourcePreview
-	switch w.Resources.Tab() {
-	case ui.TabSongs:
-		res = a.songRes
-	case ui.TabScriptures:
-		res = a.scriptRes
-	}
-	frame := models.Frame{Mode: models.ModeNormal}
-	title, caption := "", ""
-	if d := res.deck; d != nil && res.index >= 0 && res.index < len(d.Slides) {
-		s := d.Slides[res.index]
-		frame.Slide, frame.Theme = &s, d.Theme
-		title, caption = d.Title, core.SlideCaption(d, res.index)
-	}
+	frame, title, caption := a.resourcePreviewFrame()
 	a.resView.SetFrame(frame)
 	if title != v.resTitle || caption != v.resCaption {
 		v.resTitle, v.resCaption = title, caption
 		w.SetResourcePreviewInfo(title, caption)
 	}
+
+	// Error messages: the first queued alert is on screen.
+	switch {
+	case len(a.alerts) == 0:
+		if w.Message.Visible() {
+			w.Message.Hide()
+		}
+		v.alert = core.Alert{}
+	case !w.Message.Visible() || a.alerts[0] != v.alert:
+		v.alert = a.alerts[0]
+		w.Message.Show(v.alert.Title, v.alert.Message)
+	}
 	v.init = true
+}
+
+// resourcePreview returns what the resource preview shows for the visible
+// tab: the loaded song, or the selected verse of the looked-up passage (the
+// same verse the list highlights and Go Live sends).
+func (a *App) resourcePreview() resourcePreview {
+	switch a.win.Resources.Tab() {
+	case ui.TabSongs:
+		return a.songRes
+	case ui.TabScriptures:
+		return resourcePreview{deck: a.scriptureDeck, index: max(a.verseSelection(), 0)}
+	}
+	return resourcePreview{}
+}
+
+// resourcePreviewFrame is the resource preview's frame, title and caption.
+func (a *App) resourcePreviewFrame() (frame models.Frame, title, caption string) {
+	frame.Mode = models.ModeNormal
+	res := a.resourcePreview()
+	if d := res.deck; d != nil && res.index >= 0 && res.index < len(d.Slides) {
+		s := d.Slides[res.index]
+		frame.Slide, frame.Theme = &s, d.Theme
+		title, caption = d.Title, core.SlideCaption(d, res.index)
+	}
+	return frame, title, caption
 }

@@ -67,6 +67,12 @@ type DialogState struct {
 	Alerts  int    `json:"alerts"`            // error messages queued (shown one at a time)
 }
 
+// ResourceState is what the resource preview (right of the resource tabs) shows.
+type ResourceState struct {
+	Title   string `json:"title"`
+	Caption string `json:"caption"` // "John 3:18 · 3 / 3"
+}
+
 // State is the GET /state document.
 type State struct {
 	Seq              uint64         `json:"seq"`
@@ -82,6 +88,7 @@ type State struct {
 	Songs            SongsState     `json:"songs"`
 	SongCount        int            `json:"songCount"`
 	Scripture        ScriptureState `json:"scripture"`
+	Resource         ResourceState  `json:"resource"`
 	Bibles           []string       `json:"bibles"`
 	Import           ImportState    `json:"import"`
 	LastError        string         `json:"lastError"`
@@ -108,6 +115,7 @@ type StateInput struct {
 	Bibles           []models.Bible
 	BibleSelected    int
 	Scripture        ScriptureState // Bibles/Bible are filled from Bibles/BibleSelected
+	Resource         ResourceState
 	Import           ImportState
 	LastError        string
 	Dialog           DialogState
@@ -153,6 +161,7 @@ func BuildState(in StateInput) State {
 		Songs:            in.Songs,
 		SongCount:        in.Songs.Count,
 		Scripture:        in.Scripture,
+		Resource:         in.Resource,
 		Import:           in.Import,
 		LastError:        in.LastError,
 		Dialog:           in.Dialog,

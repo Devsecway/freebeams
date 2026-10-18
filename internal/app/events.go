@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"reflect"
+	"path/filepath"
 	"strings"
 
 	"freeworship/internal/app/core"
@@ -38,8 +38,23 @@ func (a *App) goBack() {
 		return
 	}
 	d, i := a.prevLive, a.prevLiveIndex
-	a.pres.SetPreview(d)
+	a.setPreview(d)
 	a.liveChange(func() { a.pres.GoLiveSlide(i) })
+}
+
+// setPreview loads d into Preview. Every Preview load goes through here, so
+// the schedule selection always follows Preview: the row d came from, or none
+// for library content. (Otherwise a row stays highlighted after a song is
+// previewed, and clicking it again does nothing.)
+func (a *App) setPreview(d *models.Deck) {
+	a.pres.SetPreview(d)
+	a.schedSel = core.ScheduleSelection(a.sched, d)
+}
+
+// syncScheduleSelection re-derives the selected row after the schedule
+// itself changed (items moved, removed, another schedule opened).
+func (a *App) syncScheduleSelection() {
+	a.schedSel = core.ScheduleSelection(a.sched, a.pres.State.Preview)
 }
 
 // setOutput turns the projector output on or off (the Live toggle).
@@ -133,24 +148,22 @@ func (a *App) selectScheduleItem(i int) {
 	if i < 0 || i >= len(a.sched.Items) {
 		return
 	}
-	a.schedSel = i
-	a.pres.SetPreview(core.ItemDeck(a.sched.Items[i]))
+	a.setPreview(core.ItemDeck(a.sched.Items[i]))
 }
 
+// removeScheduleItem removes item i. When it was the selected item, the item
+// that takes its place is loaded into Preview.
 func (a *App) removeScheduleItem(i int) bool {
+	selected := a.schedSel == i
 	if !a.sched.Remove(i) {
 		return false
 	}
 	a.schedVer++
-	switch {
-	case a.schedSel == i:
-		a.schedSel = min(i, len(a.sched.Items)-1)
-		if a.schedSel >= 0 {
-			a.selectScheduleItem(a.schedSel)
-		}
-	case a.schedSel > i:
-		a.schedSel--
+	if selected && len(a.sched.Items) > 0 {
+		a.selectScheduleItem(min(i, len(a.sched.Items)-1))
+		return true
 	}
+	a.syncScheduleSelection()
 	return true
 }
 
@@ -159,14 +172,7 @@ func (a *App) moveScheduleItem(from, to int) bool {
 		return false
 	}
 	a.schedVer++
-	switch {
-	case a.schedSel == from:
-		a.schedSel = to
-	case from < to && a.schedSel > from && a.schedSel <= to:
-		a.schedSel--
-	case from > to && a.schedSel >= to && a.schedSel < from:
-		a.schedSel++
-	}
+	a.syncScheduleSelection()
 	return true
 }
 
@@ -193,11 +199,16 @@ func (a *App) addSongToSchedule(song models.Song) {
 	a.addToSchedule(core.SongItem(song, core.SongDeck(song)))
 }
 
+// addScriptureToSchedule adds the looked-up passage. After a failed or empty
+// lookup there is none (lookupReference clears it), so nothing is added.
 func (a *App) addScriptureToSchedule(cmd *control.Command) {
 	if a.passage == nil || a.scriptureDeck == nil {
-		err := errors.New("look up a scripture reference first")
-		a.setScriptStatus(err.Error(), true)
-		a.answer(cmd, err)
+		status := "Look up a scripture reference first"
+		if a.scriptErr {
+			status = "Nothing to add: the reference did not find any verses"
+		}
+		a.setScriptStatus(status, true)
+		a.answer(cmd, errors.New(strings.ToLower(status[:1])+status[1:]))
 		return
 	}
 	a.addToSchedule(core.ScriptureItem(*a.passage, a.passageBible, *a.scriptureDeck))
@@ -206,8 +217,8 @@ func (a *App) addScriptureToSchedule(cmd *control.Command) {
 
 func (a *App) newSchedule() {
 	a.sched = models.NewSchedule()
-	a.schedSel = -1
 	a.schedVer++
+	a.syncScheduleSelection()
 }
 
 // confirmDiscard runs then, asking first when the schedule has unsaved changes.
@@ -221,14 +232,20 @@ func (a *App) confirmDiscard(title string, then func()) {
 	})
 }
 
-// saveSchedule writes the schedule to path.
+// saveSchedule writes the schedule to path. Saving to another file than the
+// current one is a Save As: the schedule is renamed after the new file.
+// Failures are shown to the operator.
 func (a *App) saveSchedule(path string) error {
 	path = core.WithScheduleExt(path)
 	if path == "" {
 		return errors.New("save schedule: no path")
 	}
-	if err := a.sched.Save(path); err != nil {
-		a.fail("save schedule", err)
+	save := a.sched.Save
+	if core.IsSaveAs(a.sched.Path, path) {
+		save = a.sched.SaveAs
+	}
+	if err := save(path); err != nil {
+		a.alert("Save Schedule", fmt.Errorf("Could not save the schedule as %q.\n\n%w", filepath.Base(path), err))
 		return err
 	}
 	log.Printf("[freeworship] saved schedule %s", path)
@@ -236,16 +253,17 @@ func (a *App) saveSchedule(path string) error {
 	return nil
 }
 
-// openSchedule replaces the schedule with the file at path.
+// openSchedule replaces the schedule with the file at path. Failures are
+// shown to the operator.
 func (a *App) openSchedule(path string) error {
 	s, err := models.LoadSchedule(path)
 	if err != nil {
-		a.fail("open schedule", err)
+		a.alert("Open Schedule", fmt.Errorf("Could not open %q.\n\n%w", filepath.Base(path), err))
 		return err
 	}
 	a.sched = s
-	a.schedSel = -1
 	a.schedVer++
+	a.syncScheduleSelection()
 	log.Printf("[freeworship] opened schedule %s (%d items)", path, len(s.Items))
 	a.rememberRecent(path)
 	return nil
@@ -319,15 +337,20 @@ func (a *App) searchSongs(q string, cmd *control.Command) {
 					}
 				}
 			}
-			if !a.importState.Running {
-				a.songsStatus = core.SongCountText(len(rows))
-			}
+			a.songsStatus = core.SongsFooter(len(rows), a.importState)
 			return nil
 		}
 	})
 }
 
 // selectSong selects row i and loads the song, then does purpose with it.
+//
+// Loads run concurrently (the store has a connection pool) and can finish in
+// any order, so their results go through a.songSeq and apply in request
+// order: an older request never overrides a newer one. A preview that a newer
+// request overtook is dropped; the other purposes (go live, add to schedule,
+// edit) are user actions and still happen, in order. cmd is answered once
+// this request's result has been applied.
 func (a *App) selectSong(i int, purpose songPurpose, cmd *control.Command) {
 	if i < 0 || i >= len(a.songs) {
 		a.answer(cmd, fmt.Errorf("no song at index %d", i))
@@ -339,24 +362,40 @@ func (a *App) selectSong(i int, purpose songPurpose, cmd *control.Command) {
 	}
 	a.songSel = i
 	id := a.songs[i].ID
-	ticket := a.songGen.Next()
+	ticket := a.songSeq.Next()
 	st := a.st
-	a.async(cmd, func(ctx context.Context) func() error {
-		song, err := st.GetSong(ctx, id)
-		return func() error {
-			if err != nil {
-				a.fail("load song", err)
-				a.songsStatus = "Could not load the song"
-				return err
+	a.async(nil, func(ctx context.Context) (apply func() error) {
+		song, err := models.Song{}, error(nil)
+		// Every ticket must reach the sequencer, even if the load panics,
+		// or later results would wait forever.
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("load song %d: panic: %v", id, r)
 			}
-			if !a.songGen.Current(ticket) && purpose == songPreview {
-				return nil // the user selected another song meanwhile
+			apply = func() error {
+				a.songSeq.Done(ticket, func() { a.applySong(ticket, song, err, purpose, cmd) })
+				return nil
 			}
-			a.song = &song
-			a.useSong(song, purpose)
-			return nil
-		}
+		}()
+		song, err = st.GetSong(ctx, id)
+		return nil
 	})
+}
+
+// applySong applies one song load (in request order, see selectSong).
+func (a *App) applySong(ticket uint64, song models.Song, err error, purpose songPurpose, cmd *control.Command) {
+	if err != nil {
+		a.alert("Load Song", fmt.Errorf("Could not load the song.\n\n%w", err))
+		a.answer(cmd, err)
+		return
+	}
+	if purpose == songPreview && a.songSeq.Superseded(ticket) {
+		a.answer(cmd, nil) // the user selected another song meanwhile
+		return
+	}
+	a.song = &song
+	a.useSong(song, purpose)
+	a.answer(cmd, nil)
 }
 
 // useSong previews the song and performs purpose.
@@ -381,11 +420,10 @@ func (a *App) useSong(song models.Song, purpose songPurpose) {
 // previewDeck loads d into Preview unless it is already there (keeping the
 // preview selection).
 func (a *App) previewDeck(d *models.Deck) {
-	if p := a.pres.State.Preview; p != nil && p.ItemID == d.ItemID && p.Title == d.Title &&
-		reflect.DeepEqual(p.Slides, d.Slides) && p.Theme == d.Theme {
+	if core.SameDeck(a.pres.State.Preview, d) {
 		return
 	}
-	a.pres.SetPreview(d)
+	a.setPreview(d)
 }
 
 func (a *App) newSong() { a.win.Editor.Open(models.Song{}, "") }
@@ -406,8 +444,7 @@ func (a *App) saveSong(song models.Song, lyrics string, cmd *control.Command) {
 		err := st.SaveSong(ctx, &song)
 		return func() error {
 			if err != nil {
-				a.fail("save song", err)
-				a.songsStatus = "Could not save \"" + song.Title + "\""
+				a.alert("Save Song", fmt.Errorf("Could not save %q.\n\n%w", song.Title, err))
 				return err
 			}
 			log.Printf("[freeworship] saved song %d %q", song.ID, song.Title)
@@ -445,8 +482,7 @@ func (a *App) doDeleteSong(row models.SongSummary, cmd *control.Command) {
 		err := st.DeleteSong(ctx, row.ID)
 		return func() error {
 			if err != nil {
-				a.fail("delete song", err)
-				a.songsStatus = "Could not delete \"" + row.Title + "\""
+				a.alert("Delete Song", fmt.Errorf("Could not delete %q.\n\n%w", row.Title, err))
 				return err
 			}
 			log.Printf("[freeworship] deleted song %d %q", row.ID, row.Title)
@@ -468,7 +504,7 @@ func (a *App) resourceGoLive() {
 			a.selectSong(a.songSel, songGoLive, nil)
 		}
 	case ui.TabScriptures:
-		a.selectVerse(max(a.verseSel, 0), true)
+		a.goLiveVerse()
 	}
 }
 
@@ -513,30 +549,47 @@ func (a *App) setScriptStatus(msg string, isErr bool) {
 	a.scriptStatus, a.scriptErr = msg, isErr
 }
 
+// clearPassage forgets the looked-up passage (after a failed or empty
+// lookup), so the verse list empties and nothing stale can be added to the
+// schedule or sent live from it.
+func (a *App) clearPassage() {
+	if a.passage == nil && a.scriptureDeck == nil && a.verseRows == nil {
+		return
+	}
+	a.passage, a.passageBible, a.scriptureDeck = nil, models.Bible{}, nil
+	a.verseRows = nil
+	a.versesVer++
+	a.verseSel = -1
+}
+
 // lookupReference parses a reference and loads its verses in the background,
-// then shows them in the verse list and Preview.
+// then shows them in the verse list and Preview. A failed or empty lookup
+// clears the previous passage.
 func (a *App) lookupReference(text string, cmd *control.Command) {
 	a.reference = text
 	text = strings.TrimSpace(text)
 	ticket := a.verseGen.Next()
 	if text == "" {
+		a.clearPassage()
 		a.setScriptStatus("", false)
 		a.answer(cmd, nil)
 		return
 	}
 	p, err := models.ParseReference(text)
 	if err != nil {
+		a.clearPassage()
 		a.setScriptStatus(err.Error(), true)
 		a.answer(cmd, err)
 		return
 	}
 	if a.bibleSel < 0 || a.bibleSel >= len(a.bibles) {
-		err := errors.New("no Bible installed")
+		a.clearPassage()
 		a.setScriptStatus("No Bibles installed", true)
-		a.answer(cmd, err)
+		a.answer(cmd, errors.New("no Bible installed"))
 		return
 	}
 	if a.st == nil {
+		a.clearPassage()
 		a.answer(cmd, errNoLibrary)
 		return
 	}
@@ -550,14 +603,15 @@ func (a *App) lookupReference(text string, cmd *control.Command) {
 			}
 			if err != nil {
 				a.fail("look up "+p.String(), err)
+				a.clearPassage()
 				a.setScriptStatus("Could not load "+p.String(), true)
 				return err
 			}
 			deck := core.ScriptureDeck(p, bible.Abbrev, verses)
-			if len(deck.Slides) == 0 {
-				err := fmt.Errorf("no verses found for %s (%s)", p.String(), bible.Abbrev)
+			if len(deck.Slides) == 0 { // no verses, or only empty ones
+				a.clearPassage()
 				a.setScriptStatus("No verses found for "+p.String()+" ("+bible.Abbrev+")", true)
-				return err
+				return fmt.Errorf("no verses found for %s (%s)", p.String(), bible.Abbrev)
 			}
 			a.passage, a.passageBible, a.scriptureDeck = &p, bible, &deck
 			a.verseRows = core.VerseRows(verses)
@@ -565,21 +619,21 @@ func (a *App) lookupReference(text string, cmd *control.Command) {
 			a.verseSel = 0
 			n := len(deck.Slides)
 			a.setScriptStatus(fmt.Sprintf("%s · %d verse%s (%s)", p.String(), n, map[bool]string{true: "", false: "s"}[n == 1], bible.Abbrev), false)
-			a.scriptRes = resourcePreview{deck: &deck, index: 0}
-			a.pres.SetPreview(&deck)
+			a.setPreview(&deck)
 			return nil
 		}
 	})
 }
 
-// verseSelection is the highlighted verse row: the preview selection while
-// the preview shows the looked-up passage, else the last selected row.
+// verseSelection is the selected verse: the single source of truth for the
+// highlighted row, the resource preview and Go Live (core.SelectedVerse).
 func (a *App) verseSelection() int {
-	d, p := a.scriptureDeck, a.pres.State.Preview
-	if d != nil && p != nil && p.ItemID == "" && p.Title == d.Title && reflect.DeepEqual(p.Slides, d.Slides) {
-		return a.pres.State.PreviewIndex
-	}
-	return a.verseSel
+	return core.SelectedVerse(a.scriptureDeck, a.pres.State.Preview, a.pres.State.PreviewIndex, a.verseSel)
+}
+
+// goLiveVerse sends the selected verse live (the Go Live button and menu).
+func (a *App) goLiveVerse() {
+	a.selectVerse(max(a.verseSelection(), 0), true)
 }
 
 // selectVerse selects verse row i into Preview; live also sends it live.
@@ -589,7 +643,6 @@ func (a *App) selectVerse(i int, live bool) {
 		return
 	}
 	a.verseSel = i
-	a.scriptRes.index = i
 	a.previewDeck(d)
 	if live {
 		a.liveChange(func() { a.pres.GoLiveSlide(i) })

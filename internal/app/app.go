@@ -18,6 +18,8 @@ import (
 	"log"
 	"os"
 	"runtime/debug"
+	"sync"
+	"time"
 
 	"freeworship/internal/app/core"
 	"freeworship/internal/control"
@@ -64,14 +66,17 @@ type App struct {
 
 	// results carries main-thread continuations of async work.
 	results chan func()
-	pending int // async jobs in flight
+	pending int            // async jobs in flight
+	jobs    sync.WaitGroup // async goroutines, awaited (bounded) at shutdown
 
 	// ---- authoritative state
 	pres  *models.Presenter
 	sched *models.Schedule
 	keys  core.Hotkeys
 
-	schedSel int // selected schedule row (-1 none)
+	// schedSel is the selected schedule row: the item Preview was loaded from
+	// (-1 when Preview holds library content). setPreview keeps it in step.
+	schedSel int
 	schedVer int // bumped on every schedule mutation (rebuilds rows/thumbnails)
 
 	songQuery   string
@@ -82,7 +87,7 @@ type App struct {
 	songCount   int
 	songsStatus string // Songs footer text ("223 songs", "Importing…")
 	searchGen   core.Generation
-	songGen     core.Generation
+	songSeq     core.Sequencer // song loads apply in request order
 
 	bibles    []models.Bible
 	biblesVer int
@@ -94,12 +99,12 @@ type App struct {
 	scriptureDeck *models.Deck
 	verseRows     []string
 	versesVer     int
-	verseSel      int
+	verseSel      int // verse last chosen in the verse list (see verseSelection)
 	scriptStatus  string
 	scriptErr     bool
 	verseGen      core.Generation
 
-	songRes, scriptRes resourcePreview
+	songRes resourcePreview // the Scriptures preview derives from verseSelection
 
 	importState core.ImportState
 
@@ -107,6 +112,7 @@ type App struct {
 	prevLiveIndex int
 
 	lastError string
+	alerts    []core.Alert // errors for the operator; the first is on screen
 
 	// ---- view
 	win         *ui.MainWindow
@@ -217,7 +223,7 @@ func (a *App) startImport() {
 		return
 	}
 	a.importState = core.ImportState{Running: true}
-	a.songsStatus = "Importing from EasyWorship…"
+	a.songsStatus = core.SongsFooter(0, a.importState)
 	st := a.st
 	log.Printf("[freeworship] importing from EasyWorship…")
 	a.async(nil, func(ctx context.Context) func() error {
@@ -229,9 +235,10 @@ func (a *App) startImport() {
 		return func() error {
 			a.importState.Running = false
 			if err != nil {
+				// The footer keeps saying so (core.SongsFooter) and a dialog
+				// shows the details; a later search must not hide the failure.
 				a.importState.Error = err.Error()
-				a.fail("import from EasyWorship", err)
-				a.songsStatus = "EasyWorship import failed: " + err.Error()
+				a.alert("EasyWorship Import", fmt.Errorf("The EasyWorship import failed, so the library may be incomplete.\n\n%w", err))
 			} else {
 				a.importState.Done, a.importState.Summary = true, summary
 				log.Printf("[freeworship] EasyWorship import: %s", summary)
@@ -239,6 +246,7 @@ func (a *App) startImport() {
 					log.Printf("[freeworship] import note: %s", w)
 				}
 			}
+			a.songsStatus = core.SongsFooter(len(a.songs), a.importState)
 			a.searchSongs(a.songQuery, nil)
 			a.loadBibles(nil)
 			return nil
@@ -254,7 +262,9 @@ func (a *App) startImport() {
 func (a *App) async(cmd *control.Command, work func(ctx context.Context) func() error) {
 	a.pending++
 	ctx := a.ctx
+	a.jobs.Add(1)
 	go func() {
+		defer a.jobs.Done()
 		var apply func() error
 		func() {
 			defer func() {
@@ -307,6 +317,29 @@ func (a *App) fail(context string, err error) {
 	}
 	a.lastError = context + ": " + err.Error()
 	log.Printf("[freeworship] %s", a.lastError)
+}
+
+// maxAlerts bounds the queue of error messages waiting to be shown.
+const maxAlerts = 5
+
+// alert logs a user-facing failure (like fail) and shows it to the operator
+// in the message dialog. render projects a.alerts onto the dialog; closing it
+// shows the next one.
+func (a *App) alert(title string, err error) {
+	if err == nil {
+		return
+	}
+	a.fail(title, err)
+	if len(a.alerts) < maxAlerts {
+		a.alerts = append(a.alerts, core.Alert{Title: title, Message: err.Error()})
+	}
+}
+
+// dismissAlert removes the alert on screen (the message dialog was closed).
+func (a *App) dismissAlert() {
+	if len(a.alerts) > 0 {
+		a.alerts = a.alerts[1:]
+	}
 }
 
 // ---- frame loop ----------------------------------------------------------------
@@ -420,19 +453,41 @@ func (a *App) Notification(what Object.Notification) {
 	}
 }
 
-// requestQuit asks before discarding unsaved schedule changes, then quits.
+// requestQuit asks before discarding an open song editor, then before
+// discarding unsaved schedule changes, then quits. Cancel keeps everything
+// as it was (the editor stays open).
 func (a *App) requestQuit() {
-	if a.quitting {
+	if a.quitting || a.win.Confirm.Visible() {
+		return // already quitting, or already asking
+	}
+	if a.win.Editor.Visible() {
+		a.win.Confirm.Ask("Quit FreeWorship", "The song editor is open. Quit without saving the song?", func() {
+			a.event(func() {
+				a.win.Editor.Close()
+				// Ask about the schedule next frame, once this dialog is
+				// down (it is reparented when it opens again).
+				a.after(1, a.quitIfScheduleSaved)
+			})
+		})
 		return
 	}
+	a.quitIfScheduleSaved()
+}
+
+// quitIfScheduleSaved quits, asking first when the schedule has unsaved changes.
+func (a *App) quitIfScheduleSaved() {
 	if a.sched.Dirty {
 		a.win.Confirm.Ask("Quit FreeWorship", "The schedule \""+a.sched.Title+"\" has unsaved changes. Quit without saving?", func() {
-			a.quitNext = true
+			a.event(func() { a.quitNext = true })
 		})
 		return
 	}
 	a.quitNext = true
 }
+
+// shutdownWait bounds how long shutdown waits for background jobs (a
+// cancelled import unwinding its transaction) before closing the library.
+const shutdownWait = 3 * time.Second
 
 // shutdown stops the output, releases render caches, closes the library and
 // quits. It is safe to call more than once.
@@ -449,8 +504,15 @@ func (a *App) shutdown() {
 	}
 	a.waiters = nil
 	a.out.OnClosed = nil
+	a.out.OnInput = nil
 	a.out.Close()
 	render.ReleaseCaches()
+	// The jobs see the cancelled context; wait (bounded) for them to stop
+	// using the store, e.g. an import rolling back its write transaction.
+	// Their continuations are dropped (post gives up after cancel).
+	if !core.WaitTimeout(&a.jobs, shutdownWait) {
+		log.Printf("[freeworship] background jobs still running after %v; closing anyway", shutdownWait)
+	}
 	if a.st != nil {
 		if err := a.st.Close(); err != nil {
 			log.Printf("[freeworship] close library: %v", err)

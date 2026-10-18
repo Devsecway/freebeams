@@ -12,12 +12,15 @@ import (
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/Input"
 	"graphics.gd/classdb/InputEventKey"
+	"graphics.gd/classdb/InputEventMouseButton"
 	"graphics.gd/classdb/LineEdit"
 	"graphics.gd/classdb/Node"
 	"graphics.gd/classdb/SceneTree"
 	"graphics.gd/classdb/Tree"
 	"graphics.gd/classdb/Viewport"
+	"graphics.gd/classdb/Window"
 	"graphics.gd/variant/Object"
+	"graphics.gd/variant/Vector2"
 )
 
 // Control actions that drive the real UI paths for automated tests: native
@@ -69,10 +72,28 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 		}
 		a.doDeleteSong(a.songs[*args.Index], cmd)
 	case "dismiss":
-		// Cancel any open dialog (the Cancel button / Esc).
-		a.win.Editor.Close()
-		a.win.Confirm.AsWindow().Hide()
+		// Cancel the topmost open dialog (its Cancel button / Esc; OK for an
+		// error message), e.g. the quit question but not the editor under it.
+		a.win.DismissDialog()
 		a.answer(cmd, nil)
+	case "accept":
+		// Press OK on the topmost open dialog.
+		if !a.win.AcceptDialog() {
+			cmd.RespondErr(errors.New("accept: no dialog is open"))
+			return true
+		}
+		a.answer(cmd, nil)
+	case "resource-go-live":
+		// The resource tab bar's Go Live button.
+		a.resourceGoLive()
+		a.answer(cmd, nil)
+	case "click-schedule":
+		// A left click on a schedule row, through Godot's input pipeline.
+		if args.Index == nil {
+			cmd.RespondErr(errArgs)
+			return true
+		}
+		a.clickScheduleRow(cmd, *args.Index)
 	case "close":
 		// What the window manager sends when the operator closes the window.
 		root := SceneTree.Get(a.AsNode()).Root()
@@ -120,8 +141,22 @@ func (a *App) nativeKey(cmd *control.Command, args actionArgs) {
 		cmd.RespondErr(fmt.Errorf("native-key: unknown key %q", args.Name))
 		return
 	}
+	window := 0 // the main window
+	switch args.Window {
+	case "", "main":
+	case "output":
+		// As if the (windowed, focusable) output window had keyboard focus.
+		if window = a.out.WindowID(); window < 0 {
+			cmd.RespondErr(errors.New("native-key: the output window is not open"))
+			return
+		}
+	default:
+		cmd.RespondErr(fmt.Errorf("native-key: unknown window %q (main|output)", args.Window))
+		return
+	}
 	for _, pressed := range []bool{true, false} {
 		ev := InputEventKey.New()
+		ev.AsInputEventFromWindow().SetWindowId(window)
 		ev.SetKeycode(code)
 		ev.SetPhysicalKeycode(code)
 		ev.SetPressed(pressed)
@@ -159,6 +194,8 @@ func (a *App) focusTarget(target string) error {
 		c = findControl(a.win.Scriptures.AsControl().AsNode(), isLineEdit)
 	case "song-list":
 		c = findControl(a.win.Songs.AsControl().AsNode(), isSongTable)
+	case "verse-list":
+		c = findControl(a.win.Scriptures.AsControl().AsNode(), isRowTree)
 	case "schedule":
 		c = a.win.Schedule.AsControl()
 	case "preview-grid":
@@ -194,6 +231,39 @@ func isLineEdit(n Node.Instance) (Control.Instance, bool) {
 		return e.AsControl(), true
 	}
 	return Control.Instance{}, false
+}
+
+// isRowTree matches a row-selecting list (the verse list, not the Bibles).
+func isRowTree(n Node.Instance) (Control.Instance, bool) {
+	if t, ok := Object.As[Tree.Instance](n); ok && t.SelectMode() == Tree.SelectRow {
+		return t.AsControl(), true
+	}
+	return Control.Instance{}, false
+}
+
+// clickScheduleRow pushes a left click (press + release) at the centre of
+// schedule row i through Godot's input pipeline, like the operator's mouse.
+func (a *App) clickScheduleRow(cmd *control.Command, i int) {
+	pos, ok := a.win.Schedule.RowCenter(i)
+	if !ok {
+		cmd.RespondErr(fmt.Errorf("click-schedule: no row %d", i))
+		return
+	}
+	// Events are in window pixels; the GUI divides by the content scale.
+	scale := Window.Get(a.AsNode()).ContentScaleFactor()
+	pos = Vector2.New(pos.X*scale, pos.Y*scale)
+	for _, pressed := range []bool{true, false} {
+		ev := InputEventMouseButton.New()
+		ev.SetButtonIndex(Input.MouseButtonLeft)
+		ev.SetPressed(pressed)
+		if pressed {
+			ev.AsInputEventMouse().SetButtonMask(Input.MouseButtonMaskLeft)
+		}
+		ev.AsInputEventMouse().SetPosition(pos)
+		ev.AsInputEventMouse().SetGlobalPosition(pos)
+		Input.ParseInputEvent(ev.AsInputEvent())
+	}
+	a.after(nativeKeyFrames, func() { a.answer(cmd, nil) })
 }
 
 // isSongTable matches the 4-column song list (not the library tree).
