@@ -60,6 +60,14 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - `Tween.TweenProperty` is not exposed on the simple API. Animate from `Process` instead.
 - `SceneTree.Get(node)` is the equivalent of `GetTree()`.
 - Call `render.ReleaseCaches()` at shutdown to keep the exit log free of leak warnings.
+- Exported node-typed fields on an extension struct are auto-instantiated as children. Tag such fields `gd:"-"`.
+- Don't keep RefCounted resources (Theme, StyleBox) in extension struct fields: they leak at exit, while Go-only
+  ones die after a frame. Store them in an engine-owned place (e.g. the node's Theme) and fetch them when needed.
+- `go test` cannot link packages that import `graphics.gd/classdb/...`. Keep testable logic in pure packages
+  (`internal/ui/uicore`, `internal/render/layout`) that import at most `graphics.gd/variant/*`.
+- `SystemFont` with no names falls back to Godot's font. Use names `[".AppleSystemUIFont", ...]` for SF. Use `DPITexture` for SVG icons.
+- Separate OS windows (dialogs) need the Theme set explicitly and the parent's content scale copied.
+- The root window's content scale must be set to `DisplayServer.ScreenGetScale()` at startup (HiDPI).
 - There is no `timeout` command on macOS. Run `gd run` directly, and have demos quit themselves.
 
 ## Conventions
