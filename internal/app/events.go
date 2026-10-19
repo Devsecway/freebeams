@@ -353,7 +353,7 @@ func (a *App) searchSongs(q string, cmd *control.Command) {
 					}
 				}
 			}
-			a.songsStatus = core.SongsFooter(len(rows), a.importState)
+			a.songsStatus = core.SongsFooterMatches(len(rows), core.LyricsMatches(rows), a.importState)
 			return nil
 		}
 	})

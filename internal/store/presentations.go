@@ -171,28 +171,17 @@ func (s *Store) DeletePresentation(ctx context.Context, id int64) error {
 }
 
 // SearchPresentations lists presentations whose title or path contains every
-// word of query (case-insensitive), ordered by title. An empty query lists
-// all. limit <= 0 means no limit.
+// word of query (case- and diacritic-insensitive, like the song search),
+// ordered by title. An empty query lists all. limit <= 0 means no limit.
+// The words are matched in Go (fold); the limit applies to the matches.
 func (s *Store) SearchPresentations(ctx context.Context, query string, limit int) ([]models.Presentation, error) {
-	if limit <= 0 {
-		limit = -1
+	terms := textTerms(query)
+	sqlLimit := limit
+	if sqlLimit <= 0 || len(terms) > 0 {
+		sqlLimit = -1
 	}
-	var (
-		where []string
-		args  []any
-	)
-	for _, w := range strings.Fields(strings.ToLower(query)) {
-		pat := "%" + likeEscape(w) + "%"
-		where = append(where, `(lower(title) LIKE ? ESCAPE '\' OR lower(path) LIKE ? ESCAPE '\')`)
-		args = append(args, pat, pat)
-	}
-	q := `SELECT ` + presentationColumns + ` FROM presentations`
-	if len(where) > 0 {
-		q += ` WHERE ` + strings.Join(where, ` AND `)
-	}
-	q += ` ORDER BY title COLLATE NOCASE, id LIMIT ?`
-	args = append(args, limit)
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+presentationColumns+` FROM presentations
+		ORDER BY title COLLATE NOCASE, id LIMIT ?`, sqlLimit)
 	if err != nil {
 		return nil, fmt.Errorf("search presentations %q: %w", query, err)
 	}
@@ -203,7 +192,13 @@ func (s *Store) SearchPresentations(ctx context.Context, query string, limit int
 		if err != nil {
 			return nil, fmt.Errorf("search presentations %q: %w", query, err)
 		}
+		if !matchesAll(terms, p.Title, p.Path) {
+			continue
+		}
 		out = append(out, p)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("search presentations %q: %w", query, err)

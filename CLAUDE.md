@@ -160,6 +160,16 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - Two first-run imports writing the same table race on a unique key; tell the second about the first
   (`easyworship.Options.BundledBibles`) instead of relying on `ErrExists` after a full insert. SQLite's
   `_txlock=immediate` + `busy_timeout` serialize the concurrent bundled and EasyWorship imports (~1 s per translation).
+- FTS5: a quoted multi-word string is re-tokenized, so `"i ll"*` is how a contraction (`I'll`) matches with unicode61
+  (the apostrophe is a separator); `*` applies to the last token only. Column filters take groups:
+  `{title author} : ("a"* OR "b"*)`; uncorrelated `id IN (SELECT rowid FROM fts WHERE fts MATCH ?)` flags make cheap
+  rank tiers in `ORDER BY`. `snippet()`/`MATCH` resolve through the hidden column named after the table even under an alias.
+- `hooks.go isSongTable` identifies the song list by its column count; a new column in `ui/songs.go` must keep it in sync.
+- Inspect a WAL-mode `library.db` copy with `sqlite3 "file:x.db?immutable=1"`; `-readonly` fails when it cannot create
+  the `-shm` file.
+- A Godot window occluded by a fullscreen or frontmost app on the only display (VLC, a browser) stops redrawing:
+  `/screenshot?window=output` returns the frozen previous frame and every output pixel check fails. Check
+  `osascript … frontmost` before blaming the code; smoke runs need the Godot windows unobstructed.
 - `screencapture -D 2` and `DisplayServer.ScreenGetImage` need Screen Recording permission for the terminal. Without
   it, check the TV by eye and the content with `/screenshot?window=output`.
 - A node that only reacts to its own lifecycle needs no extension class: connect `OnVisibilityChanged` /

@@ -154,6 +154,12 @@ It is also the drag handle for the main splitter (`Cursor = hand`). Clicking it 
   (`sd.toolbar.mini.tl.style`, padding L8 T3 B1) with `+` (add collection) and a gear dropdown.
 - **Center (Item selector)**: a list or grid of items (songs: Title, Author, Copyright… columns with
   `headercolumn.stroke`). Footer mini-toolbar 28px: view sizer (24 + 16 split button) on the left, a loading status, and `+` / `⚙▾` on the right.
+- **Search box** (the Songs `SearchLocator`): typing is debounced (~200 ms), Enter searches at once. Every
+  whitespace-separated term must match as a word prefix, case- and diacritic-insensitively, in the title, author or
+  lyrics; a double-quoted run is one phrase. Results rank title matches first, then author, then songs that needed
+  their lyrics, each group by title. A narrow **Match** column says `author` or `lyrics` for the latter rows (the
+  lyric excerpt is the row's tooltip) and the footer counts them ("5 songs · 2 matched in lyrics"). The Media and
+  Presentations search boxes fold case and diacritics the same way over the title and path.
 - **Right (Resource preview)**: 16:9 preview with title, mini video controls (play, volume, navigate), and a 28px toolbar.
 - Scriptures tab: translation picker + reference search locator. Media tab: sub-categories Videos / Images / Feeds / Audio / DVD.
 

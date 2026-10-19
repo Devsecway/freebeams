@@ -39,6 +39,11 @@ type SongsState struct {
 	Selected  int    `json:"selected"`
 	Current   string `json:"current,omitempty"` // title of the loaded (selected) song
 	CountText string `json:"countText"`
+
+	// The search ranking (store.SearchSongs): First is the title of the first
+	// row, LyricsMatches the rows that needed their lyrics to match.
+	First         string `json:"first,omitempty"`
+	LyricsMatches int    `json:"lyricsMatches"`
 }
 
 // ScriptureState summarises the Scriptures tab.

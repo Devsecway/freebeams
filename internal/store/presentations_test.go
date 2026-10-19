@@ -122,7 +122,7 @@ func TestSavePresentationsAtomic(t *testing.T) {
 func TestSearchPresentations(t *testing.T) {
 	ctx := context.Background()
 	st := openTemp(t)
-	for _, path := range []string{"/d/Easter Sunday.pdf", "/d/Christmas Eve.pptx", "/d/Youth_Night 50%.pdf", "/other/easter-kids.key"} {
+	for _, path := range []string{"/d/Easter Sunday.pdf", "/d/Christmas Eve.pptx", "/d/Youth_Night 50%.pdf", "/other/easter-kids.key", "/d/Noël Célébration.pdf"} {
 		if err := st.SavePresentation(ctx, &models.Presentation{Path: path}); err != nil {
 			t.Fatal(err)
 		}
@@ -132,8 +132,11 @@ func TestSearchPresentations(t *testing.T) {
 		limit int
 		want  []string
 	}{
-		{"", 0, []string{"Christmas Eve", "Easter Sunday", "easter-kids", "Youth Night 50%"}},
+		{"", 0, []string{"Christmas Eve", "Easter Sunday", "easter-kids", "Noël Célébration", "Youth Night 50%"}},
 		{"easter", 0, []string{"Easter Sunday", "easter-kids"}},
+		{"noel celebration", 0, []string{"Noël Célébration"}}, // diacritics folded
+		{"CÉLÉBRATION", 0, []string{"Noël Célébration"}},      // accented, any case
+		{"easter", 1, []string{"Easter Sunday"}},              // the limit applies to the matches
 		{"EASTER kids", 0, []string{"easter-kids"}},
 		{"/other/", 0, []string{"easter-kids"}},
 		{"50%", 0, []string{"Youth Night 50%"}}, // LIKE wildcards are literal

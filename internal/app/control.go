@@ -60,6 +60,7 @@ func (a *App) state() core.State {
 		Songs: core.SongsState{
 			Count: a.songCount, Query: a.songQuery, Results: len(a.songs), Selected: a.songSel,
 			Current: songTitle(a.song), CountText: a.songsStatus,
+			First: core.FirstSongTitle(a.songs), LyricsMatches: core.LyricsMatches(a.songs),
 		},
 		Bibles:        a.bibles,
 		BibleSelected: a.bibleSel,

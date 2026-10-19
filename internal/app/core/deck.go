@@ -255,13 +255,44 @@ func DefaultBible(bibles []models.Bible) int {
 // says so. A failed one stays visible next to the count, so a later search
 // cannot hide it.
 func SongsFooter(n int, imp ImportState) string {
-	switch {
-	case imp.Running:
+	return SongsFooterMatches(n, 0, imp)
+}
+
+// SongsFooterMatches is SongsFooter for a search result: lyrics is the number
+// of listed songs that needed their lyrics to match ("5 songs · 2 matched in
+// lyrics"), which tells the operator why those rows are there.
+func SongsFooterMatches(n, lyrics int, imp ImportState) string {
+	if imp.Running {
 		return "Importing from EasyWorship…"
-	case imp.Error != "":
-		return SongCountText(n) + " · EasyWorship import failed"
 	}
-	return SongCountText(n)
+	text := SongCountText(n)
+	if lyrics > 0 {
+		text += fmt.Sprintf(" · %d matched in lyrics", lyrics)
+	}
+	if imp.Error != "" {
+		text += " · EasyWorship import failed"
+	}
+	return text
+}
+
+// LyricsMatches counts the search results that needed their lyrics to match.
+func LyricsMatches(rows []models.SongSummary) int {
+	n := 0
+	for _, r := range rows {
+		if r.Matched == models.MatchedLyrics {
+			n++
+		}
+	}
+	return n
+}
+
+// FirstSongTitle is the title of the first listed song ("" for none): the
+// row a search ranks first.
+func FirstSongTitle(rows []models.SongSummary) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	return rows[0].Title
 }
 
 // SongCountText is the song count ("1 song", "223 songs").

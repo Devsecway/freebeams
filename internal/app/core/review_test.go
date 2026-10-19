@@ -227,6 +227,27 @@ func TestSongsFooter(t *testing.T) {
 			t.Errorf("%s: SongsFooter = %q, want %q", tt.name, got, tt.want)
 		}
 	}
+	matched := []struct {
+		name      string
+		n, lyrics int
+		imp       ImportState
+		want      string
+	}{
+		{"no lyrics matches", 5, 0, ImportState{Done: true}, "5 songs"},
+		{"lyrics matches", 5, 2, ImportState{Done: true}, "5 songs · 2 matched in lyrics"},
+		{"one of one", 1, 1, ImportState{}, "1 song · 1 matched in lyrics"},
+		{"importing wins", 5, 2, ImportState{Running: true}, "Importing from EasyWorship…"},
+		{"failed import stays visible", 5, 2, ImportState{Error: "x"}, "5 songs · 2 matched in lyrics · EasyWorship import failed"},
+	}
+	for _, tt := range matched {
+		if got := SongsFooterMatches(tt.n, tt.lyrics, tt.imp); got != tt.want {
+			t.Errorf("%s: SongsFooterMatches = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+	rows := []models.SongSummary{{Title: "Amazing Grace", Matched: models.MatchedTitle}, {Title: "Alas", Matched: models.MatchedLyrics}, {Title: "At The Cross", Matched: models.MatchedLyrics}}
+	if LyricsMatches(rows) != 2 || LyricsMatches(nil) != 0 || FirstSongTitle(rows) != "Amazing Grace" || FirstSongTitle(nil) != "" {
+		t.Error("LyricsMatches / FirstSongTitle")
+	}
 }
 
 func TestIsSaveAs(t *testing.T) {
