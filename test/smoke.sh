@@ -1061,6 +1061,8 @@ if [ "$(uname)" = "Darwin" ]; then
 	act "Delete File… (confirmed) trashes the file and drops the item" media-menu '{"item":"delete-file","title":"smoke-trash","confirm":true}' "s[\"media\"][\"count\"] == $MENU_MEDIA + 1"
 	[ ! -e "$MENU_DIR/smoke-trash.png" ] || fail "Delete File… left the file in place"
 	log "smoke-trash.png is in the Trash"
+	# Keep the user's Trash free of fixtures from repeated runs (only our own file name).
+	rm -f "$HOME/.Trash/smoke-trash"*.png 2>/dev/null || true
 else
 	act "Delete File… is unavailable here" media-menu '{"item":"delete-file","title":"smoke-square","confirm":true}' 'not r["ok"]'
 fi
