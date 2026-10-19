@@ -58,6 +58,10 @@ type Report struct {
 	MediaImported  int
 	MediaSkipped   int // already present (same path)
 	Warnings       []string
+
+	// Presentation files under Resources/Presentations (ImportPresentations).
+	PresentationsImported int
+	PresentationsSkipped  int // already present (same path)
 }
 
 const (

@@ -68,6 +68,7 @@ func (a *App) state() core.State {
 			CopyrightedAvailable: core.CopyrightedBiblesToImport(a.ewBibles, a.bibles),
 		},
 		Media:         a.mediaStateDoc(),
+		Presentations: a.presentationsStateDoc(),
 		Resource:      core.ResourceState{Title: resTitle, Caption: resCaption},
 		Splitters:     a.splitterPositions(),
 		Import:        a.importState,
@@ -295,8 +296,10 @@ func (a *App) handleCommand(cmd *control.Command) {
 			a.addScriptureToSchedule(cmd)
 		case "media":
 			a.addMediaToSchedule(cmd)
+		case "presentation":
+			a.addPresentationToSchedule(cmd)
 		default:
-			cmd.RespondErr(fmt.Errorf("add-to-schedule: source must be \"song\", \"scripture\" or \"media\", got %q", args.Source))
+			cmd.RespondErr(fmt.Errorf("add-to-schedule: source must be \"song\", \"scripture\", \"media\" or \"presentation\", got %q", args.Source))
 		}
 
 	// Media.
@@ -346,6 +349,49 @@ func (a *App) handleCommand(cmd *control.Command) {
 			return
 		}
 		a.doRemoveMedia(a.md.list[i], cmd)
+
+	// Presentations.
+	case "search-presentations":
+		a.win.Presentations.SetSearchText(args.Q)
+		a.loadPresentations(args.Q, cmd)
+	case "select-presentation":
+		i := -1
+		switch {
+		case args.Index != nil:
+			i = *args.Index
+		case args.Title != "":
+			i = core.FindPresentation(a.pr.list, args.Title)
+		}
+		if i < 0 || i >= len(a.pr.list) {
+			cmd.RespondErr(fmt.Errorf("select-presentation: no presentation matches %s", string(cmd.Data)))
+			return
+		}
+		a.win.Resources.SetTab(ui.TabPresentations)
+		a.selectPresentation(i, presPreview, cmd)
+	case "add-presentation":
+		paths := args.Paths
+		if args.Path != "" {
+			paths = append(paths, args.Path)
+		}
+		a.addPresentationPaths(paths, cmd)
+	case "remove-presentation":
+		i := -1
+		switch {
+		case args.Index != nil:
+			i = *args.Index
+		case args.Title != "":
+			i = core.FindPresentation(a.pr.list, args.Title)
+		}
+		if i < 0 || i >= len(a.pr.list) {
+			cmd.RespondErr(fmt.Errorf("remove-presentation: no presentation matches %s", string(cmd.Data)))
+			return
+		}
+		if !args.Confirm {
+			a.removePresentation(i) // asks first, like the UI
+			ok()
+			return
+		}
+		a.doRemovePresentation(a.pr.list[i], cmd)
 	case "select-schedule":
 		if args.Index == nil || *args.Index < 0 || *args.Index >= len(a.sched.Items) {
 			cmd.RespondErr(errArgs)

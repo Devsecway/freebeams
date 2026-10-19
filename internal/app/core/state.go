@@ -75,6 +75,27 @@ type MediaState struct {
 	Tools     string `json:"tools"` // media.Tools.Status()
 }
 
+// PresentationsState summarises the Presentations tab.
+type PresentationsState struct {
+	Count     int    `json:"count"` // presentations in the library
+	Query     string `json:"query"`
+	Results   int    `json:"results"` // tiles in the grid
+	Selected  int    `json:"selected"`
+	Current   string `json:"current,omitempty"` // title of the selected presentation
+	CountText string `json:"countText"`
+	Working   bool   `json:"working"` // pages being rendered
+	Pending   int    `json:"pending"` // listed items still without pages
+	Failed    int    `json:"failed"`  // listed items whose render failed this session
+	// The selected presentation's render: its page count, whether only its
+	// embedded images could be used, and which backend made it.
+	CurrentPages    int    `json:"currentPages"`
+	CurrentPartial  bool   `json:"currentPartial"`
+	CurrentRenderer string `json:"currentRenderer,omitempty"`
+	PDF             bool   `json:"pdf"`    // a PDF renderer exists
+	Office          bool   `json:"office"` // LibreOffice converts office documents
+	Tools           string `json:"tools"`  // presentations.Tools.Status()
+}
+
 // Alert is an error message for the operator, shown in the message dialog.
 type Alert struct {
 	Title   string `json:"title"`
@@ -125,6 +146,10 @@ type State struct {
 	Idle             bool           `json:"idle"`
 	// Splitters is where every splitter is, by name (see the split hooks).
 	Splitters map[string]SplitPos `json:"splitters"`
+
+	// Presentations is the Presentations tab (its own block keeps gofmt from
+	// realigning the fields above).
+	Presentations PresentationsState `json:"presentations"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -154,6 +179,8 @@ type StateInput struct {
 	Pending          int
 	Transitioning    bool
 	Idle             bool
+
+	Presentations PresentationsState
 }
 
 // deckState summarises deck d with slide i selected.
@@ -203,6 +230,7 @@ func BuildState(in StateInput) State {
 		Transitioning:    in.Transitioning,
 		Idle:             in.Idle,
 		Splitters:        in.Splitters,
+		Presentations:    in.Presentations,
 	}
 	if st.Splitters == nil {
 		st.Splitters = map[string]SplitPos{}

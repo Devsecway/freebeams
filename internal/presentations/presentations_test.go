@@ -12,6 +12,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -551,5 +552,40 @@ func TestRealLibreOffice(t *testing.T) {
 	}
 	if res.Renderer != RendererLibreOffice || res.Partial || res.Pages != 2 {
 		t.Fatalf("Render through LibreOffice = %+v", res)
+	}
+}
+
+func TestScan(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(rel string) string {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	a := mk("decks/B Deck.pdf")
+	b := mk("decks/sub/a.pptx")
+	mk("decks/.hidden/secret.pdf")
+	mk("decks/notes.txt")
+	mk("decks/.DS_Store.pdf")
+	single := mk("single.key")
+	items, warnings := Scan(filepath.Join(dir, "decks"), single, single, filepath.Join(dir, "missing"), filepath.Join(dir, "decks/notes.txt"))
+	got := make([]string, len(items))
+	for i, it := range items {
+		got[i] = it.Path
+	}
+	want := []string{a, b, single}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Scan = %v, want %v", got, want)
+	}
+	if items[0].Title != "B Deck" || items[2].Title != "single" {
+		t.Errorf("titles = %q, %q", items[0].Title, items[2].Title)
+	}
+	if len(warnings) != 2 {
+		t.Errorf("warnings = %v, want 2 (missing path, not a presentation)", warnings)
 	}
 }

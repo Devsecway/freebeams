@@ -516,6 +516,143 @@ shot quit-confirm dialog
 act "cancel quitting" dismiss '' 's["focus"] != "dialog"'
 act "save before closing" save-schedule '{}' 'not s["schedule"]["dirty"]'
 
+# ---- presentations -----------------------------------------------------------------------
+# PDF / PowerPoint decks rendered to page images (internal/presentations). A
+# generated two-page PDF with solid colours gives exact pixel checks on the
+# projector; a generated .pptx exercises the embedded-image fallback (or
+# LibreOffice when it is installed).
+act "Presentations tab" tab '{"tab":"presentations"}' 's["tab"] == 3'
+for _ in $(seq 1 120); do
+	LAST="$(state)"
+	python3 -c 'import json,sys; s=json.loads(sys.argv[1])["data"]; sys.exit(0 if not s["presentations"]["working"] else 1)' "$LAST" 2>/dev/null && break
+	sleep 0.5
+done
+check "presentation renderers detected" "$LAST" 'not s["presentations"]["working"] and s["presentations"]["tools"] != ""'
+log "presentation renderers: $(field "$LAST" presentations.tools)"
+PRES_COUNT="$(field "$LAST" presentations.count)"
+PRES_PDF="$(field "$LAST" presentations.pdf)"
+PRES_OFFICE="$(field "$LAST" presentations.office)"
+PRES_DIR="$OUT/presentations"
+mkdir -p "$PRES_DIR"
+# wait_presentations waits for the render job to finish with every listed item rendered.
+wait_presentations() {
+	for _ in $(seq 1 240); do
+		LAST="$(state)"
+		python3 -c 'import json,sys; s=json.loads(sys.argv[1])["data"]["presentations"]; sys.exit(0 if not s["working"] and s["pending"] == 0 else 1)' "$LAST" 2>/dev/null && break
+		sleep 0.5
+	done
+}
+# A two-page PDF: page 1 #2a5fbf (blue), page 2 #bf5f2a (orange), 16:9 pages that fill the canvas.
+python3 - "$PRES_DIR/smoke-deck.pdf" <<'PY'
+import sys
+colors = [(0.165, 0.373, 0.749), (0.749, 0.373, 0.165)]
+objs = ["<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [%s] /Count %d >>" % (" ".join("%d 0 R" % (3 + 2 * i) for i in range(len(colors))), len(colors))]
+for i, (r, g, b) in enumerate(colors):
+    content = "%.3f %.3f %.3f rg 0 0 1920 1080 re f" % (r, g, b)
+    objs.append("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 1920 1080] /Contents %d 0 R >>" % (4 + 2 * i))
+    objs.append("<< /Length %d >>\nstream\n%s\nendstream" % (len(content), content))
+out = b"%PDF-1.4\n"
+offsets = []
+for i, o in enumerate(objs):
+    offsets.append(len(out))
+    out += ("%d 0 obj\n%s\nendobj\n" % (i + 1, o)).encode()
+xref = len(out)
+out += ("xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)).encode()
+for off in offsets:
+    out += ("%010d 00000 n \n" % off).encode()
+out += ("trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)).encode()
+open(sys.argv[1], "wb").write(out)
+PY
+if [ "$PRES_PDF" = "True" ]; then
+	act "add a PDF presentation" add-presentation "{\"path\":\"$PRES_DIR/smoke-deck.pdf\"}" "s[\"presentations\"][\"count\"] == $PRES_COUNT + 1"
+	act "adding it again adds nothing" add-presentation "{\"path\":\"$PRES_DIR/smoke-deck.pdf\"}" "s[\"presentations\"][\"count\"] == $PRES_COUNT + 1"
+	wait_presentations
+	check "PDF pages rendered" "$LAST" 'not s["presentations"]["working"] and s["presentations"]["pending"] == 0 and s["presentations"]["failed"] == 0'
+	act "select the PDF" select-presentation '{"title":"smoke-deck"}' 's["presentations"]["current"] == "smoke-deck" and s["presentations"]["currentPages"] == 2 and not s["presentations"]["currentPartial"] and s["preview"]["count"] == 2 and s["preview"]["title"] == "smoke-deck" and s["resource"]["title"] == "smoke-deck" and s["resource"]["caption"] == "Slide 1 · 1 / 2"'
+	log "PDF renderer: $(field "$LAST" presentations.currentRenderer)"
+	wait_idle
+	shot presentations-tab main
+	pixel "presentations tab has content" "$OUT/presentations-tab.png" notblank
+	act "PDF live" go-live '' 's["live"]["title"] == "smoke-deck" and s["live"]["index"] == 0 and s["live"]["count"] == 2 and s["live"]["label"] == "Slide 1"'
+	wait_idle
+	shot presentation-page1-output output
+	pixel "the output shows page 1" "$OUT/presentation-page1-output.png" has 2a5fbf 0.25 0.25 0.75 0.75 10000
+	act "Next steps to page 2" next '' 's["live"]["index"] == 1 and s["live"]["label"] == "Slide 2"'
+	wait_idle
+	shot presentation-page2-output output
+	shot presentation-page2-main main
+	pixel "the output shows page 2" "$OUT/presentation-page2-output.png" has bf5f2a 0.25 0.25 0.75 0.75 10000
+	pixel "page 1 is gone from the output" "$OUT/presentation-page2-output.png" lacks 2a5fbf 0.25 0.25 0.75 0.75 200
+	pixel "the live monitor shows page 2" "$OUT/presentation-page2-main.png" has bf5f2a 0.68 0.42 0.91 0.61 2000
+	act "Next at the last page stays" next '' 's["live"]["index"] == 1'
+	act "Prev steps back to page 1" prev '' 's["live"]["index"] == 0 and s["live"]["label"] == "Slide 1"'
+	act "focus the presentation grid" focus '{"target":"presentation-grid"}' 's["focus"] == "grid"'
+	act "Enter in the presentation grid sends the deck live" native-key '{"name":"enter"}' 's["live"]["title"] == "smoke-deck" and s["live"]["index"] == 0'
+	act "release focus (presentations)" focus '{"target":"none"}' 's["focus"] == "none"'
+	act "add presentation to schedule" add-to-schedule '{"source":"presentation"}' 's["schedule"]["items"][-1] == "smoke-deck" and s["schedule"]["dirty"]'
+	PRES_ROW=$(( $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST") - 1 ))
+	act "clear live with black (presentation)" black '' 's["mode"] == "black"'
+	act "black off (presentation)" black '' 's["mode"] == "normal"'
+	act "select the presentation schedule item" select-schedule "{\"index\":$PRES_ROW}" "s[\"preview\"][\"title\"] == \"smoke-deck\" and s[\"preview\"][\"count\"] == 2 and s[\"schedule\"][\"selected\"] == $PRES_ROW"
+	act "presentation schedule item live" go-live "{\"slide\":1}" "s[\"schedule\"][\"live\"] == $PRES_ROW and s[\"live\"][\"title\"] == \"smoke-deck\" and s[\"live\"][\"index\"] == 1"
+	act "remove asks for confirmation (presentation)" remove-presentation '{"title":"smoke-deck"}' 's["focus"] == "dialog" and s["dialog"]["confirm"] == "Remove Presentation"'
+	act "cancel the removal (presentation)" dismiss '' 's["focus"] != "dialog"'
+	act "remove the PDF" remove-presentation '{"title":"smoke-deck","confirm":true}' "s[\"presentations\"][\"count\"] == $PRES_COUNT and s[\"presentations\"].get(\"current\", \"\") == \"\""
+	check "the schedule still has the presentation" "$LAST" "s[\"schedule\"][\"items\"][$PRES_ROW] == \"smoke-deck\" and s[\"live\"][\"title\"] == \"smoke-deck\""
+else
+	log "no PDF renderer on this machine (no Core Graphics, no pdftoppm): skipping the PDF checks"
+fi
+# A minimal .pptx with one slide holding a solid #5f2abf 960x540 picture.
+python3 - "$PRES_DIR/smoke-slides.pptx" <<'PY'
+import struct, sys, zipfile, zlib
+w, h = 960, 540
+raw = (b"\x00" + bytes([0x5F, 0x2A, 0xBF]) * w) * h
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+P = "http://schemas.openxmlformats.org/presentationml/2006/main"
+A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED) as z:
+    z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+        '<Default Extension="png" ContentType="image/png"/>'
+        '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>'
+        '<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>')
+    z.writestr("_rels/.rels", '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="%s/officeDocument" Target="ppt/presentation.xml"/></Relationships>' % R)
+    z.writestr("ppt/presentation.xml", '<?xml version="1.0"?><p:presentation xmlns:p="%s" xmlns:r="%s"><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst>'
+        '<p:sldSz cx="12192000" cy="6858000"/></p:presentation>' % (P, R))
+    z.writestr("ppt/_rels/presentation.xml.rels", '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="%s/slide" Target="slides/slide1.xml"/></Relationships>' % R)
+    z.writestr("ppt/slides/slide1.xml", '<?xml version="1.0"?><p:sld xmlns:p="%s" xmlns:a="%s" xmlns:r="%s"><p:cSld><p:spTree>'
+        '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>'
+        '<p:pic><p:nvPicPr><p:cNvPr id="2" name="Picture"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>'
+        '<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="6858000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>'
+        '</p:spTree></p:cSld></p:sld>' % (P, A, R))
+    z.writestr("ppt/slides/_rels/slide1.xml.rels", '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="%s/image" Target="../media/image1.png"/></Relationships>' % R)
+    z.writestr("ppt/media/image1.png", png)
+PY
+act "add a PowerPoint deck" add-presentation "{\"path\":\"$PRES_DIR/smoke-slides.pptx\"}" "s[\"presentations\"][\"count\"] == $PRES_COUNT + 1"
+wait_presentations
+check "PowerPoint pages rendered" "$LAST" 'not s["presentations"]["working"] and s["presentations"]["pending"] == 0 and s["presentations"]["failed"] == 0'
+if [ "$PRES_OFFICE" = "True" ]; then
+	act "select the deck (LibreOffice)" select-presentation '{"title":"smoke-slides"}' 's["presentations"]["current"] == "smoke-slides" and s["presentations"]["currentPages"] == 1 and s["presentations"]["currentRenderer"] == "libreoffice" and not s["presentations"]["currentPartial"]'
+else
+	act "select the deck (embedded images)" select-presentation '{"title":"smoke-slides"}' 's["presentations"]["current"] == "smoke-slides" and s["presentations"]["currentPages"] == 1 and s["presentations"]["currentRenderer"] == "embedded" and s["presentations"]["currentPartial"] and s["preview"]["count"] == 1'
+fi
+act "deck live" go-live '' 's["live"]["title"] == "smoke-slides" and s["live"]["count"] == 1'
+wait_idle
+shot presentation-pptx-output output
+pixel "the output shows the deck's slide" "$OUT/presentation-pptx-output.png" has 5f2abf 0.25 0.25 0.75 0.75 10000
+act "remove the deck" remove-presentation '{"title":"smoke-slides","confirm":true}' "s[\"presentations\"][\"count\"] == $PRES_COUNT"
+act "search presentations" search-presentations '{"q":"zzz-nothing"}' 's["presentations"]["query"] == "zzz-nothing" and s["presentations"]["results"] == 0'
+act "all presentations" search-presentations '{"q":""}' "s[\"presentations\"][\"results\"] == $PRES_COUNT"
+act "Songs tab (presentations)" tab '{"tab":"songs"}' 's["tab"] == 0'
+act "save the schedule (presentations)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+
 # ---- quit ------------------------------------------------------------------------------------
 LAST="$(post close)"
 log "closing the window (clean schedule)"

@@ -44,11 +44,18 @@ type viewCache struct {
 	alert       core.Alert // the alert the message dialog shows
 	toggles     [4]bool    // logo, black, clear, live
 	init        bool
+
+	// Presentations tab (presentations.go).
+	presVer    int
+	presThumbs int
+	presRows   []ui.PresentationRow
+	presSel    int
+	presStatus string
 }
 
 func newViewCache() viewCache {
 	return viewCache{previewSel: -2, liveSel: -2, songSel: -2, songsVer: -1, biblesVer: -1, bibleSel: -2,
-		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2}
+		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2, presVer: -1, presSel: -2}
 }
 
 // buildUI creates the main window, the monitors and the output, and connects
@@ -148,6 +155,7 @@ func (a *App) buildUI() {
 	}
 
 	a.wireMedia()
+	a.wirePresentations()
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -300,6 +308,25 @@ func (a *App) render() {
 		w.Media.SetCountText(a.md.status)
 	}
 
+	// Presentations tab, as the Media tab: tiles rebuilt when the list
+	// changes or when rendered pages / badges arrived.
+	if a.pr.ver != v.presVer || a.pr.thumbVer != v.presThumbs {
+		rows := a.presentationRows()
+		if a.pr.ver != v.presVer || !reflect.DeepEqual(rows, v.presRows) {
+			w.Presentations.SetItems(rows)
+			v.presSel = -2
+		}
+		v.presVer, v.presThumbs, v.presRows = a.pr.ver, a.pr.thumbVer, rows
+	}
+	if a.pr.sel != v.presSel {
+		v.presSel = a.pr.sel
+		w.Presentations.SetSelected(a.pr.sel)
+	}
+	if a.pr.status != v.presStatus || !v.init {
+		v.presStatus = a.pr.status
+		w.Presentations.SetCountText(a.pr.status)
+	}
+
 	// Resource preview for the visible tab.
 	frame, title, caption := a.resourcePreviewFrame()
 	a.resView.SetFrame(frame)
@@ -333,6 +360,8 @@ func (a *App) resourcePreview() resourcePreview {
 		return resourcePreview{deck: a.scriptureDeck, index: max(a.verseSelection(), 0)}
 	case ui.TabMedia:
 		return resourcePreview{deck: a.md.deck}
+	case ui.TabPresentations:
+		return resourcePreview{deck: a.pr.deck} // page 1
 	}
 	return resourcePreview{}
 }

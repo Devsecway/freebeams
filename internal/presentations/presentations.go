@@ -558,6 +558,62 @@ func writeAtomic(path string, write func(*os.File) error) (err error) {
 	return os.Rename(tmp, path)
 }
 
+// Scan lists the presentation files in paths (folders recursively, hidden
+// entries skipped; a path may be a single file), as unsaved library items
+// with Path (absolute) and Title filled in, ordered by path. Problems with a
+// path (missing, unreadable, not a presentation) become warnings.
+func Scan(paths ...string) (items []models.Presentation, warnings []string) {
+	seen := map[string]bool{}
+	addFile := func(p string) {
+		if !seen[p] {
+			seen[p] = true
+			items = append(items, models.Presentation{Path: p, Title: models.MediaTitle(p)})
+		}
+	}
+	for _, path := range paths {
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("%s: %v", path, err))
+			continue
+		}
+		fi, err := os.Stat(abs)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("%s: %v", path, err))
+			continue
+		}
+		if !fi.IsDir() {
+			if models.IsPresentationFile(abs) {
+				addFile(abs)
+			} else {
+				warnings = append(warnings, fmt.Sprintf("%s: not a presentation file", path))
+			}
+			continue
+		}
+		err = filepath.WalkDir(abs, func(p string, d os.DirEntry, err error) error {
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("%s: %v", p, err))
+				return nil
+			}
+			if p != abs && strings.HasPrefix(d.Name(), ".") {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if d.IsDir() || !d.Type().IsRegular() || !models.IsPresentationFile(p) {
+				return nil
+			}
+			addFile(p)
+			return nil
+		})
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("%s: %v", path, err))
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
+	return items, warnings
+}
+
 // numberedFiles lists the files in dir matching prefix*ext sorted by the
 // number between them (pdftoppm's prefix-1.png, prefix-2.png, …).
 func numberedFiles(dir, prefix, ext string) []string {
