@@ -373,9 +373,10 @@ func (a *App) clickScheduleRow(cmd *control.Command, i int) {
 	a.after(nativeKeyFrames, func() { a.answer(cmd, nil) })
 }
 
-// isSongTable matches the 4-column song list (not the library tree).
+// isSongTable matches the multi-column song list (Title, Author, Copyright,
+// CCLI #, Match), not the one-column library tree.
 func isSongTable(n Node.Instance) (Control.Instance, bool) {
-	if t, ok := Object.As[Tree.Instance](n); ok && t.Columns() == 4 {
+	if t, ok := Object.As[Tree.Instance](n); ok && t.Columns() > 1 {
 		return t.AsControl(), true
 	}
 	return Control.Instance{}, false

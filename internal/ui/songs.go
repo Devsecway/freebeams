@@ -2,6 +2,7 @@ package ui
 
 import (
 	"freeworship/internal/models"
+	"freeworship/internal/ui/uicore"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/GUI"
@@ -74,14 +75,16 @@ func NewSongLibraryPanel() *SongLibraryPanel {
 	left := libraryPane(s.search.root.AsControl(), s.library.AsControl(), libraryFooter())
 
 	// Right: song list.
+	// The Match column says why a search listed a row when that was not its
+	// title ("author", "lyrics"; the lyric excerpt is in the row's tooltip).
 	s.list = Tree.New()
-	s.list.SetColumns(4)
+	s.list.SetColumns(5)
 	s.list.SetColumnTitlesVisible(true)
 	s.list.SetHideRoot(true)
 	s.list.SetSelectMode(Tree.SelectRow)
 	s.list.SetAllowRmbSelect(true)
 	s.list.SetAllowReselect(true)
-	for i, t := range []string{"Title", "Author", "Copyright", "CCLI #"} {
+	for i, t := range []string{"Title", "Author", "Copyright", "CCLI #", "Match"} {
 		s.list.SetColumnTitle(i, t)
 		s.list.SetColumnTitleAlignment(i, GUI.HorizontalAlignmentLeft)
 		s.list.SetColumnClipContent(i, true)
@@ -91,6 +94,8 @@ func NewSongLibraryPanel() *SongLibraryPanel {
 	s.list.SetColumnExpandRatio(2, 2)
 	s.list.SetColumnExpand(3, false)
 	s.list.SetColumnCustomMinimumWidth(3, 80)
+	s.list.SetColumnExpand(4, false)
+	s.list.SetColumnCustomMinimumWidth(4, 56)
 	s.list.OnItemSelected(func() {
 		if i := treeIndex(s.list.GetSelected()); i >= 0 {
 			s.selected = i
@@ -212,6 +217,13 @@ func (s *SongLibraryPanel) render() {
 				it.SetText(1, song.Author)
 				it.SetText(2, song.Copyright)
 				it.SetText(3, song.CCLI)
+				hint, tip := uicore.SongMatchHint(song.Matched, song.Snippet)
+				it.SetText(4, hint)
+				if tip != "" {
+					for c := 0; c < 5; c++ {
+						it.SetTooltipText(c, tip)
+					}
+				}
 			}
 		}
 		selectTreeRow(s.list, s.selected)
