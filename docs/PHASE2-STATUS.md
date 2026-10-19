@@ -78,6 +78,8 @@ test/smoke.sh          # 228 checks; screenshots and app.log in test/out/
   hook for "use as background".
 - **Settings UI** (output display, default themes, transition and duration, copyrighted-Bible opt-in).
 - **More transitions** (push, wipe, iris, zoom) and the Logo image setting.
-- **Packaging**: signed DMG, Windows, Linux (PLAN §4 M6).
+- **Packaging** (PLAN §4 M6): the release build, scripts, CI workflows and docs are in place, see
+  [RELEASE.md](RELEASE.md). Still open: signing and notarization (needs credentials), and the Windows and Linux
+  builds, which are unverified until the release workflow has run.
 - Media library polish: audio (EasyWorship's `Audio` folder), drag-and-drop into the schedule, per-item titles and
   tags, removing items whose files have gone missing.

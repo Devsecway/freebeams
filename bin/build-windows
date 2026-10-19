@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# Build the Windows bundle (FreeWorship.exe + windows_<arch>.dll), zip it, and
+# on Windows build the Inno Setup installer.
+#
+# Native build (what release.yml does), under MSYS2 UCRT64 on Windows with Go
+# on PATH:
+#   MSYSTEM=UCRT64 /c/msys64/usr/bin/bash -l bin/build-windows
+# Cross build from macOS or Linux: gd compiles with `zig cc` (zig must be on
+# PATH); the exe is not branded and no installer is built:
+#   bin/build-windows
+#
+# Outputs (<v> = bin/version, <arch> = GOARCH, amd64 by default):
+#   releases/windows/<arch>/                    FreeWorship.exe, windows_<arch>.dll
+#                                               (+ runtime DLLs the .dll needs)
+#   releases/FreeWorship-<v>-windows-<arch>.zip the portable bundle
+#   releases/FreeWorship-<v>-Setup.exe          the installer (Windows with Inno Setup)
+#
+# Optional:
+#   SIGNTOOL_CMD="signtool sign /fd SHA256 /tr http://timestamp... /td SHA256 /a"
+#       runs on every PE file before it is packaged (Authenticode placeholder;
+#       no certificate is part of this repository)
+#   NO_INSTALLER=1   skip Inno Setup on Windows
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+fail() {
+	echo "build-windows: $*" >&2
+	exit 1
+}
+need() { # need COMMAND "where it comes from"
+	command -v "$1" >/dev/null 2>&1 || fail "'$1' not found ($2)"
+}
+step() { printf '\n==> %s\n' "$*"; }
+
+GOARCH="${GOARCH:-amd64}"
+case "$GOARCH" in
+amd64 | arm64) ;;
+*) fail "unsupported GOARCH '$GOARCH' (want amd64 or arm64)" ;;
+esac
+export GOARCH
+
+OUT="releases/windows/$GOARCH"
+EXE="$OUT/FreeWorship.exe"
+DLL="graphics/windows_$GOARCH.dll"
+V="$("$ROOT/bin/version")"
+
+native=0
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*) native=1 ;;
+esac
+
+# --- toolchain ---------------------------------------------------------------
+need go "https://go.dev/dl/"
+if [ "$native" = 1 ]; then
+	# MinGW gcc builds the Go c-shared DLL. Link libgcc and winpthread
+	# statically so the DLL does not need the MinGW runtime beside it.
+	need gcc "MSYS2: pacman -S mingw-w64-ucrt-x86_64-gcc"
+	export CC="${CC:-gcc}" CXX="${CXX:-g++}"
+	export CGO_LDFLAGS="${CGO_LDFLAGS:-} -static-libgcc -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic"
+else
+	# gd cross-compiles Windows with zig when CC is unset.
+	[ -n "${CC:-}" ] || need zig "https://ziglang.org/download/ (gd uses 'zig cc' to cross-compile for Windows)"
+fi
+
+# --- build -------------------------------------------------------------------
+step "GOOS=windows GOARCH=$GOARCH bin/gd build"
+rc=0
+GOOS=windows "$ROOT/bin/gd" build || rc=$?
+# Godot's headless export can crash on teardown on GPU-less machines after
+# writing the exe, so trust the artifacts, not only the exit status.
+[ -f "$EXE" ] && [ -f "$DLL" ] || fail "gd build failed (exit $rc): $EXE or $DLL was not produced"
+[ "$rc" -eq 0 ] || echo "    note: gd exited $rc but the artifacts exist (Godot teardown crash)"
+
+step "version $V"
+
+# --- bundle the DLL (and whatever runtime it needs) next to the exe ----------
+step "bundle $DLL next to the exe"
+cp -f "$DLL" "$OUT/"
+if command -v objdump >/dev/null 2>&1; then
+	gccdir="$(dirname "$(command -v gcc 2>/dev/null || echo /nonexistent)")"
+	missing=""
+	for dep in $(objdump -p "$OUT/$(basename "$DLL")" | awk '/DLL Name/{print $3}' | grep -iE '^lib' || true); do
+		[ -f "$OUT/$dep" ] && continue
+		if [ -f "$gccdir/$dep" ]; then
+			cp -f "$gccdir/$dep" "$OUT/"
+			echo "    bundled $dep"
+		else
+			missing="$missing $dep"
+		fi
+	done
+	[ -z "$missing" ] || fail "the DLL needs runtime libraries that are not available:$missing"
+else
+	echo "    objdump not found: the DLL's runtime dependencies were not checked"
+fi
+
+# --- brand the exe (icon + version resource) --------------------------------
+# Godot only applies application/icon and the version strings from the export
+# preset when rcedit is configured in its editor settings, so apply them here
+# with rcedit on Windows. Elsewhere the exe keeps Godot's icon.
+step "icon and version resource"
+if [ "$native" = 1 ]; then
+	need curl "to download rcedit"
+	RCEDIT="${RCEDIT:-$HOME/.cache/freeworship/rcedit-x64.exe}"
+	if [ ! -f "$RCEDIT" ]; then
+		mkdir -p "$(dirname "$RCEDIT")"
+		curl -fsSL -o "$RCEDIT" https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
+	fi
+	"$RCEDIT" "$EXE" \
+		--set-icon graphics/icon.ico \
+		--set-version-string ProductName "FreeWorship" \
+		--set-version-string FileDescription "FreeWorship worship presentation software" \
+		--set-version-string CompanyName "FreeWorship" \
+		--set-version-string LegalCopyright "Copyright 2026 FreeWorship contributors" \
+		--set-file-version "$V.0" --set-product-version "$V.0"
+else
+	echo "    skipped (rcedit runs on Windows)"
+fi
+
+# --- sign (placeholder) ------------------------------------------------------
+sign_files() { # sign_files FILE...
+	if [ -z "${SIGNTOOL_CMD:-}" ]; then
+		echo "    not signed (SIGNTOOL_CMD is unset)"
+		return
+	fi
+	local f
+	for f in "$@"; do
+		echo "    sign: $f"
+		# shellcheck disable=SC2086
+		$SIGNTOOL_CMD "$f"
+	done
+}
+step "sign the bundle"
+sign_files "$EXE" "$OUT/$(basename "$DLL")"
+
+# --- portable zip ------------------------------------------------------------
+step "zip"
+ZIP="releases/FreeWorship-$V-windows-$GOARCH.zip"
+rm -f "$ZIP"
+zipdir() { # zipdir OUT.zip DIR  (archive the directory's contents under FreeWorship/)
+	local out="$1" dir="$2" stage
+	stage="$(mktemp -d -t freeworship-zip)"
+	mkdir -p "$stage/FreeWorship"
+	cp -R "$dir"/. "$stage/FreeWorship/"
+	if command -v zip >/dev/null 2>&1; then
+		(cd "$stage" && zip -qr "$OLDPWD/$out" FreeWorship)
+	elif command -v 7z >/dev/null 2>&1; then
+		(cd "$stage" && 7z a -bso0 -bsp0 "$OLDPWD/$out" FreeWorship)
+	elif command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
+		local py=python3
+		command -v python3 >/dev/null 2>&1 || py=python
+		(cd "$stage" && "$py" -m zipfile -c "$OLDPWD/$out" FreeWorship)
+	else
+		rm -rf "$stage"
+		fail "no zip, 7z or python found to write $out"
+	fi
+	rm -rf "$stage"
+}
+zipdir "$ZIP" "$OUT"
+ls -lh "$ZIP"
+
+# --- installer (Inno Setup, Windows only) ------------------------------------
+step "installer"
+if [ "$native" != 1 ]; then
+	echo "    skipped: Inno Setup runs on Windows (packaging/windows/freeworship.iss)"
+elif [ "${NO_INSTALLER:-0}" = "1" ]; then
+	echo "    skipped (NO_INSTALLER=1)"
+else
+	find_iscc() {
+		local c la=""
+		[ -n "${LOCALAPPDATA:-}" ] && la="$(cygpath -u "$LOCALAPPDATA" 2>/dev/null || true)"
+		for c in iscc \
+			"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
+			"/c/Program Files/Inno Setup 6/ISCC.exe" \
+			${la:+"$la/Programs/Inno Setup 6/ISCC.exe"}; do
+			if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then
+				echo "$c"
+				return
+			fi
+		done
+	}
+	iscc="$(find_iscc)"
+	[ -n "$iscc" ] || fail "Inno Setup (ISCC) not found: choco install innosetup, or winget install JRSoftware.InnoSetup, or NO_INSTALLER=1"
+	# Disable MSYS2 path mangling of the /D and /O switches for this native exe.
+	MSYS2_ARG_CONV_EXCL='*' "$iscc" \
+		"/DAppVersion=$V" \
+		"/DIconFile=$(cygpath -w "$ROOT/graphics/icon.ico")" \
+		"/DSourceDir=$(cygpath -w "$ROOT/$OUT")" \
+		"/O$(cygpath -w "$ROOT/releases")" \
+		packaging/windows/freeworship.iss
+	SETUP="releases/FreeWorship-$V-Setup.exe"
+	[ -f "$SETUP" ] || fail "$SETUP was not produced"
+	# The installer is what users download, so it is signed last.
+	sign_files "$SETUP"
+	ls -lh "$SETUP"
+fi
+
+step "done"
+echo "bundle: $OUT/"
+echo "zip:    $ZIP"

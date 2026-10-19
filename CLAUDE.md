@@ -12,15 +12,19 @@ graphics.gd idioms.
 ```bash
 go build ./... && go vet ./... && go test ./...
 bin/gd run              # builds graphics/darwin_*.dylib and launches Godot 4.7 (~/gd/freeworship/bin/Godot.app)
-GOOS=macos bin/gd build # release build into releases/
+GOOS=macos bin/gd build # release build: releases/darwin/universal/FreeWorship.app (also GOOS=windows, linux)
+bin/release-dmg         # the app + an Applications link as releases/FreeWorship-<version>-macOS.dmg
+bin/version             # the release version (config/version in graphics/project.godot)
 test/smoke.sh           # end to end through the control API; screenshots and app.log in test/out/
 test/splitters.sh       # drags every splitter through Godot's input pipeline (the layout-crash regression test)
 ```
+Releases: `docs/RELEASE.md` (scripts in `bin/`, Inno Setup and AppImage recipes in `packaging/`, GitHub Actions in
+`.github/workflows/`). The icon set is generated from `graphics/icon.svg` by `packaging/icons/make-icons.sh`.
 `bin/gd` runs the graphics.gd build tool pinned in `go.mod` (`tool graphics.gd/cmd/gd`) with `GDPATH=~/gd/freeworship`,
 so it installs and uses its own Godot and leaves Bufflehead's `~/gd/bin` alone. Keep the local Go toolchain at the
 `go.mod` version: with an auto-downloaded toolchain `gd` says so and builds without its resident-callback runtime patch.
-`gd` generates `graphics/library.gdextension` and the dylibs. Never hand-write or commit them (`graphics/icon.svg` and
-`main.tscn` are template files it writes once; they are committed).
+`gd` generates `graphics/library.gdextension`, `graphics/graphics.gen.go` and the dylibs. Never hand-write or commit
+them (`graphics/icon.svg` and `main.tscn` are template files it writes once; they are committed).
 The first run on a clean checkout runs a headless Godot import. That import needs no dylib, and `gd` builds it afterwards.
 
 ## Package layout & dependency rules
@@ -118,6 +122,27 @@ internal/app               Godot: the App node that wires store + presenter + ui
   dir (`~/Library/Caches/FreeWorship/media`) and let the factory load the 640 px JPEG.
 - Godot plays Ogg Theora only. Guard `VideoStreamPlayer.Play()` behind an "is .ogv and exists" check: a missing or
   unsupported file logs a Godot ERROR, which fails the smoke test's log hygiene.
+
+## Release builds (`gd build`) gotchas
+- `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:
+  `GOOS=macos go tool gd` fails inside `go` itself ("unsupported GOOS/GOARCH pair macos/arm64"), and `GOOS=windows`
+  would build `gd.exe` for Windows and try to run it.
+- The version has one source: `config/version` in `graphics/project.godot`. The macOS and Windows presets leave
+  `short_version`/`version`/`file_version`/`product_version` empty on purpose: Godot falls back to `config/version`
+  (`CFBundleShortVersionString` came out as `0.1.0`). `bin/version` prints it, `internal/app/version.go` logs it.
+- Godot prefixes the macOS `application/app_category` with `public.app-category.` itself: the preset value is
+  `"Productivity"`, not the full identifier (that gave `public.app-category.public.app-category.productivity`).
+- `.icns`/`.ico` files are not "resources" for `export_filter="all_resources"`. The presets add
+  `include_filter="*.icns"` / `"*.ico"` so `config/macos_native_icon` / `config/windows_native_icon` can be read
+  from the pck at startup (a missing file is a Godot ERROR in the log).
+- Export templates install into `~/Library/Application Support/Godot/export_templates/<version>.stable/` (per OS; see
+  `gdpaths.ExportTemplates` in gd). `gd build` fetches only the target platform's files from the `.tpz` (macos.zip is
+  124 MB). CI caches that directory plus `$GDPATH/bin`.
+- `GOTOOLCHAIN=local` (what `actions/setup-go` sets) makes gd refuse every download, Godot included. CI sets
+  `GOTOOLCHAIN=$(go env GOVERSION)` instead.
+- Godot's export ad-hoc signs the bundle (`codesign/codesign=1`); `bin/sign-notarize` re-signs everything with
+  `--force` and the entitlements in `packaging/macos/entitlements.plist`.
+- Never run `gd build` while the exported app is running from `releases/`: the export replaces the bundle in place.
 
 ## Conventions
 - Errors are wrapped with context (`fmt.Errorf("load song %d: %w", id, err)`). No panics in library code.

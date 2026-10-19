@@ -1,0 +1,207 @@
+name: Release
+
+# Builds the macOS, Windows and Linux artifacts natively on each platform and,
+# for a tag, attaches them to a draft GitHub release for a maintainer to
+# publish. The build logic lives in bin/ so every job is one script that can
+# also be run by hand (see docs/RELEASE.md).
+#
+# Trigger: push a tag vX.Y.Z matching config/version in graphics/project.godot
+# (the version job fails otherwise), or run it by hand for a dry run that only
+# uploads workflow artifacts.
+#
+# Signing is optional and gated on secrets (none are required for a build):
+#   macOS    MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD, APPLE_API_KEY_P8_BASE64,
+#            APPLE_API_KEY_ID, APPLE_API_ISSUER_ID  (see bin/sign-notarize)
+#   Windows  SIGNTOOL_CMD                              (see bin/build-windows)
+# Without them the macOS job builds an unsigned DMG (Gatekeeper blocks it on
+# other Macs) and the Windows binaries are unsigned (SmartScreen warns).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        name: The tag must match graphics/project.godot config/version
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/*) v="$(bin/version --check "$GITHUB_REF_NAME")" ;;
+            *) v="$(bin/version)" ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "FreeWorship $v"
+
+  macos:
+    name: macOS DMG
+    needs: version
+    runs-on: macos-15 # arm64; gd builds the x86_64 slice too (universal)
+    timeout-minutes: 90 # Apple's notary queue is variable
+    env:
+      GDPATH: ${{ runner.temp }}/gd
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # setup-go pins GOTOOLCHAIN=local, which gd reads as "download nothing"
+      # and then cannot install Godot. Pin the exact version instead.
+      - name: Let gd download Godot
+        run: echo "GOTOOLCHAIN=$(go env GOVERSION)" >> "$GITHUB_ENV"
+
+      - name: Cache Godot and the macOS export templates
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/gd/bin
+            ~/Library/Application Support/Godot/export_templates
+          key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
+
+      - name: Build (and sign + notarize when the secrets are set)
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          if [ -n "$MACOS_CERT_P12_BASE64" ] && [ -n "$APPLE_API_KEY_P8_BASE64" ]; then
+            bin/sign-notarize
+          else
+            echo "::warning::macOS signing secrets are not set; building an unsigned DMG"
+            bin/release-dmg
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: FreeWorship-macOS
+          path: releases/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows zip + installer
+    needs: version
+    runs-on: windows-latest
+    env:
+      GDPATH: ${{ runner.temp }}/gd
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # UCRT64 gcc builds the Go c-shared DLL; path-type inherit keeps Go and
+      # Inno Setup (preinstalled on the runner image) visible.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          install: mingw-w64-ucrt-x86_64-gcc zip
+
+      - name: Let gd download Godot
+        shell: msys2 {0}
+        run: echo "GOTOOLCHAIN=$(go env GOVERSION)" >> "$GITHUB_ENV"
+
+      - name: Cache Godot and the Windows export templates
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/gd/bin
+            ~/AppData/Roaming/Godot/export_templates
+          key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
+
+      - name: Build bundle, zip and installer
+        shell: msys2 {0}
+        env:
+          SIGNTOOL_CMD: ${{ secrets.SIGNTOOL_CMD }}
+        run: bin/build-windows
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: FreeWorship-windows
+          path: |
+            releases/*.zip
+            releases/*-Setup.exe
+          if-no-files-found: error
+
+  linux:
+    name: Linux tar.gz + AppImage
+    needs: version
+    # ubuntu-22.04 on purpose: an older glibc keeps the binary's floor low so
+    # the AppImage runs on newer distros too.
+    runs-on: ubuntu-22.04
+    env:
+      GDPATH: ${{ runner.temp }}/gd
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends file libfuse2 desktop-file-utils
+
+      - name: Let gd download Godot
+        run: echo "GOTOOLCHAIN=$(go env GOVERSION)" >> "$GITHUB_ENV"
+
+      - name: Cache Godot and the Linux export templates
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/gd/bin
+            ~/.local/share/godot/export_templates
+          key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
+
+      - name: Build bundle, tar.gz and AppImage
+        run: bin/build-linux
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: FreeWorship-linux
+          path: |
+            releases/*.tar.gz
+            releases/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Draft GitHub release
+    needs: [version, macos, windows, linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: FreeWorship-*
+          merge-multiple: true
+          path: dist
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # A draft: a maintainer reviews the assets and notes, then publishes.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" --draft --generate-notes \
+            --title "FreeWorship ${{ needs.version.outputs.version }}"

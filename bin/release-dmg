@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Build the universal macOS app and package it as a DMG that holds
+# FreeWorship.app and an Applications symlink.
+#
+#   bin/release-dmg               GOOS=macos bin/gd build, then package
+#   SKIP_BUILD=1 bin/release-dmg  package the existing releases/darwin/universal/FreeWorship.app
+#
+# Output: releases/FreeWorship-<version>-macOS.dmg, with <version> from
+# bin/version (config/version in graphics/project.godot).
+#
+# The DMG is unsigned and not notarized: it runs on the machine that built it,
+# and Gatekeeper blocks it elsewhere. bin/sign-notarize makes the one that ships.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP="$ROOT/releases/darwin/universal/FreeWorship.app"
+BIN="$APP/Contents/MacOS/FreeWorship"
+
+fail() {
+	echo "release-dmg: $*" >&2
+	exit 1
+}
+need() { # need COMMAND "where it comes from"
+	command -v "$1" >/dev/null 2>&1 || fail "'$1' not found ($2)"
+}
+
+[ "$(uname -s)" = "Darwin" ] || fail "runs on macOS only (hdiutil, lipo)"
+need hdiutil "part of macOS"
+need lipo "Xcode command line tools: xcode-select --install"
+need ditto "part of macOS"
+
+V="$("$ROOT/bin/version")"
+DMG="$ROOT/releases/FreeWorship-$V-macOS.dmg"
+
+cd "$ROOT"
+if [ "${SKIP_BUILD:-0}" = "1" ]; then
+	echo "==> skipping the build (SKIP_BUILD=1)"
+else
+	echo "==> GOOS=macos bin/gd build"
+	GOOS=macos "$ROOT/bin/gd" build
+fi
+[ -d "$APP" ] || fail "$APP not found: the export did not run or failed"
+[ -x "$BIN" ] || fail "$BIN is missing from the bundle"
+
+# The DMG ships to Intel and Apple-silicon Macs alike; a thin build would
+# silently lock one of them out.
+archs="$(lipo -archs "$BIN")"
+case "$archs" in
+*x86_64*arm64* | *arm64*x86_64*) echo "==> universal binary ($archs)" ;;
+*) [ "${ALLOW_THIN:-0}" = "1" ] || fail "$BIN is not universal (got '$archs'); set ALLOW_THIN=1 to package it anyway" ;;
+esac
+
+# The bundle version comes from the same project.godot setting as bin/version
+# (the macOS preset leaves short_version empty, so Godot falls back to it).
+plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || true)"
+[ "$plist_version" = "$V" ] || fail "Info.plist has CFBundleShortVersionString '$plist_version', bin/version says '$V'"
+
+STAGE="$(mktemp -d -t freeworship-dmg)"
+trap 'rm -rf "$STAGE"' EXIT
+echo "==> staging FreeWorship.app and the Applications link"
+ditto "$APP" "$STAGE/FreeWorship.app"
+ln -s /Applications "$STAGE/Applications"
+
+echo "==> writing $DMG"
+rm -f "$DMG"
+hdiutil create -quiet -volname "FreeWorship $V" -srcfolder "$STAGE" -ov -format UDZO -imagekey zlib-level=9 "$DMG"
+hdiutil verify -quiet "$DMG"
+
+echo "Done: $DMG"
+ls -lh "$DMG"

@@ -1,0 +1,55 @@
+name: CI
+
+# Pure-Go checks on every push and pull request. The app's Godot side is not
+# exercised here (that is test/smoke.sh on a machine with a display); the
+# tests that read the local EasyWorship install skip when it is absent.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  go:
+    name: gofmt, vet, test (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt -l reports:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+      - name: bin/version
+        run: bin/version
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: shellcheck the scripts
+        run: |
+          shellcheck --version | head -2
+          shellcheck bin/gd bin/version bin/release-dmg bin/sign-notarize \
+            bin/build-windows bin/build-linux \
+            packaging/linux/AppRun packaging/icons/make-icons.sh

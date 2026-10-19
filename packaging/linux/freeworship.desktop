@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=FreeWorship
+Comment=Worship presentation software
+Exec=freeworship
+Icon=freeworship
+Categories=Office;Presentation;
+Terminal=false

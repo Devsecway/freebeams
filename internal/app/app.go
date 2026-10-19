@@ -156,6 +156,7 @@ func (a *App) Ready() {
 	a.openLibrary()
 	a.restoreLayout()
 	a.startControl()
+	log.Printf("[freeworship] %s", versionBanner())
 
 	logo := core.LogoBackground(core.EWImagesDir)
 	if a.st != nil {
