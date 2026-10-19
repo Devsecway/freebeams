@@ -85,6 +85,21 @@ The Scriptures gear menu's *Import Bible File…* opens the native file dialog (
   ```
   Book keys are names, abbreviations or canonical numbers (`"1"`…`"66"`, `"Psalm"`, `"Song_of_Solomon"`, `"1 Cor"`);
   a verse key `"1-2"` (verses the translation combines) stores the text under verse 1;
+- the **array layout** of <https://github.com/thiagobodruk/bible> and the `en_kjv.json`-style files derived from it
+  (`internal/importers/bibletext/array.go`):
+  ```json
+  [{"abbrev": "gn", "name": "Gênesis", "chapters": [["In the beginning God created…", "The earth was…"], ["…"]]}, …]
+  ```
+  66 books in canonical order, chapters and verses positional, no header. The file has no abbreviation of its own, so
+  it comes from the **file name**: `en_esv.json` → ESV, language `en`; `NKJV.json` → NKJV (`TranslationFromFilename`);
+  known abbreviations get their full name. The repository's book abbreviations and names are Portuguese (`jn` is Jonah
+  there, `jo` John, `sl` Psalms), so a whole Bible resolves its books by position; a file with fewer books by name,
+  then abbreviation. The files are BibleGateway scrapes and `CleanArrayText` repairs what the scrape broke: bracketed
+  cross-references (`[Heb 11:3]`, `[Ex 17:6; Num 20:11]`, the Amplified Bible's inline footnotes) are removed while
+  other brackets stay (the AMP's amplifications are its text, `[greatly]`, `[me]`), `( Elohim)` closes up, a small-caps
+  LORD that lost its trailing space is separated again (`Lordis` → `Lord is`; `Lordship` is left alone), rows of dashes
+  go. What it cannot repair: the NKJV scrape also glued italicised (supplied) words to their neighbours (`itwas`,
+  `thereis`), which only a dictionary could undo;
 - an EasyWorship **`.ewb`** file (`docs/formats/ewb.md`).
 
 The app parses the file off the main thread, then asks: it names the translation, its verse count and copyright

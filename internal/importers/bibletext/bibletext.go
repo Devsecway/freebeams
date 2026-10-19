@@ -1,7 +1,7 @@
 // Package bibletext reads Bible translations from JSON text files and writes
 // FreeWorship's single-file Bible JSON. It is pure Go (no Godot).
 //
-// Two layouts are read (see docs/BIBLES.md):
+// Three layouts are read (see docs/BIBLES.md):
 //
 //   - A translation folder in the layout of
 //     github.com/hargarpay/bible-translations:
@@ -14,6 +14,10 @@
 //     Book keys are names, abbreviations or canonical numbers ("1".."66").
 //     The bundled translations ship in this form, gzip-compressed (Encode
 //     writes it).
+//   - The array layout of github.com/thiagobodruk/bible (array.go): a JSON
+//     array of 66 books, each {"abbrev", "name", "chapters": [["…"], …]},
+//     verses positional, no header. The file name gives the abbreviation
+//     ("en_esv.json" → ESV) and the text is cleaned by CleanArrayText.
 //
 // Book names resolve through models.FindBook ("Psalm", "Song_of_Solomon",
 // "1 Cor") and verses come out in canonical order. Text is cleaned by
@@ -88,7 +92,7 @@ func ReadFile(path string) (Result, error) {
 		return Result{}, fmt.Errorf("read bible: %w", err)
 	}
 	defer f.Close()
-	res, err := Decode(f)
+	res, err := DecodeNamed(f, filepath.Base(path))
 	if err != nil {
 		return Result{}, fmt.Errorf("read bible %s: %w", filepath.Base(path), err)
 	}
@@ -207,14 +211,24 @@ type document struct {
 	Books     json.RawMessage `json:"books"`
 }
 
-// Decode reads a single-file Bible JSON.
-func Decode(rd io.Reader) (Result, error) {
+// Decode reads a single-file Bible JSON in the object layout (the array
+// layout needs the file name: DecodeNamed).
+func Decode(rd io.Reader) (Result, error) { return DecodeNamed(rd, "") }
+
+// DecodeNamed reads a single-file Bible JSON in either layout. filename is
+// the file's base name ("" when unknown); the array layout takes its
+// abbreviation and language from it (TranslationFromFilename).
+func DecodeNamed(rd io.Reader, filename string) (Result, error) {
 	data, err := io.ReadAll(io.LimitReader(rd, maxFileSize+1))
 	if err != nil {
 		return Result{}, fmt.Errorf("decode bible: %w", err)
 	}
 	if len(data) > maxFileSize {
 		return Result{}, errors.New("decode bible: file too large")
+	}
+	data = bytes.TrimPrefix(data, utf8BOM)
+	if isArrayJSON(data) {
+		return decodeArray(data, filename)
 	}
 	var doc document
 	if err := json.Unmarshal(data, &doc); err != nil {
@@ -326,9 +340,11 @@ type reader struct {
 	verses   map[[3]int]models.Verse
 	warnings []string
 	dropped  int
+
+	clean func(s string, chapter, verse int) string // the layout's text cleaning
 }
 
-func newReader() *reader { return &reader{verses: map[[3]int]models.Verse{}} }
+func newReader() *reader { return &reader{verses: map[[3]int]models.Verse{}, clean: CleanText} }
 
 func (r *reader) warn(format string, args ...any) {
 	if len(r.warnings) >= maxWarnings {
@@ -361,7 +377,7 @@ func (r *reader) addChapter(raw []member, book, chapter int, where string) {
 			r.warn("%s verse %s: not a string, skipped", where, k)
 			continue
 		}
-		text = CleanText(text, chapter, verse)
+		text = r.clean(text, chapter, verse)
 		if text == "" {
 			r.warn("%s verse %s: empty, skipped", where, k)
 			continue
@@ -410,6 +426,12 @@ func CleanText(s string, chapter, verse int) string {
 	s = footnoteRE.ReplaceAllString(s, "")
 	s = bracketRE.Replace(s)
 	s = strings.Join(strings.Fields(s), " ")
+	return dropLeakedHeading(s, chapter, verse)
+}
+
+// dropLeakedHeading removes a chapter number leaked into the start of verse
+// 1 ("36 The transgression…" in Psalm 36).
+func dropLeakedHeading(s string, chapter, verse int) string {
 	if verse == 1 && chapter > 0 {
 		if p := strconv.Itoa(chapter) + " "; strings.HasPrefix(s, p) {
 			s = s[len(p):]

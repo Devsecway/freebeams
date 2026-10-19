@@ -916,6 +916,20 @@ act "OK imports it" accept '' 'r["ok"]'
 wait_idle
 check "SMK2 is installed after OK" "$LAST" '"SMK2" in s["bibles"] and s["scripture"]["status"] == "Imported SMK2: 2 verses"'
 act "a single-chapter book in the imported file" reference '{"text":"jude 3","bible":"SMK2"}' 's["scripture"]["bible"] == "SMK2" and s["preview"]["text"] == "Smoke fixture, Jude verse three." and s["preview"]["footer"] == "Jude 1:3 (SMK2)"'
+# The array layout (github.com/thiagobodruk/bible: 66 books in order, verses
+# positional, no header): the abbreviation comes from the file name and the
+# scrape's artefacts are cleaned (cross-references, "( Elohim)", "Lordis").
+BIBLE_ARRAY="$OUT/en_smk3.json"
+python3 - "$BIBLE_ARRAY" <<'PY'
+import json, sys
+books = [{"abbrev": "xx", "name": "Livro", "chapters": []} for _ in range(66)]
+books[0]["chapters"] = [["In the beginning God ( Elohim) created the heavens and the earth. [Heb 11:3]"]]
+books[18]["chapters"] = [[] for _ in range(22)] + [["The Lordis my shepherd [to feed me], [Ezek 34:11-31] I shall not want."]]
+json.dump(books, open(sys.argv[1], "w"))
+PY
+act "import-bible-file reads the array layout" import-bible-file "{\"path\":\"$BIBLE_ARRAY\",\"confirm\":true}" '"SMK3" in s["bibles"] and s["scripture"]["status"] == "Imported SMK3: 2 verses"'
+act "books resolve by position, with the cleaned text" reference '{"text":"gen 1:1","bible":"SMK3"}' 's["preview"]["text"] == "In the beginning God (Elohim) created the heavens and the earth." and s["preview"]["footer"] == "Genesis 1:1 (SMK3)"'
+act "amplification brackets stay, the cross-reference goes" reference '{"text":"ps 23:1","bible":"SMK3"}' 's["preview"]["text"] == "The Lord is my shepherd [to feed me], I shall not want."'
 act "a missing file is an error" import-bible-file '{"path":"/nonexistent/bible.json","confirm":true}' 'not r["ok"]'
 wait_idle
 check "the read error is in the message dialog" "$LAST" 's["dialog"]["message"]["title"] == "Import Bible File" and s["scripture"]["error"]'

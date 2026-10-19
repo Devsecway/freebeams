@@ -30,7 +30,7 @@ type bibleFileImport struct {
 // bibleFileFilters are the native dialog filters for Import Bible File….
 var bibleFileFilters = []string{
 	"*.json, *.ewb ; Bible files",
-	"*.json ; Bible JSON (a bible-translations folder or chapter, or a single file)",
+	"*.json ; Bible JSON (a bible-translations folder or chapter, a single file, or an en_kjv.json array)",
 	"*.ewb ; EasyWorship Bible",
 }
 

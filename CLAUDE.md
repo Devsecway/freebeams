@@ -230,6 +230,9 @@ internal/app               Godot: the App node that wires store + presenter + ui
   -color_trc bt709 -color_range tv` makes AVFoundation reproduce `#2a7f62` exactly (`test/smoke.sh` playback block).
 - A single-screen machine has the output closed until `output {"on":true}`; `/screenshot?window=output` then returns
   a JSON error, not a PNG (`pngcheck.py` says "not a PNG").
+- `en_kjv.json`-style Bibles (the thiagobodruk/bible array layout) carry Portuguese book abbreviations that collide with
+  English ones (`jn` is Jonah, `jo` John): resolve a 66-book array by position, never by abbreviation. The file name is
+  the only place the translation's abbreviation lives (`bibletext.TranslationFromFilename`).
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

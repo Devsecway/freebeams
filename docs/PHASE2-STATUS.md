@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 580 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback and tile-menu blocks)
+test/smoke.sh          # 583 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -252,7 +252,7 @@ Recorded 2026-10-19 on the same machine. Policy and formats: [BIBLES.md](BIBLES.
 | Import Bible File… (gear menu): native dialog, parse off-thread, confirmation with the licence statement, import, refresh | **pass** | `internal/app/biblefile.go`, `ui.ScripturePanel.OnImportFile`. `DisplayServer.FileDialogShow` in `FileDialogModeOpenAny` (a file or a translation folder; filters `*.json`, `*.ewb`). `core.BibleFileQuestion` names the translation, its verse count and copyright notice (or "public domain") and states the user's licence responsibility (`TestBibleFileQuestion`). Smoke: `import-bible-file (confirmed) imports the folder` (fixture tree `SMK` in the repository layout, with the source's quirks), `the imported translation works, with cleaned text` (`Psalms 23:1 (SMK)`), `import-bible-file asks first` (screenshot `import-bible-file-confirm.png`), `cancel the question`, `OK imports it` / `SMK2 is installed after OK` (single-file JSON), `a single-chapter book in the imported file` (`Jude 1:3 (SMK2)`). |
 | Duplicates reported, errors to the message dialog | **pass** | Smoke: `a chapter file of the folder is the same translation: a duplicate` (`SMK is already installed`), `the duplicate is reported, not imported twice` (message dialog, screenshot `import-bible-file-duplicate.png`, one `SMK` in `/state.bibles`), `a missing file is an error` / `the read error is in the message dialog`, `import-bible-file needs a path`. |
 | Control and state | **pass** | `import-bible-file {path, confirm}`; `/state.bundled {running, done, installed, skipped, version, error}`; `/state.import.running` is also true while the bundled install runs, so the existing first-launch wait covers both imports; `/state.bibles` lists imported translations. |
-| Smoke | **pass** | The "bundled Bibles and Import Bible File…" block adds 27 checks (415 in all, three of them `app idle` waits), one block before `# ---- quit`. |
+| Smoke | **pass** | The "bundled Bibles and Import Bible File…" block adds 27 checks (415 in all, three of them `app idle` waits), one block before `# ---- quit`. 2026-10-19: three more for the array layout of thiagobodruk/bible (`import-bible-file reads the array layout`, `books resolve by position, with the cleaned text`, `amplification brackets stay, the cross-reference goes`; fixture `en_smk3.json`, 583 in all). |
 
 ### Shared files touched (bundled Bibles and Import Bible File…)
 
@@ -312,7 +312,7 @@ Recorded 2026-10-19 on the same machine (the HDMI TV was not detected: the outpu
 pixel checks read the output window). The right-click and footer-gear menus of the media and presentation tiles now
 follow EasyWorship's (UI-SPEC §3.6 lists both menus and what is deliberately left out). "smoke: X" names a check in the
 `# ---- item menus` section of `test/smoke.sh` (100 checks, between the search and quit sections; the full run is
-580 checks and passed on 2026-10-19 with log hygiene clean).
+583 checks and passed on 2026-10-19 with log hygiene clean).
 
 | Criterion | Status | Verification |
 |---|---|---|
