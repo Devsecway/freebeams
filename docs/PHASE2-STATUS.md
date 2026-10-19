@@ -205,6 +205,14 @@ transitions").
   `dialogs()`, `TopDialogHost()`. `toolbar.go`, `splitter.go`, `monitor.go`, `events.go` are untouched.
 - `test/pngcheck.py`: a `same FILE2` mode. `test/smoke.sh`: one block before `# ---- quit`.
 
+## Icons (operator UI icon set)
+
+| Criterion | Status | Verification |
+|---|---|---|
+| One icon language (32 px toolbar / 16 px mini grids, 2 / 1.5 px rounded strokes on the pixel grid), own artwork, crisp at 1× and 2× | **pass** | `internal/ui/uicore/icons.go` (artwork, pure Go) + `internal/ui/icons.go` (DPITextures). `TestIconSVGWellFormed`, `TestIconGrid`, `TestIconMulti`, `TestIconColors`. Before/after at native Retina pixels: `docs/screens/icons-{before,after}-{toolbar,panels}-{dark,light}.png`; design notes and the audit in [ICONS.md](ICONS.md). |
+| State colors from palette tokens: Go Live accent, Live red only while on, Logo/Black/Clear brightened when active, hover, disabled; light palette | **pass** | Single-color icons are white masks tinted at draw time (`drawGlyph`, `glyphTint`); `live_on` / `golive` carry their own colors. Theme colors `glyph`, `glyph_hot`, `glyph_on`, `accent`, `toolbutton_text_sel` in `theme.go`; no hex in widgets. Smoke screenshots `black-main.png` (Black active), `light-main.png`. |
+| Smoke | **pass** | 388/388 on 2026-10-19 after the redesign; no pixel check changed (none asserts an icon color). A first run failed once at `the output shows the image` (the media monitors still showed the previous image although `/state` had `live.title == smoke-green` and was idle; intermittent, not icon-related, passed on the rerun). |
+
 ## Remaining for Phase 2
 
 - **Video playback verification** on a machine with a Theora-capable ffmpeg (see above), then: a progress
