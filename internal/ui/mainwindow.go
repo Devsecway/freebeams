@@ -43,6 +43,9 @@ type MainWindow struct {
 	Confirm         *ConfirmDialog    `gd:"-"`
 	Message         *MessageDialog    `gd:"-"` // errors for the operator
 
+	// Phase 2 resource tabs (their own block keeps gofmt from realigning the one above).
+	Presentations *PresentationPanel `gd:"-"`
+
 	// Splitters, for persisting their percentages (OnChanged) and restoring
 	// them (SetPercent).
 	MainSplit        *Splitter `gd:"-"`
@@ -361,11 +364,12 @@ func (w *MainWindow) buildResourcePages() Control.Instance {
 	w.Songs = NewSongLibraryPanel()
 	w.Scriptures = NewScripturePanel()
 	w.Media = NewMediaPanel()
+	w.Presentations = NewPresentationPanel()
 	w.pages = []Control.Instance{
 		w.Songs.AsControl(),
 		w.Scriptures.AsControl(),
 		w.Media.AsControl(),
-		placeholderPage(),
+		w.Presentations.AsControl(),
 		placeholderPage(),
 	}
 	for _, p := range w.pages {
