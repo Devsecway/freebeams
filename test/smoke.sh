@@ -875,6 +875,54 @@ act "File ▸ New Schedule (clean schedule, no question)" menu '{"item":"new-sch
 act "open the saved schedule again" open-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["title"] == "smoke-schedule"'
 act "Songs tab again" tab '{"tab":"songs"}' 's["tab"] == 0'
 
+# ---- bundled Bibles and Import Bible File… (Phase 2) -----------------------------------------
+# The KJV and ASV ship inside the app (internal/bibles/bundled, docs/BIBLES.md)
+# and are installed on first launch, so a library without EasyWorship has
+# them too; the startup wait above covered the install (/state.import.running
+# stays true while it runs).
+LAST="$(state)"
+check "bundled KJV and ASV are installed" "$LAST" '"KJV" in s["bibles"] and "ASV" in s["bibles"] and s["bundled"]["done"] and not s["bundled"]["running"] and not s["bundled"].get("error") and s["bundled"]["version"] >= 1'
+check "the bundled install accounted for both" "$LAST" 'sorted(s["bundled"]["installed"] + [x.split(" ")[0] for x in s["bundled"]["skipped"]]) == ["ASV", "KJV"]'
+act "ASV wording" reference '{"text":"jn 3:16","bible":"ASV"}' 's["scripture"]["bible"] == "ASV" and "believeth on him" in s["preview"]["text"] and "eternal life" in s["preview"]["text"] and s["preview"]["footer"] == "John 3:16 (ASV)"'
+act "KJV wording differs" reference '{"text":"jn 3:16","bible":"KJV"}' 's["scripture"]["bible"] == "KJV" and "believeth in him" in s["preview"]["text"] and s["preview"]["footer"] == "John 3:16 (KJV)"'
+act "ASV Psalm 36:1 carries no leaked heading" reference '{"text":"ps 36:1","bible":"ASV"}' 's["preview"]["text"].startswith("The transgression of the wicked")'
+act "ASV omits Acts 8:37 by design" reference '{"text":"acts 8:36-38","bible":"ASV"}' 's["preview"]["count"] == 2'
+act "KJV has Acts 8:37" reference '{"text":"acts 8:36-38","bible":"KJV"}' 's["preview"]["count"] == 3'
+# Import Bible File…: a fixture translation in the bible-translations layout
+# (<ABBREV>/{old,new}/<Book>/<chapter>.json), written here with made-up and
+# KJV wording only. The psalm carries the source's quirks (footnote marker,
+# leaked heading, no-break space) to show the cleaning.
+BIBLE_DIR="$OUT/bible-fixture/SMK"
+rm -rf "$OUT/bible-fixture"
+mkdir -p "$BIBLE_DIR/new/John" "$BIBLE_DIR/old/Psalm"
+printf '%s' '{"16": "For God so loved the world (smoke fixture, verse sixteen).", "17": "For God sent not his Son into the world to condemn the world (smoke fixture)."}' >"$BIBLE_DIR/new/John/3.json"
+printf '%s' '{"1": "[a]23 The Lord is my shepherd; I shall not want."}' >"$BIBLE_DIR/old/Psalm/23.json"
+act "import-bible-file (confirmed) imports the folder" import-bible-file "{\"path\":\"$BIBLE_DIR\",\"confirm\":true}" '"SMK" in s["bibles"] and s["scripture"]["status"] == "Imported SMK: 3 verses" and not s["scripture"]["error"]'
+act "the imported translation works, with cleaned text" reference '{"text":"ps 23:1","bible":"SMK"}' 's["scripture"]["bible"] == "SMK" and s["preview"]["text"] == "The Lord is my shepherd; I shall not want." and s["preview"]["footer"] == "Psalms 23:1 (SMK)"'
+act "a chapter file of the folder is the same translation: a duplicate" import-bible-file "{\"path\":\"$BIBLE_DIR/new/John/3.json\",\"confirm\":true}" 'not r["ok"] and "SMK is already installed" in r["error"]'
+wait_idle
+check "the duplicate is reported, not imported twice" "$LAST" 's["dialog"]["message"]["title"] == "Import Bible File" and "already installed" in s["dialog"]["message"]["message"] and s["bibles"].count("SMK") == 1 and s["scripture"]["error"]'
+shot import-bible-file-duplicate message
+act "dismiss the duplicate message" dismiss '' 'not s["dialog"].get("message")'
+# A single-file Bible JSON goes through the question first.
+BIBLE_JSON="$OUT/smoke-bible.json"
+printf '%s' '{"abbrev":"SMK2","name":"Smoke Bible","language":"en","books":{"John":{"3":{"16":"Smoke fixture, single file, verse sixteen."}},"Jude":{"1":{"3":"Smoke fixture, Jude verse three."}}}}' >"$BIBLE_JSON"
+act "import-bible-file asks first" import-bible-file "{\"path\":\"$BIBLE_JSON\"}" 's["dialog"]["confirm"] == "Import Bible File" and "SMK2" not in s["bibles"]'
+shot import-bible-file-confirm dialog
+act "cancel the question" dismiss '' 's["focus"] != "dialog" and "SMK2" not in s["bibles"]'
+act "ask again" import-bible-file "{\"path\":\"$BIBLE_JSON\"}" 's["dialog"]["confirm"] == "Import Bible File"'
+act "OK imports it" accept '' 'r["ok"]'
+wait_idle
+check "SMK2 is installed after OK" "$LAST" '"SMK2" in s["bibles"] and s["scripture"]["status"] == "Imported SMK2: 2 verses"'
+act "a single-chapter book in the imported file" reference '{"text":"jude 3","bible":"SMK2"}' 's["scripture"]["bible"] == "SMK2" and s["preview"]["text"] == "Smoke fixture, Jude verse three." and s["preview"]["footer"] == "Jude 1:3 (SMK2)"'
+act "a missing file is an error" import-bible-file '{"path":"/nonexistent/bible.json","confirm":true}' 'not r["ok"]'
+wait_idle
+check "the read error is in the message dialog" "$LAST" 's["dialog"]["message"]["title"] == "Import Bible File" and s["scripture"]["error"]'
+act "dismiss the read error" dismiss '' 'not s["dialog"].get("message")'
+act "import-bible-file needs a path" import-bible-file '{}' 'not r["ok"]'
+act "back to KJV (bibles)" reference '{"text":"jn 3:16","bible":"KJV"}' 's["scripture"]["bible"] == "KJV"'
+act "Songs tab again (bibles)" tab '{"tab":"songs"}' 's["tab"] == 0'
+
 # ---- quit ------------------------------------------------------------------------------------
 LAST="$(post close)"
 log "closing the window (clean schedule)"
