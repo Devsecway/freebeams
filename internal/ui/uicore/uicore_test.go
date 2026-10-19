@@ -208,6 +208,46 @@ func TestTileGrid(t *testing.T) {
 	if c := narrow.Columns(); c != 1 {
 		t.Errorf("narrow Columns = %d, want 1", c)
 	}
+	if lr := g.Label(w, h); lr.X != 4 || lr.Y != 3+105 || lr.W != 184 || lr.H != 18 {
+		t.Errorf("Label = %+v", lr)
+	}
+}
+
+func TestTileGridRows(t *testing.T) {
+	// The Details view: one row per item, a 64 px thumbnail at the left and
+	// the label beside it, whatever the width.
+	g := TileGrid{Width: 600, MinTileW: 150, Gap: 6, Pad: 6, Inset: 3, LabelH: 18, Aspect: 16.0 / 9.0, Rows: true, RowThumbW: 64}
+	if c := g.Columns(); c != 1 {
+		t.Fatalf("Columns = %d, want 1", c)
+	}
+	w, h := g.TileSize()
+	if w != 588 || h != 36+6 { // 64 wide -> 36 high, + 2*3 inset
+		t.Errorf("row size = %v x %v, want 588 x 42", w, h)
+	}
+	if th := g.Thumb(w, h); th != (Rect{X: 3, Y: 3, W: 64, H: 36}) {
+		t.Errorf("Thumb = %+v", th)
+	}
+	if lr := g.Label(w, h); lr != (Rect{X: 3 + 64 + 8, Y: 3, W: 588 - 75 - 3, H: 36}) {
+		t.Errorf("Label = %+v", lr)
+	}
+	if r := g.Tile(2); r != (Rect{X: 6, Y: 6 + 2*(42+6), W: 588, H: 42}) {
+		t.Errorf("Tile(2) = %+v", r)
+	}
+	if ch := g.ContentHeight(3); ch != 12+3*42+2*6 {
+		t.Errorf("ContentHeight(3) = %v", ch)
+	}
+	// The height never depends on the width (no scrollbar feedback loop).
+	wide := g
+	wide.Width = 1400
+	if _, hw := wide.TileSize(); hw != h || wide.ContentHeight(3) != g.ContentHeight(3) {
+		t.Errorf("row height follows the width: %v", hw)
+	}
+	// A row narrower than the thumbnail clips the thumbnail, not the layout.
+	tiny := g
+	tiny.Width = 40
+	if th := tiny.Thumb(tiny.TileSize()); th.W != 40-12-6 || tiny.Label(tiny.TileSize()).W != 0 {
+		t.Errorf("tiny row: thumb %+v label %+v", th, tiny.Label(tiny.TileSize()))
+	}
 }
 
 func TestNavigate(t *testing.T) {

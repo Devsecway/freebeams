@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -72,6 +73,79 @@ type Media struct {
 	// always "" for stills.
 	TranscodedPath string    `json:"transcodedPath,omitempty"`
 	Added          time.Time `json:"added"`
+
+	// Aspect and Repeat are the item's Aspect Ratio ▸ and Repeating ▸ menu
+	// choices (how it fills the slide; whether a video loops). "" reads as
+	// the defaults (AspectFill, RepeatLoop).
+	Aspect MediaAspect `json:"aspect,omitempty"`
+	Repeat MediaRepeat `json:"repeat,omitempty"`
+}
+
+// MediaAspect is how a media item is scaled to the slide (the tile menu's
+// Aspect Ratio ▸). It is also the slide background's Fit.
+type MediaAspect string
+
+const (
+	AspectFill    MediaAspect = "fill"    // cover the canvas, cropping the overflow (default)
+	AspectFit     MediaAspect = "fit"     // fit inside the canvas, letterboxed
+	AspectStretch MediaAspect = "stretch" // stretch to the canvas, ignoring the aspect ratio
+)
+
+// MediaAspects lists the aspect choices in menu order.
+var MediaAspects = []MediaAspect{AspectFill, AspectFit, AspectStretch}
+
+// Valid reports whether a is a known aspect ("" is not: use Normalized).
+func (a MediaAspect) Valid() bool {
+	return a == AspectFill || a == AspectFit || a == AspectStretch
+}
+
+// Normalized returns a, or AspectFill for "" and unknown values.
+func (a MediaAspect) Normalized() MediaAspect {
+	if a.Valid() {
+		return a
+	}
+	return AspectFill
+}
+
+// ParseMediaAspect reads "fill" / "fit" / "stretch" (case-insensitive).
+func ParseMediaAspect(s string) (MediaAspect, error) {
+	a := MediaAspect(strings.ToLower(strings.TrimSpace(s)))
+	if !a.Valid() {
+		return "", fmt.Errorf("unknown aspect ratio %q (fill|fit|stretch)", s)
+	}
+	return a, nil
+}
+
+// MediaRepeat is whether a video plays again when it ends (the tile menu's
+// Repeating ▸). Stills ignore it.
+type MediaRepeat string
+
+const (
+	RepeatLoop MediaRepeat = "loop" // play again from the start (default)
+	RepeatOnce MediaRepeat = "once" // play once and hold the last frame
+)
+
+// MediaRepeats lists the repeat choices in menu order.
+var MediaRepeats = []MediaRepeat{RepeatLoop, RepeatOnce}
+
+// Valid reports whether r is a known repeat mode ("" is not: use Normalized).
+func (r MediaRepeat) Valid() bool { return r == RepeatLoop || r == RepeatOnce }
+
+// Normalized returns r, or RepeatLoop for "" and unknown values.
+func (r MediaRepeat) Normalized() MediaRepeat {
+	if r.Valid() {
+		return r
+	}
+	return RepeatLoop
+}
+
+// ParseMediaRepeat reads "loop" / "once" (case-insensitive).
+func ParseMediaRepeat(s string) (MediaRepeat, error) {
+	r := MediaRepeat(strings.ToLower(strings.TrimSpace(s)))
+	if !r.Valid() {
+		return "", fmt.Errorf("unknown repeat mode %q (loop|once)", s)
+	}
+	return r, nil
 }
 
 // PlayablePath is the file the renderer can play for a video: the transcode
@@ -90,17 +164,18 @@ func (m Media) PlayablePath() string {
 	return ""
 }
 
-// Background is the slide background this item provides. A still covers the
-// slide. A video background names the source file (so a schedule saved on
-// one computer still identifies the clip on another) with the thumbnail as
-// its poster; the app substitutes the playable file when it has one (see
-// ResolveVideo).
+// Background is the slide background this item provides, scaled by its
+// Aspect (Fit) and, for a video, looping by its Repeat (Loop). A video
+// background names the source file (so a schedule saved on one computer
+// still identifies the clip on another) with the thumbnail as its poster;
+// the app substitutes the playable file when it has one (see ResolveVideo).
 func (m Media) Background() Background {
-	bg := Background{Color: RGBA{A: 1}, Path: m.Path}
+	bg := Background{Color: RGBA{A: 1}, Path: m.Path, Fit: m.Aspect.Normalized()}
 	switch m.Kind {
 	case MediaVideo:
 		bg.Kind = BackgroundVideo
 		bg.Poster = m.ThumbPath
+		bg.Loop = m.Repeat.Normalized() == RepeatLoop
 	default:
 		bg.Kind = BackgroundImage
 	}

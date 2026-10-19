@@ -123,6 +123,13 @@ CREATE TABLE themes (
 );
 CREATE INDEX themes_name ON themes (name COLLATE NOCASE);
 `,
+	// 5: the media tile menu's Aspect Ratio ▸ (fill / fit / stretch) and
+	// Repeating ▸ (loop / once) choices, per item (models.MediaAspect,
+	// models.MediaRepeat).
+	`
+ALTER TABLE media ADD COLUMN aspect TEXT NOT NULL DEFAULT 'fill';
+ALTER TABLE media ADD COLUMN repeat TEXT NOT NULL DEFAULT 'loop';
+`,
 }
 
 // migrate brings the schema up to date. Each migration runs in its own

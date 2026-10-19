@@ -162,6 +162,27 @@ It is also the drag handle for the main splitter (`Cursor = hand`). Clicking it 
   Presentations search boxes fold case and diacritics the same way over the title and path.
 - **Right (Resource preview)**: 16:9 preview with title, mini video controls (play, volume, navigate), and a 28px toolbar.
 - Scriptures tab: translation picker + reference search locator. Media tab: sub-categories Videos / Images / Feeds / Audio / DVD.
+- **Media tile menu** (right-click on a tile and the footer `⚙▾`; the same menu, after EasyWorship's video tile menu):
+  `Add Media Files…` | `Add to Schedule`, `Go Live` | `Aspect Ratio ▸` (radio: Fill, Fit, Stretch), `Repeating ▸`
+  (radio: Loop, Play Once; videos only) | `Use As Logo Background` | `Remove from Library`, `Delete File…` (moves the file
+  to the Trash; macOS only, left out elsewhere) | `Update items in Schedule` | `Open File Location` | `View ▸` (radio: Large
+  / Medium / Small Thumbnails, Details), `Sort by ▸` (radio: Name, Date Added, Kind), `Refresh`. Aspect Ratio and
+  Repeating are stored per item (`media.aspect` / `media.repeat`) and travel with the slide (`Background.Fit` /
+  `Background.Loop`): Fill covers the canvas, Fit letterboxes on black, Stretch ignores the aspect ratio. Schedule
+  items keep their snapshot until `Update items in Schedule`. View and Sort by are per tab and persisted
+  (`ui.media.view`, `ui.media.sort`); Details is a list of rows with a 64 px thumbnail and the title. The footer's
+  `[▤|▾]` sizer offers the same views. Refresh re-checks every file (missing ones are removed after a question) and
+  re-derives missing thumbnails. Not offered (no counterpart yet): Edit Video Properties…, Media Usage ▸, Copy to Theme ▸.
+- **Presentation tile menu** (same places): `Add Presentation…` | `Add to Schedule`, `Go Live` | `Use As Logo Background`
+  (page 1; enabled once rendered) | `Remove from Library`, `Delete File…` | `Open File Location` | `View ▸`, `Sort by ▸`
+  (Kind = PDF / PowerPoint / Keynote / OpenDocument), `Refresh`. Not offered: New / Edit Presentation… (no editor),
+  Import PowerPoint File… (Add Presentation… takes every type), Export Presentation File… (no native format), Update
+  items in Schedule (schedule items re-resolve their pages from the library by path).
+- Both menus are control actions: `media-menu {item, index|title, confirm}` with `add-to-schedule`, `go-live`,
+  `aspect-fill|fit|stretch`, `repeat-loop|once`, `logo-background`, `remove`, `delete-file`, `update-schedule`,
+  `reveal`, `view-large|medium|small|details`, `sort-name|date|kind`, `refresh`; `presentation-menu` the same minus the
+  aspect / repeat / schedule-update items. `/state.media` reports `aspect`, `repeat`, `view`, `sort`;
+  `/state.presentations` reports `view`, `sort`.
 
 ### 3.7 Default hotkeys (from `HotKeys.2.ini`)
 | Action | Keys |

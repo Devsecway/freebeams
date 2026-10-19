@@ -947,6 +947,168 @@ act "all media again" search-media '{"q":""}' 's["media"]["results"] == s["media
 act "presentation search ignores case" search-presentations '{"q":"ZZZ-NOTHING"}' 's["presentations"]["results"] == 0'
 act "all presentations again" search-presentations '{"q":""}' "s[\"presentations\"][\"results\"] == $PRES_COUNT"
 
+# ---- item menus (media and presentation tile menus) --------------------------------------------
+# The right-click / gear menus of the media and presentation tiles (UI-SPEC §3.6), driven
+# through `media-menu {item}` / `presentation-menu {item}`. A square image whose top quarter
+# is #2a7f62 (green) over #7f2a62 (magenta) tells the aspect ratios apart on the projector:
+# Fill crops the band to the top 5% with no bars, Fit letterboxes the square between black
+# bars with the band a quarter high, Stretch keeps the band a quarter high with no bars. The
+# counts are taken here: the themes block added images of its own since the media block.
+act "Media tab (menus)" tab '{"tab":"media"}' 's["tab"] == 2'
+MENU_MEDIA="$(field "$LAST" media.count)"
+MENU_PRES="$(field "$LAST" presentations.count)"
+# The fixtures live in their own folder, recreated here, so a file left behind by an aborted run
+# never changes what the media block's folder scan finds.
+MENU_DIR="$OUT/media-menus"
+rm -rf "$MENU_DIR"
+mkdir -p "$MENU_DIR"
+python3 - "$MENU_DIR/smoke-square.png" <<'PY'
+import struct, sys, zlib
+w, h = 200, 200
+green, magenta = bytes([0x2A, 0x7F, 0x62]), bytes([0x7F, 0x2A, 0x62])
+raw = b"".join(b"\x00" + (green if y < h // 4 else magenta) * w for y in range(h))
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+open(sys.argv[1], "wb").write(png)
+PY
+act "add the square image" add-media "{\"path\":\"$MENU_DIR/smoke-square.png\"}" "s[\"media\"][\"count\"] == $MENU_MEDIA + 1"
+act "select the square: Fill and Loop by default" select-media '{"title":"smoke-square"}' 's["media"]["current"] == "smoke-square" and s["media"]["aspect"] == "fill" and s["media"]["repeat"] == "loop" and s["media"]["view"] == "medium" and s["media"]["sort"] == "name"'
+act "square live (Fill)" go-live '' 's["live"]["title"] == "smoke-square"'
+wait_idle
+shot menu-fill-output output
+pixel "Fill covers the canvas: no bars" "$OUT/menu-fill-output.png" has 7f2a62 0.05 0.35 0.18 0.65 2000
+pixel "Fill crops the band to the top edge" "$OUT/menu-fill-output.png" has 2a7f62 0.4 0.0 0.6 0.045 200
+pixel "Fill: no band below the top edge" "$OUT/menu-fill-output.png" lacks 2a7f62 0.4 0.12 0.6 0.22 50
+act "Aspect Ratio ▸ Fit" media-menu '{"item":"aspect-fit"}' 's["media"]["aspect"] == "fit" and s["media"]["current"] == "smoke-square"'
+act "Fit live" go-live '' 's["live"]["title"] == "smoke-square"'
+wait_idle
+shot menu-fit-output output
+pixel "Fit letterboxes: black bars beside the square" "$OUT/menu-fit-output.png" has 000000 0.05 0.3 0.18 0.7 2000
+pixel "Fit shows the whole image: the band is a quarter high" "$OUT/menu-fit-output.png" has 2a7f62 0.45 0.1 0.55 0.2 200
+pixel "Fit centre" "$OUT/menu-fit-output.png" has 7f2a62 0.4 0.4 0.6 0.6 2000
+act "Aspect Ratio ▸ Stretch" media-menu '{"item":"aspect-stretch"}' 's["media"]["aspect"] == "stretch"'
+act "Stretch live" go-live '' 's["live"]["title"] == "smoke-square"'
+wait_idle
+shot menu-stretch-output output
+pixel "Stretch fills the canvas: no bars" "$OUT/menu-stretch-output.png" has 7f2a62 0.05 0.35 0.18 0.65 2000
+pixel "Stretch keeps the band a quarter high" "$OUT/menu-stretch-output.png" has 2a7f62 0.45 0.1 0.55 0.2 200
+act "Aspect Ratio ▸ Fit by title" media-menu '{"item":"aspect-fit","title":"smoke-square"}' 's["media"]["aspect"] == "fit"'
+act "Repeating ▸ Play Once" media-menu '{"item":"repeat-once"}' 's["media"]["repeat"] == "once"'
+act "Repeating ▸ Loop" media-menu '{"item":"repeat-loop"}' 's["media"]["repeat"] == "loop"'
+act "an unknown menu item is refused" media-menu '{"item":"aspect-zoom"}' 'not r["ok"]'
+act "an unknown tile is refused" media-menu '{"item":"reveal","title":"zzz-nothing"}' 'not r["ok"]'
+act "reload the list" search-media '{"q":""}' 's["media"]["current"] == "smoke-square"'
+act "the aspect ratio is read back from the library" select-media '{"title":"smoke-square"}' 's["media"]["aspect"] == "fit" and s["media"]["repeat"] == "loop"'
+# Use As Logo Background: the item (with its aspect ratio) becomes the logo screen.
+act "Use As Logo Background (media)" media-menu '{"item":"logo-background"}' 's["settings"]["logo"]["kind"] == "image" and s["settings"]["logo"]["path"].endswith("smoke-square.png") and s["settings"]["logo"]["fit"] == "fit"'
+act "logo mode shows it" logo '' 's["mode"] == "logo"'
+wait_idle
+shot menu-logo-output output
+pixel "the logo screen shows the square" "$OUT/menu-logo-output.png" has 7f2a62 0.4 0.4 0.6 0.6 2000
+pixel "the logo screen letterboxes like the slide, over the logo colour" "$OUT/menu-logo-output.png" has 1b2735 0.05 0.3 0.18 0.7 2000
+act "logo off (menus)" logo '' 's["mode"] == "normal"'
+# View ▸ and Sort by ▸ are state, persisted per tab, and survive a reload of the list.
+act "View ▸ Small Thumbnails" media-menu '{"item":"view-small"}' 's["media"]["view"] == "small"'
+act "View ▸ Details" media-menu '{"item":"view-details"}' 's["media"]["view"] == "details"'
+wait_idle
+shot media-details main
+pixel "the media Details list has content" "$OUT/media-details.png" notblank
+act "View ▸ Large Thumbnails" media-menu '{"item":"view-large"}' 's["media"]["view"] == "large"'
+act "Sort by ▸ Date Added puts the newest item first" media-menu '{"item":"sort-date"}' 's["media"]["sort"] == "date" and s["media"]["selected"] == 0 and s["media"]["current"] == "smoke-square"'
+act "Sort by ▸ Kind" media-menu '{"item":"sort-kind"}' 's["media"]["sort"] == "kind" and s["media"]["current"] == "smoke-square"'
+act "Sort by ▸ Name" media-menu '{"item":"sort-name"}' 's["media"]["sort"] == "name"'
+act "view and sort survive a reload of the list" search-media '{"q":""}' 's["media"]["view"] == "large" and s["media"]["sort"] == "name" and s["media"]["current"] == "smoke-square"'
+act "View ▸ Medium Thumbnails" media-menu '{"item":"view-medium"}' 's["media"]["view"] == "medium"'
+# Update items in Schedule: the schedule keeps its snapshot until asked.
+act "add the square to the schedule" add-to-schedule '{"source":"media"}' 's["schedule"]["items"][-1] == "smoke-square"'
+SQ_ROW=$(( $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST") - 1 ))
+act "Aspect Ratio ▸ Fill (the schedule keeps its Fit snapshot)" media-menu '{"item":"aspect-fill"}' 's["media"]["aspect"] == "fill"'
+act "select the square's schedule item" select-schedule "{\"index\":$SQ_ROW}" "s[\"preview\"][\"title\"] == \"smoke-square\" and s[\"schedule\"][\"selected\"] == $SQ_ROW"
+act "the snapshot live" go-live '' "s[\"schedule\"][\"live\"] == $SQ_ROW"
+wait_idle
+shot menu-snapshot-output output
+pixel "the snapshot still letterboxes (Fit)" "$OUT/menu-snapshot-output.png" has 000000 0.05 0.3 0.18 0.7 2000
+act "Update items in Schedule" media-menu '{"item":"update-schedule","title":"smoke-square"}' "s[\"schedule\"][\"dirty\"] and s[\"preview\"][\"title\"] == \"smoke-square\" and s[\"schedule\"][\"selected\"] == $SQ_ROW"
+act "the updated item live" go-live '' "s[\"schedule\"][\"live\"] == $SQ_ROW"
+wait_idle
+shot menu-updated-output output
+pixel "the updated snapshot fills the canvas (Fill)" "$OUT/menu-updated-output.png" has 7f2a62 0.05 0.35 0.18 0.65 2000
+act "black (menus)" black '' 's["mode"] == "black"'
+act "black off (menus)" black '' 's["mode"] == "normal"'
+# Refresh: a file that went missing is dropped after a question.
+cp "$MEDIA_DIR/smoke-green.png" "$MENU_DIR/smoke-gone.png"
+act "add a file that will go missing" add-media "{\"path\":\"$MENU_DIR/smoke-gone.png\"}" "s[\"media\"][\"count\"] == $MENU_MEDIA + 2"
+rm "$MENU_DIR/smoke-gone.png"
+act "Refresh asks about the missing file" media-menu '{"item":"refresh"}' 'r["ok"]'
+wait_idle
+check "the refresh question is up" "$LAST" 's["dialog"]["confirm"] == "Refresh Media"'
+shot refresh-confirm dialog
+act "cancel the refresh" dismiss '' "s[\"focus\"] != \"dialog\" and s[\"media\"][\"count\"] == $MENU_MEDIA + 2"
+act "Refresh (confirmed) drops the missing file" media-menu '{"item":"refresh","confirm":true}' "s[\"media\"][\"count\"] == $MENU_MEDIA + 1 and s[\"media\"][\"current\"] == \"smoke-square\""
+act "Refresh with nothing missing asks nothing" media-menu '{"item":"refresh"}' "s[\"media\"][\"count\"] == $MENU_MEDIA + 1 and not s[\"dialog\"].get(\"confirm\")"
+# Delete File…: the file goes to the Trash (macOS; elsewhere the item is left out of the menu).
+if [ "$(uname)" = "Darwin" ]; then
+	cp "$MEDIA_DIR/smoke-green.png" "$MENU_DIR/smoke-trash.png"
+	act "add a file to delete" add-media "{\"path\":\"$MENU_DIR/smoke-trash.png\"}" "s[\"media\"][\"count\"] == $MENU_MEDIA + 2"
+	act "Delete File… asks first" media-menu '{"item":"delete-file","title":"smoke-trash"}' 'r["ok"]'
+	wait_idle
+	check "the delete question is up" "$LAST" 's["dialog"]["confirm"] == "Delete File"'
+	shot delete-file-confirm dialog
+	act "cancel the delete" dismiss '' 's["focus"] != "dialog"'
+	[ -f "$MENU_DIR/smoke-trash.png" ] || fail "Delete File… removed the file before OK"
+	act "Delete File… (confirmed) trashes the file and drops the item" media-menu '{"item":"delete-file","title":"smoke-trash","confirm":true}' "s[\"media\"][\"count\"] == $MENU_MEDIA + 1"
+	[ ! -e "$MENU_DIR/smoke-trash.png" ] || fail "Delete File… left the file in place"
+	log "smoke-trash.png is in the Trash"
+else
+	act "Delete File… is unavailable here" media-menu '{"item":"delete-file","title":"smoke-square","confirm":true}' 'not r["ok"]'
+fi
+# The presentation tile menu.
+act "Presentations tab (menus)" tab '{"tab":"presentations"}' 's["tab"] == 3'
+if [ "$PRES_PDF" = "True" ]; then
+	act "add the PDF again" add-presentation "{\"path\":\"$PRES_DIR/smoke-deck.pdf\"}" "s[\"presentations\"][\"count\"] == $MENU_PRES + 1"
+	wait_presentations
+	act "select the PDF (menus)" select-presentation '{"title":"smoke-deck"}' 's["presentations"]["current"] == "smoke-deck" and s["presentations"]["currentPages"] == 2 and s["presentations"]["view"] == "medium" and s["presentations"]["sort"] == "name"'
+	act "Use As Logo Background (presentation): page 1" presentation-menu '{"item":"logo-background"}' 's["settings"]["logo"]["kind"] == "image" and s["settings"]["logo"]["path"].endswith(".png")'
+	act "logo mode shows page 1" logo '' 's["mode"] == "logo"'
+	wait_idle
+	shot menu-logo-pdf-output output
+	pixel "the logo screen shows the PDF's first page" "$OUT/menu-logo-pdf-output.png" has 2a5fbf 0.25 0.25 0.75 0.75 10000
+	act "logo off (presentation menus)" logo '' 's["mode"] == "normal"'
+	act "View ▸ Details (presentations)" presentation-menu '{"item":"view-details"}' 's["presentations"]["view"] == "details"'
+	wait_idle
+	shot presentations-details main
+	pixel "the presentations Details list has content" "$OUT/presentations-details.png" notblank
+	act "View ▸ Small Thumbnails (presentations)" presentation-menu '{"item":"view-small"}' 's["presentations"]["view"] == "small"'
+	act "Sort by ▸ Date Added puts the newest deck first" presentation-menu '{"item":"sort-date"}' 's["presentations"]["sort"] == "date" and s["presentations"]["selected"] == 0'
+	act "Sort by ▸ Kind (presentations)" presentation-menu '{"item":"sort-kind"}' 's["presentations"]["sort"] == "kind" and s["presentations"]["current"] == "smoke-deck"'
+	act "the presentation view and sort survive a reload" search-presentations '{"q":""}' 's["presentations"]["view"] == "small" and s["presentations"]["sort"] == "kind"'
+	act "Sort by ▸ Name (presentations)" presentation-menu '{"item":"sort-name"}' 's["presentations"]["sort"] == "name"'
+	act "View ▸ Medium Thumbnails (presentations)" presentation-menu '{"item":"view-medium"}' 's["presentations"]["view"] == "medium"'
+	act "Remove from Library (menu) asks first" presentation-menu '{"item":"remove","title":"smoke-deck"}' 'r["ok"]'
+	wait_idle
+	check "the remove question is up (menu)" "$LAST" 's["dialog"]["confirm"] == "Remove Presentation"'
+	act "cancel the removal (menu)" dismiss '' 's["focus"] != "dialog"'
+	act "Remove from Library (menu, confirmed)" presentation-menu '{"item":"remove","title":"smoke-deck","confirm":true}' "s[\"presentations\"][\"count\"] == $MENU_PRES"
+else
+	log "no PDF renderer: skipping the presentation logo check"
+fi
+cp "$PRES_DIR/smoke-slides.pptx" "$MENU_DIR/smoke-gone.pptx"
+act "add a deck that will go missing" add-presentation "{\"path\":\"$MENU_DIR/smoke-gone.pptx\"}" "s[\"presentations\"][\"count\"] == $MENU_PRES + 1"
+wait_presentations
+rm "$MENU_DIR/smoke-gone.pptx"
+act "Refresh asks about the missing deck" presentation-menu '{"item":"refresh"}' 'r["ok"]'
+wait_idle
+check "the presentation refresh question is up" "$LAST" 's["dialog"]["confirm"] == "Refresh Presentations"'
+act "cancel the presentation refresh" dismiss '' "s[\"focus\"] != \"dialog\" and s[\"presentations\"][\"count\"] == $MENU_PRES + 1"
+act "Refresh (confirmed) drops the missing deck" presentation-menu '{"item":"refresh","confirm":true}' "s[\"presentations\"][\"count\"] == $MENU_PRES"
+act "a presentation menu item needs a tile" presentation-menu '{"item":"reveal"}' 'not r["ok"]'
+act "default logo again" set-setting '{"key":"logo","value":""}' 'not s["settings"]["logo"].get("path", "").endswith("smoke-square.png") and not s["settings"]["logo"].get("path", "").endswith(".png")'
+act "Songs tab (menus)" tab '{"tab":"songs"}' 's["tab"] == 0'
+act "save the schedule (menus)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+# Open File Location last: the Finder window it opens takes the focus.
+act "Open File Location shows the square in the Finder" media-menu '{"item":"reveal","title":"smoke-square"}' 'r["ok"] and "file location" not in s["lastError"]'
+
 # ---- quit ------------------------------------------------------------------------------------
 LAST="$(post close)"
 log "closing the window (clean schedule)"

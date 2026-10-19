@@ -17,15 +17,27 @@ type TileGrid struct {
 	Inset    float64 // highlight padding inside a tile, around the thumbnail
 	LabelH   float64 // label row height
 	Aspect   float64 // thumbnail aspect (16/9)
+
+	// Rows lays the tiles out as a list (the Details view): one tile per
+	// row, a RowThumbW-wide thumbnail at the left and the label beside it.
+	Rows      bool
+	RowThumbW float64
 }
 
 // Columns is the number of tiles per row (at least 1).
 func (g TileGrid) Columns() int {
 	inner := g.Width - 2*g.Pad
-	if g.MinTileW <= 0 || inner <= g.MinTileW {
+	if g.Rows || g.MinTileW <= 0 || inner <= g.MinTileW {
 		return 1
 	}
 	return max(1, int(math.Floor((inner+g.Gap)/(g.MinTileW+g.Gap))))
+}
+
+func (g TileGrid) aspect() float64 {
+	if g.Aspect <= 0 {
+		return 16.0 / 9.0
+	}
+	return g.Aspect
 }
 
 // TileSize is the size of one tile.
@@ -35,12 +47,12 @@ func (g TileGrid) TileSize() (w, h float64) {
 	if w < 1 {
 		w = 1
 	}
-	aspect := g.Aspect
-	if aspect <= 0 {
-		aspect = 16.0 / 9.0
+	if g.Rows {
+		h = math.Round(g.RowThumbW/g.aspect()) + 2*g.Inset
+		return w, h
 	}
 	thumbW := w - 2*g.Inset
-	h = math.Round(thumbW/aspect) + 2*g.Inset + g.LabelH
+	h = math.Round(thumbW/g.aspect()) + 2*g.Inset + g.LabelH
 	return w, h
 }
 
@@ -59,7 +71,24 @@ func (g TileGrid) Tile(i int) Rect {
 
 // Thumb returns the thumbnail rect inside a tile of size (w, h), relative to the tile.
 func (g TileGrid) Thumb(w, h float64) Rect {
+	if g.Rows {
+		return Rect{X: g.Inset, Y: g.Inset, W: math.Min(g.RowThumbW, w-2*g.Inset), H: h - 2*g.Inset}
+	}
 	return Rect{X: g.Inset, Y: g.Inset, W: w - 2*g.Inset, H: h - 2*g.Inset - g.LabelH}
+}
+
+// rowLabelGap separates a Details row's thumbnail from its label.
+const rowLabelGap = 8
+
+// Label returns the label rect inside a tile of size (w, h), relative to the
+// tile: the row under the thumbnail, or beside it in a Details row.
+func (g TileGrid) Label(w, h float64) Rect {
+	th := g.Thumb(w, h)
+	if g.Rows {
+		x := th.X + th.W + rowLabelGap
+		return Rect{X: x, Y: th.Y, W: math.Max(0, w-x-g.Inset), H: th.H}
+	}
+	return Rect{X: th.X + 1, Y: th.Y + th.H, W: math.Max(0, th.W-2), H: g.LabelH}
 }
 
 // ContentHeight is the total height needed for n tiles.

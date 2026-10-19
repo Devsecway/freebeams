@@ -78,6 +78,13 @@ type MediaState struct {
 	FFmpeg    bool   `json:"ffmpeg"`
 	Theora    bool   `json:"theora"`
 	Tools     string `json:"tools"` // media.Tools.Status()
+
+	// The tile menus (menus_items.go): the selected item's Aspect Ratio ▸ and
+	// Repeating ▸ choices, and the panel's View ▸ and Sort by ▸.
+	Aspect string `json:"aspect,omitempty"` // fill | fit | stretch
+	Repeat string `json:"repeat,omitempty"` // loop | once
+	View   string `json:"view"`             // large | medium | small | details
+	Sort   string `json:"sort"`             // name | date | kind
 }
 
 // PresentationsState summarises the Presentations tab.
@@ -99,6 +106,10 @@ type PresentationsState struct {
 	PDF             bool   `json:"pdf"`    // a PDF renderer exists
 	Office          bool   `json:"office"` // LibreOffice converts office documents
 	Tools           string `json:"tools"`  // presentations.Tools.Status()
+
+	// The tile menu's View ▸ and Sort by ▸ (menus_items.go).
+	View string `json:"view"` // large | medium | small | details
+	Sort string `json:"sort"` // name | date | kind
 }
 
 // Alert is an error message for the operator, shown in the message dialog.

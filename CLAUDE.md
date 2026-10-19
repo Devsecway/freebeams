@@ -181,6 +181,23 @@ internal/app               Godot: the App node that wires store + presenter + ui
   dir (`~/Library/Caches/FreeWorship/media`) and let the factory load the 640 px JPEG.
 - Godot plays Ogg Theora only. Guard `VideoStreamPlayer.Play()` behind an "is .ogv and exists" check: a missing or
   unsupported file logs a Godot ERROR, which fails the smoke test's log hygiene.
+- `PopupMenu.AddItem` / `AddSubmenuItem` with id -1 give the entry its *index* as id, while `AddSeparator` keeps -1.
+  An `enableMenu` that switches on `GetItemId(idx)` must give submenu entries explicit ids
+  (`MoreArgs().AddSubmenuItem(label, name, id)`), or an entry at index 2 masquerades as the item with id 2.
+- A PopupMenu submenu node has one parent: a tile's context menu and the footer gear menu need their own submenu
+  copies, both projected from the same state in render (`ui/itemmenus.go` `radioMenu`), never one shared node.
+- A background pipeline that rewrites whole rows (`store.SaveMedia` from a pass-start snapshot) clobbers columns the
+  operator changed meanwhile (`SetMediaOptions`). Re-read those columns right before the save, or write them with a
+  targeted UPDATE only.
+- Move a file to the Trash on macOS with `NSFileManager trashItemAtURL` (cgo, Foundation: `internal/app/trash_darwin.go`).
+  `osascript -e 'tell application "Finder" to delete …'` needs the Automation (TCC) permission and hangs an unattended
+  smoke run on the prompt.
+- A smoke block's fixture files go in a folder of their own (`$OUT/media-menus`, recreated by the block): the startup
+  `rm -f "$OUT"/*.png` cleans only the top level, and a file left in `$OUT/media` by an aborted run changes what the
+  media block's folder scan adds. Later blocks read `media.count` from `/state` at their start rather than reusing
+  `$MEDIA_COUNT`: the themes block adds images of its own.
+- The scratchpad directory is shared by every agent of one session. Prefix scratch scripts and logs with the worktree
+  id (`adbc-run-smoke.sh`), or another agent's same-named wrapper (for its own worktree) runs instead of yours.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

@@ -31,7 +31,7 @@ type BackgroundKind string
 const (
 	BackgroundColor    BackgroundKind = "color"
 	BackgroundGradient BackgroundKind = "gradient" // vertical, Color (top) -> Color2 (bottom)
-	BackgroundImage    BackgroundKind = "image"    // Path, scaled to cover
+	BackgroundImage    BackgroundKind = "image"    // Path, scaled by Fit (cover by default)
 	BackgroundVideo    BackgroundKind = "video"    // Path (Ogg Theora plays; else Poster, else Color)
 )
 
@@ -44,6 +44,12 @@ type Background struct {
 	// Poster is a still shown in place of a video that cannot play (no
 	// transcode yet, or the file is missing).
 	Poster string `json:"poster,omitempty"`
+
+	// Fit is how an image or video is scaled to the canvas (the media item's
+	// Aspect Ratio); "" is AspectFill. Loop makes a video play again when it
+	// ends (the media item's Repeating); a snapshot without it does not loop.
+	Fit  MediaAspect `json:"fit,omitempty"`
+	Loop bool        `json:"loop,omitempty"`
 }
 
 // SlideKind tells the renderer and UI what produced a slide.

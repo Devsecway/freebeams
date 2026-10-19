@@ -104,6 +104,74 @@ func TestMediaCRUD(t *testing.T) {
 	}
 }
 
+func TestMediaOptions(t *testing.T) {
+	ctx := context.Background()
+	st := openTemp(t)
+
+	// Defaults on insert, and the whole-row save round-trips a choice.
+	m := models.Media{Path: "/m/clip.mp4"}
+	if err := st.SaveMedia(ctx, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Aspect != models.AspectFill || m.Repeat != models.RepeatLoop {
+		t.Fatalf("defaults after insert: aspect %q repeat %q", m.Aspect, m.Repeat)
+	}
+	m.Aspect, m.Repeat = models.AspectFit, models.RepeatOnce
+	if err := st.SaveMedia(ctx, &m); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.GetMedia(ctx, m.ID); got.Aspect != models.AspectFit || got.Repeat != models.RepeatOnce {
+		t.Fatalf("after SaveMedia: aspect %q repeat %q", got.Aspect, got.Repeat)
+	}
+
+	tests := []struct {
+		name       string
+		aspect     models.MediaAspect
+		repeat     models.MediaRepeat
+		wantAspect models.MediaAspect
+		wantRepeat models.MediaRepeat
+		wantErr    bool
+	}{
+		{"stretch, loop", models.AspectStretch, models.RepeatLoop, models.AspectStretch, models.RepeatLoop, false},
+		{"fit, once", models.AspectFit, models.RepeatOnce, models.AspectFit, models.RepeatOnce, false},
+		{"empty is the default", "", "", models.AspectFill, models.RepeatLoop, false},
+		{"unknown aspect is rejected", "zoom", models.RepeatLoop, models.AspectFill, models.RepeatLoop, true},
+		{"unknown repeat is rejected", models.AspectFill, "twice", models.AspectFill, models.RepeatLoop, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := st.SetMediaOptions(ctx, m.ID, tc.aspect, tc.repeat)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("SetMediaOptions: err = %v, want error %v", err, tc.wantErr)
+			}
+			if tc.wantErr {
+				return
+			}
+			got, err := st.GetMedia(ctx, m.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Aspect != tc.wantAspect || got.Repeat != tc.wantRepeat {
+				t.Fatalf("after SetMediaOptions: aspect %q repeat %q; want %q %q", got.Aspect, got.Repeat, tc.wantAspect, tc.wantRepeat)
+			}
+			// The search lists the same values.
+			list, err := st.SearchMedia(ctx, "", "", 0)
+			if err != nil || len(list) != 1 || list[0].Aspect != tc.wantAspect || list[0].Repeat != tc.wantRepeat {
+				t.Fatalf("SearchMedia = %+v, %v", list, err)
+			}
+		})
+	}
+	if err := st.SetMediaOptions(ctx, 9999, models.AspectFit, models.RepeatLoop); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing id: %v", err)
+	}
+	if err := st.SaveMedia(ctx, &models.Media{Path: "/m/x.png", Aspect: "zoom"}); err == nil {
+		t.Fatal("saving an unknown aspect succeeded")
+	}
+	if err := st.SaveMedia(ctx, &models.Media{Path: "/m/x.png", Repeat: "twice"}); err == nil {
+		t.Fatal("saving an unknown repeat mode succeeded")
+	}
+}
+
 func TestSaveMediaItemsAtomic(t *testing.T) {
 	ctx := context.Background()
 	st := openTemp(t)

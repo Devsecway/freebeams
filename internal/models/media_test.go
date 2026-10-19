@@ -138,9 +138,68 @@ func TestMediaScheduleItemRoundTrip(t *testing.T) {
 	}
 	// The JSON names are part of the file format.
 	raw, _ := json.Marshal(it)
-	for _, key := range []string{`"mediaId":7`, `"poster":"/t/clip.jpg"`, `"kind":"media"`} {
+	for _, key := range []string{`"mediaId":7`, `"poster":"/t/clip.jpg"`, `"kind":"media"`, `"fit":"fill"`, `"loop":true`} {
 		if !strings.Contains(string(raw), key) {
 			t.Errorf("item JSON lacks %s: %s", key, raw)
+		}
+	}
+}
+
+func TestMediaAspectAndRepeat(t *testing.T) {
+	aspects := []struct {
+		in      string
+		want    MediaAspect
+		wantErr bool
+	}{
+		{"fill", AspectFill, false}, {"Fit", AspectFit, false}, {" STRETCH ", AspectStretch, false},
+		{"", "", true}, {"cover", "", true},
+	}
+	for _, tc := range aspects {
+		got, err := ParseMediaAspect(tc.in)
+		if (err != nil) != tc.wantErr || got != tc.want {
+			t.Errorf("ParseMediaAspect(%q) = %q, %v; want %q, err %v", tc.in, got, err, tc.want, tc.wantErr)
+		}
+	}
+	repeats := []struct {
+		in      string
+		want    MediaRepeat
+		wantErr bool
+	}{
+		{"loop", RepeatLoop, false}, {"Once", RepeatOnce, false}, {"", "", true}, {"never", "", true},
+	}
+	for _, tc := range repeats {
+		got, err := ParseMediaRepeat(tc.in)
+		if (err != nil) != tc.wantErr || got != tc.want {
+			t.Errorf("ParseMediaRepeat(%q) = %q, %v; want %q, err %v", tc.in, got, err, tc.want, tc.wantErr)
+		}
+	}
+	if MediaAspect("").Normalized() != AspectFill || MediaAspect("x").Normalized() != AspectFill || AspectFit.Normalized() != AspectFit {
+		t.Error("MediaAspect.Normalized")
+	}
+	if MediaRepeat("").Normalized() != RepeatLoop || MediaRepeat("x").Normalized() != RepeatLoop || RepeatOnce.Normalized() != RepeatOnce {
+		t.Error("MediaRepeat.Normalized")
+	}
+	if MediaAspect("").Valid() || MediaRepeat("").Valid() || len(MediaAspects) != 3 || len(MediaRepeats) != 2 {
+		t.Error("Valid / menu lists")
+	}
+
+	// The item's choices reach the slide background as Fit and Loop.
+	backgrounds := []struct {
+		name string
+		m    Media
+		fit  MediaAspect
+		loop bool
+	}{
+		{"still defaults", Media{Kind: MediaImage, Path: "/p/a.jpg"}, AspectFill, false},
+		{"still fit; repeat ignored", Media{Kind: MediaImage, Path: "/p/a.jpg", Aspect: AspectFit, Repeat: RepeatOnce}, AspectFit, false},
+		{"video defaults loop", Media{Kind: MediaVideo, Path: "/p/a.mp4"}, AspectFill, true},
+		{"video stretch, once", Media{Kind: MediaVideo, Path: "/p/a.mp4", Aspect: AspectStretch, Repeat: RepeatOnce}, AspectStretch, false},
+		{"unknown values read as the defaults", Media{Kind: MediaVideo, Path: "/p/a.mp4", Aspect: "zoom", Repeat: "twice"}, AspectFill, true},
+	}
+	for _, tc := range backgrounds {
+		bg := tc.m.Background()
+		if bg.Fit != tc.fit || bg.Loop != tc.loop {
+			t.Errorf("%s: Background = fit %q loop %v; want %q %v", tc.name, bg.Fit, bg.Loop, tc.fit, tc.loop)
 		}
 	}
 }

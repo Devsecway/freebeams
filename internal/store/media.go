@@ -11,7 +11,7 @@ import (
 	"freeworship/internal/models"
 )
 
-const mediaColumns = `id, path, kind, title, duration, width, height, thumb_path, transcoded_path, added`
+const mediaColumns = `id, path, kind, title, duration, width, height, thumb_path, transcoded_path, added, aspect, repeat`
 
 // scanMedia reads one media row (see mediaColumns).
 func scanMedia(sc interface{ Scan(...any) error }) (models.Media, error) {
@@ -19,14 +19,38 @@ func scanMedia(sc interface{ Scan(...any) error }) (models.Media, error) {
 		m          models.Media
 		durationMS int64
 		added      string
+		aspect     string
+		repeat     string
 	)
 	if err := sc.Scan(&m.ID, &m.Path, &m.Kind, &m.Title, &durationMS, &m.Width, &m.Height,
-		&m.ThumbPath, &m.TranscodedPath, &added); err != nil {
+		&m.ThumbPath, &m.TranscodedPath, &added, &aspect, &repeat); err != nil {
 		return models.Media{}, err
 	}
 	m.Duration = time.Duration(durationMS) * time.Millisecond
 	m.Added, _ = time.Parse(timeLayout, added)
+	m.Aspect, m.Repeat = models.MediaAspect(aspect).Normalized(), models.MediaRepeat(repeat).Normalized()
 	return m, nil
+}
+
+// SetMediaOptions sets an item's Aspect Ratio and Repeating choices without
+// touching anything else (the pipeline rewrites whole rows: see SaveMedia).
+// "" keeps the default. A missing id returns ErrNotFound.
+func (s *Store) SetMediaOptions(ctx context.Context, id int64, aspect models.MediaAspect, repeat models.MediaRepeat) error {
+	if aspect != "" && !aspect.Valid() {
+		return fmt.Errorf("set media %d options: unknown aspect ratio %q", id, aspect)
+	}
+	if repeat != "" && !repeat.Valid() {
+		return fmt.Errorf("set media %d options: unknown repeat mode %q", id, repeat)
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE media SET aspect = ?, repeat = ? WHERE id = ?`,
+		string(aspect.Normalized()), string(repeat.Normalized()), id)
+	if err != nil {
+		return fmt.Errorf("set media %d options: %w", id, err)
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return fmt.Errorf("set media %d options: %w", id, ErrNotFound)
+	}
+	return nil
 }
 
 // GetMedia loads one media item. A missing id returns ErrNotFound.
@@ -57,7 +81,8 @@ func (s *Store) MediaByPath(ctx context.Context, path string) (models.Media, err
 // SaveMedia inserts (ID == 0) or updates a media item, assigning ID and
 // Added. The path is unique: inserting a path that is already registered
 // returns ErrExists, and updating an ID that does not exist returns
-// ErrNotFound. An empty Title is derived from the path.
+// ErrNotFound. An empty Title is derived from the path; an empty Aspect or
+// Repeat is the default (fill, loop), and unknown values are rejected.
 func (s *Store) SaveMedia(ctx context.Context, m *models.Media) error {
 	if m == nil {
 		return errors.New("save media: nil item")
@@ -114,16 +139,23 @@ func saveMediaTx(ctx context.Context, tx *sql.Tx, m *models.Media, now time.Time
 	if durationMS < 0 {
 		durationMS = 0
 	}
+	if m.Aspect != "" && !m.Aspect.Valid() {
+		return fmt.Errorf("save media %q: unknown aspect ratio %q", path, m.Aspect)
+	}
+	if m.Repeat != "" && !m.Repeat.Valid() {
+		return fmt.Errorf("save media %q: unknown repeat mode %q", path, m.Repeat)
+	}
+	aspect, repeat := m.Aspect.Normalized(), m.Repeat.Normalized()
 	if m.ID == 0 {
 		added := m.Added
 		if added.IsZero() {
 			added = now
 		}
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO media (path, kind, title, duration, width, height, thumb_path, transcoded_path, added)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO media (path, kind, title, duration, width, height, thumb_path, transcoded_path, added, aspect, repeat)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			path, string(m.Kind), title, durationMS, m.Width, m.Height, m.ThumbPath, m.TranscodedPath,
-			added.UTC().Format(timeLayout))
+			added.UTC().Format(timeLayout), string(aspect), string(repeat))
 		if err != nil {
 			if isUniqueViolation(err) {
 				return fmt.Errorf("save media %q: %w", path, ErrExists)
@@ -146,9 +178,10 @@ func saveMediaTx(ctx context.Context, tx *sql.Tx, m *models.Media, now time.Time
 		}
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE media SET path = ?, kind = ?, title = ?, duration = ?, width = ?, height = ?,
-				thumb_path = ?, transcoded_path = ?
+				thumb_path = ?, transcoded_path = ?, aspect = ?, repeat = ?
 			WHERE id = ?`,
-			path, string(m.Kind), title, durationMS, m.Width, m.Height, m.ThumbPath, m.TranscodedPath, m.ID); err != nil {
+			path, string(m.Kind), title, durationMS, m.Width, m.Height, m.ThumbPath, m.TranscodedPath,
+			string(aspect), string(repeat), m.ID); err != nil {
 			if isUniqueViolation(err) {
 				return fmt.Errorf("save media %d: path %q: %w", m.ID, path, ErrExists)
 			}
@@ -160,6 +193,7 @@ func saveMediaTx(ctx context.Context, tx *sql.Tx, m *models.Media, now time.Time
 	}
 	m.Path, m.Title = path, title
 	m.Duration = time.Duration(durationMS) * time.Millisecond
+	m.Aspect, m.Repeat = aspect, repeat
 	return nil
 }
 

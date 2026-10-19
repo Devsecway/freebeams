@@ -263,9 +263,9 @@ func normalizeBackground(b models.Background) models.Background {
 	case models.BackgroundGradient:
 		return models.Background{Kind: b.Kind, Color: b.Color, Color2: b.Color2}
 	case models.BackgroundImage:
-		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path}
+		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path, Fit: b.Fit.Normalized()}
 	case models.BackgroundVideo:
-		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path, Poster: b.Poster}
+		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path, Poster: b.Poster, Fit: b.Fit.Normalized(), Loop: b.Loop}
 	default: // color, unknown
 		return models.Background{Kind: models.BackgroundColor, Color: b.Color}
 	}
@@ -492,7 +492,7 @@ func (l *layer) apply(vis visual, r layout.Rect, s float64) {
 	case models.BackgroundImage:
 		if t, ok := imageTexture(vis.bg.Path); ok {
 			l.tex.SetTexture(t)
-			l.tex.SetStretchMode(TextureRect.StretchKeepAspectCovered)
+			l.tex.SetStretchMode(stretchFor(vis.bg.Fit))
 			l.tex.AsCanvasItem().SetVisible(true)
 		} else {
 			l.tex.AsCanvasItem().SetVisible(false)
@@ -558,6 +558,19 @@ func (l *layer) apply(vis visual, r layout.Rect, s float64) {
 	} else {
 		l.body.AsCanvasItem().SetVisible(false)
 	}
+}
+
+// stretchFor maps a background's Fit (the media item's Aspect Ratio) to the
+// TextureRect stretch mode: cover the canvas (the default), fit inside it
+// letterboxed on the layer's color, or stretch to it.
+func stretchFor(fit models.MediaAspect) TextureRect.StretchMode {
+	switch fit {
+	case models.AspectFit:
+		return TextureRect.StretchKeepAspectCentered
+	case models.AspectStretch:
+		return TextureRect.StretchScale
+	}
+	return TextureRect.StretchKeepAspectCovered
 }
 
 // placeScaled positions c at r (parent pixels) with node scale k: its own
