@@ -516,6 +516,134 @@ shot quit-confirm dialog
 act "cancel quitting" dismiss '' 's["focus"] != "dialog"'
 act "save before closing" save-schedule '{}' 'not s["schedule"]["dirty"]'
 
+# ---- transitions and settings (Phase 2) ----------------------------------------------------
+# A second solid image (#1f3f9f) beside the green one makes the mid-transition
+# geometry checkable per pixel on the projector: push/wipe/iris leave the old
+# color on one side and the new one on the other. Durations are long (4 s) so
+# a screenshot one second in lands mid-way whatever the machine's speed. The
+# image lives in its own folder, recreated here, so it never changes what the
+# media section's "add a media folder" finds in $MEDIA_DIR on a later run.
+MEDIA_DIR2="$OUT/media-transitions"
+rm -rf "$MEDIA_DIR2"
+mkdir -p "$MEDIA_DIR2"
+python3 - "$MEDIA_DIR2/smoke-blue.png" <<'PY'
+import struct, sys, zlib
+w, h = 320, 180
+raw = (b"\x00" + bytes([0x1F, 0x3F, 0x9F]) * w) * h
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+open(sys.argv[1], "wb").write(png)
+PY
+act "add the blue and green images" add-media "{\"paths\":[\"$MEDIA_DIR\",\"$MEDIA_DIR2\"]}" "s[\"media\"][\"count\"] == $MEDIA_COUNT + 2"
+act "default transition is a 500 ms blend" settings '' 's["settings"]["transition"] == {"kind":"blend","duration":500} and s["settings"]["outputScreen"] == -1 and s["settings"]["interfaceColor"] == "dark"'
+act "green live" select-media '{"title":"smoke-green"}' 's["media"]["current"] == "smoke-green"'
+act "go live with green" go-live '' 's["live"]["title"] == "smoke-green"'
+wait_idle
+# Push left: the new slide enters from the right, so one second in the right
+# edge is blue and the left edge still green.
+act "transition: push-left, 4 s" transition '{"kind":"push-left","duration":4000}' 's["settings"]["transition"] == {"kind":"push-left","duration":4000}'
+act "select blue" select-media '{"title":"smoke-blue"}' 's["preview"]["title"] == "smoke-blue"'
+act "push running" go-live '' 's["live"]["title"] == "smoke-blue" and s["transitioning"]'
+sleep 1
+shot push-mid output
+shot push-mid-main main
+pixel "mid-push: the right edge shows the new slide" "$OUT/push-mid.png" has 1f3f9f 0.85 0.3 1.0 0.7 200
+pixel "mid-push: the left edge still shows the old slide" "$OUT/push-mid.png" has 2a7f62 0.0 0.3 0.15 0.7 200
+pixel "mid-push on the live monitor too" "$OUT/push-mid-main.png" has 1f3f9f 0.80 0.42 0.91 0.61 100
+wait_idle
+shot push-end output
+pixel "the push ends on the new slide" "$OUT/push-end.png" has 1f3f9f 0.05 0.05 0.95 0.95 10000
+# Wipe left: the new slide is revealed from the right edge leftwards.
+act "transition: wipe-left" transition '{"kind":"wipe-left"}' 's["settings"]["transition"] == {"kind":"wipe-left","duration":4000}'
+act "select green" select-media '{"title":"smoke-green"}' 's["preview"]["title"] == "smoke-green"'
+act "wipe running" go-live '' 's["live"]["title"] == "smoke-green" and s["transitioning"]'
+sleep 1
+shot wipe-mid output
+pixel "mid-wipe: the right edge shows the new slide" "$OUT/wipe-mid.png" has 2a7f62 0.85 0.3 1.0 0.7 200
+pixel "mid-wipe: the left edge still shows the old slide" "$OUT/wipe-mid.png" has 1f3f9f 0.0 0.3 0.15 0.7 200
+wait_idle
+# Iris: a circle from the centre; the corners keep the old slide.
+act "transition: iris" transition '{"kind":"Iris"}' 's["settings"]["transition"]["kind"] == "iris"'
+act "select blue again" select-media '{"title":"smoke-blue"}' 's["preview"]["title"] == "smoke-blue"'
+act "iris running" go-live '' 's["transitioning"]'
+sleep 1
+shot iris-mid output
+pixel "mid-iris: the centre shows the new slide" "$OUT/iris-mid.png" has 1f3f9f 0.45 0.45 0.55 0.55 200
+pixel "mid-iris: the corners still show the old slide" "$OUT/iris-mid.png" has 2a7f62 0.0 0.0 0.1 0.1 200
+wait_idle
+act "unknown transition is rejected" transition '{"kind":"cube"}' 'not r["ok"]'
+# Settings round trip: set-setting persists at once; the stored JSON is the
+# control API's form.
+act "set-setting transition" set-setting '{"key":"transition","value":{"kind":"wipe-up","duration":700}}' 's["settings"]["transition"] == {"kind":"wipe-up","duration":700}'
+wait_idle
+python3 - "$LIB" <<'PY' || fail "the transition setting was not persisted"
+import json, sqlite3, sys
+db = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
+row = db.execute("select value from settings where key = 'settings.transition'").fetchone()
+sys.exit(0 if row and json.loads(row[0]) == {"kind": "wipe-up", "duration": 700} else 1)
+PY
+log "ok: the transition setting is persisted"
+act "back to the default blend" transition '{"kind":"blend","duration":500}' 's["settings"]["transition"] == {"kind":"blend","duration":500}'
+act "set-setting output.screen automatic" set-setting '{"key":"output.screen","value":-1}' 's["settings"]["outputScreen"] == -1 and s["outputOpen"]'
+act "an unplugged display is rejected" set-setting '{"key":"output.screen","value":99}' 'not r["ok"]'
+act "an unknown setting is rejected" set-setting '{"key":"bogus","value":1}' 'not r["ok"]'
+# Logo image.
+act "logo image" set-setting "{\"key\":\"output.logo\",\"value\":\"$MEDIA_DIR2/smoke-blue.png\"}" 's["settings"]["logo"]["kind"] == "image" and s["settings"]["logo"]["path"].endswith("smoke-blue.png")'
+act "logo on" logo '' 's["mode"] == "logo"'
+wait_idle
+shot logo-blue-output output
+pixel "the output shows the logo image" "$OUT/logo-blue-output.png" has 1f3f9f 0.25 0.25 0.75 0.75 10000
+act "logo off" logo '' 's["mode"] == "normal"'
+act "default logo" set-setting '{"key":"output.logo","value":""}' 'not s["settings"]["logo"].get("path", "").endswith("smoke-blue.png")'
+# Interface color (View ▸ Interface Color) rebuilds the theme at runtime.
+act "light interface" set-setting '{"key":"ui.interfaceColor","value":"light"}' 's["settings"]["interfaceColor"] == "light"'
+wait_idle
+shot light-main main
+pixel "light interface has content" "$OUT/light-main.png" notblank
+act "dark interface via the menu" menu '{"item":"interface-dark"}' 's["settings"]["interfaceColor"] == "dark"'
+wait_idle
+# Options dialog (Edit ▸ Options…): a child of the main window; hotkeys off;
+# Cancel restores the settings from when it opened.
+act "Options… opens the dialog" menu '{"item":"options"}' 's["dialog"]["settings"] and s["dialog"]["host"] == "main" and s["focus"] == "dialog"'
+wait_idle
+shot settings-dialog settings
+pixel "settings dialog has content" "$OUT/settings-dialog.png" notblank
+act "hotkeys are off while Options is open" key '{"name":"n"}' 'not d["consumed"]'
+act "a change while the dialog is open applies at once" transition '{"kind":"iris","duration":900}' 's["settings"]["transition"] == {"kind":"iris","duration":900}'
+act "Cancel restores the settings" dismiss '' 'not s["dialog"]["settings"] and s["settings"]["transition"] == {"kind":"blend","duration":500} and s["focus"] != "dialog"'
+act "options opens again on the Transition page" options '{"page":"transition"}' 's["dialog"]["settings"]'
+wait_idle
+shot settings-transition settings
+pixel "transition page has content" "$OUT/settings-transition.png" notblank
+act "the Hotkeys page" options '{"page":"Hotkeys"}' 's["dialog"]["settings"]'
+wait_idle
+shot settings-hotkeys settings
+pixel "hotkeys page has content" "$OUT/settings-hotkeys.png" notblank
+act "an unknown page is rejected" options '{"page":"bogus"}' 'not r["ok"]'
+act "change again" transition '{"kind":"cover-down"}' 's["settings"]["transition"]["kind"] == "cover-down"'
+act "OK keeps the change" options '{"on":false}' 'not s["dialog"]["settings"] and s["settings"]["transition"]["kind"] == "cover-down"'
+act "blend again" transition '{"kind":"blend","duration":500}' 's["settings"]["transition"] == {"kind":"blend","duration":500}'
+# Crash safety (M6): an error dialog opens over the main window and leaves
+# the projector output untouched.
+act "blue live for the crash-safety check" go-live '' 's["live"]["title"] == "smoke-blue"'
+wait_idle
+shot output-before-error output
+act "opening a corrupt schedule fails again" open-schedule "{\"path\":\"$OUT/corrupt.fws\"}" 'not r["ok"]'
+wait_idle
+check "the error dialog is on the main window" "$LAST" 's["dialog"]["message"]["title"] == "Open Schedule" and s["dialog"]["host"] == "main" and s["outputOpen"]'
+shot output-during-error output
+pixel "the output is unchanged by the error dialog" "$OUT/output-before-error.png" same "$OUT/output-during-error.png"
+pixel "the output still shows the slide" "$OUT/output-during-error.png" has 1f3f9f 0.25 0.25 0.75 0.75 10000
+act "dismiss the error" dismiss '' 'not s["dialog"].get("message") and s["dialog"].get("host", "") == ""'
+# Menus through the control API.
+act "Help ▸ About" menu '{"item":"about"}' 's["dialog"]["message"]["title"] == "About FreeWorship" and s["dialog"]["host"] == "main"'
+act "close About" dismiss '' 'not s["dialog"].get("message")'
+act "unknown menu item is rejected" menu '{"item":"bogus"}' 'not r["ok"]'
+act "File ▸ New Schedule (clean schedule, no question)" menu '{"item":"new-schedule"}' 's["schedule"]["title"] == "Untitled" and not s["schedule"]["dirty"] and s["focus"] != "dialog"'
+act "open the saved schedule again" open-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["title"] == "smoke-schedule"'
+act "Songs tab again" tab '{"tab":"songs"}' 's["tab"] == 0'
+
 # ---- quit ------------------------------------------------------------------------------------
 LAST="$(post close)"
 log "closing the window (clean schedule)"
