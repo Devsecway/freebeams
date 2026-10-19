@@ -235,33 +235,9 @@ func readEWB(path string) (models.Bible, []models.Verse, error) {
 	return bible, verses, nil
 }
 
-// publicDomainAbbrevs are translations known to be in the public domain.
-var publicDomainAbbrevs = map[string]bool{
-	"KJV": true, "AV": true, "KJVA": true, "AKJV": true,
-	"ASV": true, "WEB": true, "WEBBE": true, "WEBUS": true, "YLT": true,
-	"DARBY": true, "DBY": true, "BBE": true, "DRA": true, "DRB": true,
-	"GNV": true, "GENEVA": true, "WBT": true, "WEBSTER": true,
-	"RVA": true, "RV1909": true, "RVA1909": true, "RVR1909": true, "SRV": true,
-	"LSG": true, "LUT1912": true, "LUTH1912": true, "ELB1905": true, "SVV": true,
-}
-
-// publicDomainNames are lower-case full names of public-domain translations.
-var publicDomainNames = map[string]bool{
-	"king james version": true, "authorized version": true, "authorised version": true,
-	"american standard version": true, "world english bible": true,
-	"young's literal translation": true, "darby translation": true, "darby bible": true,
-	"bible in basic english": true, "douay-rheims": true, "douay-rheims bible": true,
-	"geneva bible": true, "webster bible": true, "webster's bible": true,
-	"reina-valera antigua": true, "reina valera antigua": true, "reina-valera 1909": true,
-	"reina valera 1909": true, "louis segond 1910": true, "luther 1912": true,
-}
-
-// isPublicDomain reports whether a translation is known to be public domain,
-// by abbreviation or full name. Unknown translations are treated as
+// isPublicDomain reports whether a translation is known to be public domain
+// (models.IsPublicDomainBible). Unknown translations are treated as
 // copyrighted (e.g. HCSB, NIV, NKJV, RVR1960).
 func isPublicDomain(abbrev, name string) bool {
-	if publicDomainAbbrevs[strings.ToUpper(strings.TrimSpace(abbrev))] {
-		return true
-	}
-	return publicDomainNames[strings.ToLower(strings.Join(strings.Fields(name), " "))]
+	return models.IsPublicDomainBible(abbrev, name)
 }
