@@ -87,6 +87,8 @@ type DialogState struct {
 	Confirm string `json:"confirm,omitempty"` // title of the open question
 	Message *Alert `json:"message,omitempty"` // the error message on screen
 	Alerts  int    `json:"alerts"`            // error messages queued (shown one at a time)
+	// ThemeEditor reports the theme editor being open.
+	ThemeEditor bool `json:"themeEditor,omitempty"`
 }
 
 // ResourceState is what the resource preview (right of the resource tabs) shows.
@@ -111,6 +113,7 @@ type State struct {
 	SongCount        int            `json:"songCount"`
 	Scripture        ScriptureState `json:"scripture"`
 	Media            MediaState     `json:"media"`
+	Themes           ThemesState    `json:"themes"`
 	Resource         ResourceState  `json:"resource"`
 	Bibles           []string       `json:"bibles"`
 	Import           ImportState    `json:"import"`
@@ -143,6 +146,7 @@ type StateInput struct {
 	BibleSelected    int
 	Scripture        ScriptureState // Bibles/Bible are filled from Bibles/BibleSelected
 	Media            MediaState
+	Themes           ThemesState
 	Resource         ResourceState
 	Import           ImportState
 	LastError        string
@@ -191,6 +195,7 @@ func BuildState(in StateInput) State {
 		SongCount:        in.Songs.Count,
 		Scripture:        in.Scripture,
 		Media:            in.Media,
+		Themes:           in.Themes,
 		Resource:         in.Resource,
 		Import:           in.Import,
 		LastError:        in.LastError,

@@ -284,6 +284,69 @@ func TestPresenterFrames(t *testing.T) {
 	}
 }
 
+func TestPresenterRestyleDecks(t *testing.T) {
+	p := NewPresenter()
+	song := testDeck("song", "v1", "v2")
+	song.Theme.ID = 1
+	scripture := testDeck("scripture", "a")
+	scripture.Theme.ID = 2
+	p.SetPreview(song)
+	p.GoLive()
+	p.SetPreview(scripture)
+
+	byID := func(id int64, th Theme) func(*Deck) (Theme, bool) {
+		return func(d *Deck) (Theme, bool) {
+			if d.Theme.ID == id {
+				return th, true
+			}
+			return Theme{}, false
+		}
+	}
+	red := DefaultSongTheme()
+	red.ID, red.Name = 1, "red"
+	red.Font.Color = Hex(0xFF0000)
+
+	tests := []struct {
+		name          string
+		restyle       func(*Deck) (Theme, bool)
+		changed       bool
+		preview, live string // theme names afterwards
+	}{
+		{"nil restyle", nil, false, "scripture", "song"},
+		{"no deck matches", byID(99, red), false, "scripture", "song"},
+		{"live deck matches", byID(1, red), true, "scripture", "red"},
+		{"same theme again", byID(1, red), false, "scripture", "red"},
+		{"every deck", func(d *Deck) (Theme, bool) { return red, true }, true, "red", "red"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			seq := p.State.Seq
+			if got := p.RestyleDecks(tc.restyle); got != tc.changed {
+				t.Fatalf("RestyleDecks = %v, want %v", got, tc.changed)
+			}
+			if bumped := p.State.Seq != seq; bumped != tc.changed {
+				t.Errorf("Seq bumped = %v, want %v", bumped, tc.changed)
+			}
+			if p.State.Preview.Theme.Name != tc.preview || p.State.Live.Theme.Name != tc.live {
+				t.Errorf("themes = %q / %q, want %q / %q", p.State.Preview.Theme.Name, p.State.Live.Theme.Name, tc.preview, tc.live)
+			}
+		})
+	}
+	// Slides, titles and ids are untouched; the live frame carries the new theme.
+	if p.State.Live.Title != "song" || len(p.State.Live.Slides) != 2 || p.State.Live.ItemID != "song-id" {
+		t.Errorf("live deck changed beyond its theme: %+v", p.State.Live)
+	}
+	if f := p.LiveFrame(); f.Theme.Font.Color != Hex(0xFF0000) {
+		t.Errorf("live frame theme = %+v", f.Theme)
+	}
+	// Empty decks are skipped without panicking.
+	p.ClearLive()
+	p.SetPreview(nil)
+	if p.RestyleDecks(func(*Deck) (Theme, bool) { return red, true }) {
+		t.Error("RestyleDecks changed something with no decks")
+	}
+}
+
 func TestPresenterZeroValue(t *testing.T) {
 	// A zero Presenter (not built with NewPresenter) must not panic.
 	var p Presenter

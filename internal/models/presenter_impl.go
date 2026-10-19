@@ -231,6 +231,31 @@ func (p *Presenter) SetLogo(bg Background) {
 	p.bump()
 }
 
+// RestyleDecks gives the Preview and Live decks a new theme where restyle
+// says so: it is called with each deck (nil decks are skipped) and returns
+// the theme to apply and true, or false to leave that deck alone. The deck's
+// slides, title and item id are untouched, so it is still the same deck to
+// the schedule. It reports whether any deck changed; Seq is bumped once then.
+func (p *Presenter) RestyleDecks(restyle func(d *Deck) (Theme, bool)) bool {
+	if restyle == nil {
+		return false
+	}
+	changed := false
+	for _, d := range []*Deck{p.State.Preview, p.State.Live} {
+		if d == nil {
+			continue
+		}
+		if th, ok := restyle(d); ok && th != d.Theme {
+			d.Theme = th
+			changed = true
+		}
+	}
+	if changed {
+		p.bump()
+	}
+	return changed
+}
+
 // LiveSlide returns the current live slide, or nil.
 // The result is a copy; changing it does not affect the presenter.
 func (p *Presenter) LiveSlide() *Slide {
