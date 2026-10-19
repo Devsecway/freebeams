@@ -29,6 +29,11 @@ Captured in `docs/screens/icons-before-*.png` (2× Retina, dark and light, Live 
 - **Hard-coded glyph colors** (`#DCDCDC` / `#3A3A3A`) in `theme.go` instead of palette-derived tones,
   and the glyph tone was baked into every texture, so a different tint per state needed a new
   texture.
+- **The Media, Themes and Presentations library lists showed Godot's red fallback icon** instead
+  of `library` / `video` / `image` / `theme` / `presentation`. Those panels built their Tree in the
+  constructor (before entering the themed tree, so `GetThemeIcon` cached the fallback) and rebuilt it
+  inside the `theme_changed` handler, which Godot emits *before* invalidating that cache. Fixed with
+  `onThemeReady` (see below); Songs only looked up in the handler and happened to work.
 
 ## Grids and strokes
 
@@ -110,4 +115,7 @@ bitmap. `drawIcon` floors the draw position: a half-pixel offset (e.g. a 16 px i
 4. Use it: `newToolButton(text, "name", …)`, `newMiniButton(kind, "name", …)`, or
    `drawGlyph(ci, control, "name", pos, size, tint)` in a custom `Draw`. Built-in controls take
    `fwIcon(control, "name")` (palette colors). The Theme is rebuilt for a palette switch, so nothing
-   else is needed for Light/Dark.
+   else is needed for Light/Dark, **except** for textures a control stores (Tree item icons): set
+   those from an `onThemeReady(control, fn)` callback (`widgets.go`), never from a plain
+   `OnThemeChanged` handler or a constructor, or you get the fallback icon / the old palette's
+   texture (see the audit).

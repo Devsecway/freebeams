@@ -20,6 +20,7 @@ import (
 	"graphics.gd/classdb/TextServer"
 	"graphics.gd/classdb/Texture2D"
 	"graphics.gd/classdb/VBoxContainer"
+	"graphics.gd/variant/Callable"
 	"graphics.gd/variant/Color"
 	"graphics.gd/variant/Float"
 	"graphics.gd/variant/Rect2"
@@ -53,6 +54,17 @@ func fwIcon(c Control.Instance, name string) Texture2D.Instance {
 // tint (see drawGlyph).
 func fwMask(c Control.Instance, name string) Texture2D.Instance {
 	return c.MoreArgs().GetThemeIcon(name, tMasks)
+}
+
+// onThemeReady calls fn at the end of the frame in which c's theme changed
+// (including the change when c enters a themed tree). Godot emits
+// theme_changed *before* it invalidates the control's theme-item cache, so a
+// GetThemeIcon inside the signal handler returns whatever an earlier lookup
+// cached: the fallback (red) icon when that lookup happened before c was in
+// the tree, or the previous palette's texture. Deferring past the
+// notification sees the new theme.
+func onThemeReady(c Control.Instance, fn func()) {
+	c.OnThemeChanged(func() { Callable.Defer(Callable.New(fn)) })
 }
 
 func alpha(c Color.RGBA, a float32) Color.RGBA {

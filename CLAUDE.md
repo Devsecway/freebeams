@@ -101,6 +101,11 @@ internal/app               Godot: the App node that wires store + presenter + ui
   with a white modulate (alpha only). See `docs/ICONS.md`.
 - `DrawColoredPolygon` is not anti-aliased: tiny shapes (the ▾ of dropdowns) look jagged at 1×. Rasterise them as
   an SVG `DPITexture` instead.
+- Godot emits `theme_changed` *before* it invalidates the control's theme-item cache, so `GetThemeIcon` /
+  `GetThemeColor` inside an `OnThemeChanged` handler return what an earlier lookup cached: the red fallback icon if
+  that lookup ran before the control entered the tree (e.g. a Tree built in a constructor), or the previous
+  palette's item. Fetch theme items for stored textures from `onThemeReady` (`internal/ui/widgets.go`), which
+  defers past the notification with `Callable.Defer`. Custom `Draw` code is unaffected (it runs after).
 - A `GetMinimumSize` must not depend on the control's own size inside a `ScrollContainer`. The slide grid's height
   came from its width, the height decided the scrollbar, and the scrollbar changed the width: at some widths Godot
   toggled the scrollbar forever inside one message-queue flush, until `Message queue out of memory` and a crash while a
