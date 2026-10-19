@@ -9,7 +9,6 @@ import (
 	"graphics.gd/classdb/LineEdit"
 	"graphics.gd/classdb/Node"
 	"graphics.gd/classdb/PanelContainer"
-	"graphics.gd/variant/Color"
 	"graphics.gd/variant/Float"
 	"graphics.gd/variant/Vector2"
 )
@@ -110,5 +109,5 @@ type searchIcon struct {
 
 func (i *searchIcon) Draw() {
 	c := i.AsControl()
-	drawIcon(i.AsCanvasItem(), fwIcon(c, "search"), Vector2.New(0, 0), 16, Color.RGBA{R: 1, G: 1, B: 1, A: 0.75})
+	drawGlyph(i.AsCanvasItem(), c, "search", Vector2.New(0, 0), 16, alpha(fwColor(c, "glyph"), 0.75))
 }

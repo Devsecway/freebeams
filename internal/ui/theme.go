@@ -29,8 +29,9 @@ func LightPalette() Palette { return uicore.LightPalette() }
 // custom-drawn FreeWorship widgets read palette colors, fonts and icons from
 // these pseudo types so that swapping the Theme (Light/Dark) restyles them too.
 const (
-	tFw    = "Fw"      // palette colors, fonts, shared styleboxes
-	tIcons = "FwIcons" // glyph textures (rasterised at 2x)
+	tFw    = "Fw"          // palette colors, fonts, shared styleboxes
+	tIcons = "FwIcons"     // icon textures in palette colors (Tree items, multicolor icons)
+	tMasks = "FwIconMasks" // single-color icon textures in white, tinted when drawn
 )
 
 // Type variations (Control.SetThemeTypeVariation).
@@ -147,75 +148,84 @@ func BuildTheme(p Palette) Theme.Instance {
 }
 
 func setPaletteColors(th Theme.Instance, p Palette) {
-	glyph := iconColor(p)
 	colors := map[string]Color.RGBA{
 		"bk0": p.Bk0, "bk1": p.Bk1, "bk2": p.Bk2, "bk3": p.Bk3,
-		"window_border":    p.WindowBorder,
-		"text":             p.Text,
-		"text_semibold":    p.TextSemibold,
-		"hyperlink":        p.TextHyperlink,
-		"highlight":        p.Highlight,
-		"highlight_hot":    p.HighlightHot,
-		"highlight_text":   p.HighlightText,
-		"highlight_inact":  p.HighlightInactive,
-		"highlight2":       p.Highlight2,
-		"highlight2_hot":   p.Highlight2Hot,
-		"highlight2_text":  p.Highlight2Text,
-		"splitter":         p.SplitterBar,
-		"border":           p.Border,
-		"border_bl":        p.BorderBL,
-		"border_tl":        p.BorderTL,
-		"selectorline":     p.SelectorLine,
-		"header_stroke":    p.HeaderColumnStroke,
-		"library_bk":       p.LibraryBk,
-		"div_lead":         p.DividerLeading,
-		"div_trail":        p.DividerTrailing,
-		"divmini_lead":     p.DividerMiniLeading,
-		"divmini_trail":    p.DividerMiniTrailing,
-		"tab_div_stroke":   p.TabDividerStroke,
-		"tab_div_fill":     p.TabDividerFill,
-		"red":              p.Red,
-		"glyph":            glyph,
-		"thumb_bg":         uicore.Hex(0x000000),
-		"monitor_border":   uicore.Hex(0x000000),
-		"tab_text":         p.Text,
-		"tab_text_sel":     p.TextSemibold,
-		"toolbutton_text":  p.Text,
-		"inactive_overlay": p.InactiveOverlay,
-		"grip_a":           p.HSplitterClosed.Sample(0),
-		"grip_b":           p.HSplitterClosed.Sample(1),
-		"vgrip_a":          p.VSplitterClosed.Sample(0),
-		"vgrip_b":          p.VSplitterClosed.Sample(1),
+		"window_border":   p.WindowBorder,
+		"text":            p.Text,
+		"text_semibold":   p.TextSemibold,
+		"hyperlink":       p.TextHyperlink,
+		"highlight":       p.Highlight,
+		"highlight_hot":   p.HighlightHot,
+		"highlight_text":  p.HighlightText,
+		"highlight_inact": p.HighlightInactive,
+		"highlight2":      p.Highlight2,
+		"highlight2_hot":  p.Highlight2Hot,
+		"highlight2_text": p.Highlight2Text,
+		"splitter":        p.SplitterBar,
+		"border":          p.Border,
+		"border_bl":       p.BorderBL,
+		"border_tl":       p.BorderTL,
+		"selectorline":    p.SelectorLine,
+		"header_stroke":   p.HeaderColumnStroke,
+		"library_bk":      p.LibraryBk,
+		"div_lead":        p.DividerLeading,
+		"div_trail":       p.DividerTrailing,
+		"divmini_lead":    p.DividerMiniLeading,
+		"divmini_trail":   p.DividerMiniTrailing,
+		"tab_div_stroke":  p.TabDividerStroke,
+		"tab_div_fill":    p.TabDividerFill,
+		"red":             p.Red,
+		"thumb_bg":        uicore.Hex(0x000000),
+		"monitor_border":  uicore.Hex(0x000000),
+		"tab_text":        p.Text,
+		"tab_text_sel":    p.TextSemibold,
+		"toolbutton_text": p.Text,
+		// Icon tints (docs/ICONS.md): glyph at rest, glyph_hot under the
+		// pointer, glyph_on for an active toggle (Logo, Black, Clear) and
+		// its label; accent is the Go Live play glyph; disabled icons keep
+		// the glyph tint at 35% alpha.
+		"glyph":               uicore.GlyphColor(p),
+		"glyph_hot":           p.TextSemibold,
+		"glyph_on":            p.TextSemibold,
+		"accent":              uicore.AccentColor(p),
+		"toolbutton_text_sel": p.TextSemibold,
+		"inactive_overlay":    p.InactiveOverlay,
+		"grip_a":              p.HSplitterClosed.Sample(0),
+		"grip_b":              p.HSplitterClosed.Sample(1),
+		"vgrip_a":             p.VSplitterClosed.Sample(0),
+		"vgrip_b":             p.VSplitterClosed.Sample(1),
 	}
 	for name, c := range colors {
 		th.SetColor(name, tFw, c)
 	}
 }
 
-// iconColor is the glyph color: a little brighter than body text so line icons
-// read at the same weight as EasyWorship's filled artwork.
-func iconColor(p Palette) Color.RGBA {
-	if p.IsDark() {
-		return uicore.Hex(0xDCDCDC)
-	}
-	return uicore.Hex(0x3A3A3A)
-}
-
+// setIcons rasterises the icon set (see icons.go): every icon in palette
+// colors under FwIcons, and every single-color icon in white under
+// FwIconMasks for tinting at draw time.
 func setIcons(th Theme.Instance, p Palette) {
-	for _, name := range iconNames() {
-		if tex, ok := rasterIcon(name, iconColor(p), p.Red, p.Bk0); ok {
+	colors, masks := paletteIconColors(p), maskIconColors()
+	for _, name := range uicore.IconNames() {
+		if tex, ok := rasterIcon(name, colors); ok {
 			th.SetIcon(name, tIcons, tex)
+		}
+		if iconIsMulti(name) {
+			continue
+		}
+		if tex, ok := rasterIcon(name, masks); ok {
+			th.SetIcon(name, tMasks, tex)
 		}
 	}
 	// LineEdit clear button (white glyph, tinted by clear_button_color).
-	if tex, ok := rasterIcon("clear_field", uicore.Hex(0xFFFFFF), p.Red, p.Bk0); ok {
+	if tex, ok := rasterIcon("clear_field", masks); ok {
 		th.SetIcon("clear", "LineEdit", tex)
 	}
-	// Tree folding arrows.
-	if tex, ok := rasterIcon("chev_down", p.Text, p.Red, p.Bk0); ok {
+	// Tree folding arrows, in the text color.
+	arrows := uicore.IconColors{Glyph: p.Text, Accent: p.Text, Red: p.Text}
+	if tex, ok := rasterIcon("chev_down", arrows); ok {
 		th.SetIcon("arrow", "Tree", tex)
 	}
-	if tex, ok := rasterIcon("chev_right", p.Text, p.Red, p.Bk0); ok {
+	if tex, ok := rasterIcon("chev_right", arrows); ok {
 		th.SetIcon("arrow_collapsed", "Tree", tex)
 		th.SetIcon("arrow_collapsed_mirrored", "Tree", tex)
 	}

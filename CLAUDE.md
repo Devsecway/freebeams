@@ -93,6 +93,19 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - A synthesized key event needs `unicode` set to type into a LineEdit.
 - Changing a Tree selection in code (`set_selected`/`deselect_all`) needs `QueueRedraw()` to show.
 - There is no `timeout` command on macOS. Run `gd run` directly, and have demos quit themselves.
+- `DPITexture.SetSource(svg)` keeps the SVG and re-rasterises it for the drawing viewport's oversampling (the
+  window's content scale); its logical size is the SVG `width`/`height`. Draw it at whole-pixel positions: a
+  fractional offset (e.g. a 16 px icon centred in a 27 px button) resamples the bitmap and blurs it.
+- One white single-color SVG tinted through the `modulate` argument of `DrawTextureRect` replaces a texture per
+  color/state; the tint multiplies the anti-aliased edges correctly. An icon with colors of its own must be drawn
+  with a white modulate (alpha only). See `docs/ICONS.md`.
+- `DrawColoredPolygon` is not anti-aliased: tiny shapes (the ▾ of dropdowns) look jagged at 1×. Rasterise them as
+  an SVG `DPITexture` instead.
+- Godot emits `theme_changed` *before* it invalidates the control's theme-item cache, so `GetThemeIcon` /
+  `GetThemeColor` inside an `OnThemeChanged` handler return what an earlier lookup cached: the red fallback icon if
+  that lookup ran before the control entered the tree (e.g. a Tree built in a constructor), or the previous
+  palette's item. Fetch theme items for stored textures from `onThemeReady` (`internal/ui/widgets.go`), which
+  defers past the notification with `Callable.Defer`. Custom `Draw` code is unaffected (it runs after).
 - A `GetMinimumSize` must not depend on the control's own size inside a `ScrollContainer`. The slide grid's height
   came from its width, the height decided the scrollbar, and the scrollbar changed the width: at some widths Godot
   toggled the scrollbar forever inside one message-queue flush, until `Message queue out of memory` and a crash while a

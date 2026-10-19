@@ -77,7 +77,7 @@ func NewPresentationPanel() *PresentationPanel {
 	p.library.AsControl().SetThemeTypeVariation(vLibraryTree)
 	p.library.SetHideRoot(true)
 	p.library.SetColumns(1)
-	p.library.AsControl().OnThemeChanged(func() { p.builtLib = false; p.render() })
+	onThemeReady(p.library.AsControl(), func() { p.builtLib = false; p.render() })
 	left := libraryPane(p.search.root.AsControl(), p.library.AsControl(), p.libraryFooter())
 
 	// Right: the thumbnail grid.

@@ -76,7 +76,7 @@ func NewThemePanel() *ThemePanel {
 	p.library.AsControl().SetThemeTypeVariation(vLibraryTree)
 	p.library.SetHideRoot(true)
 	p.library.SetColumns(1)
-	p.library.AsControl().OnThemeChanged(func() { p.builtLib = false; p.render() })
+	onThemeReady(p.library.AsControl(), func() { p.builtLib = false; p.render() })
 	left := libraryPane(libraryTitle("Themes"), p.library.AsControl(), p.libraryFooter())
 
 	// Right: the thumbnail grid.
@@ -229,7 +229,7 @@ func (p *ThemePanel) render() {
 			root := p.library.CreateItem()
 			it := root.CreateChild()
 			it.SetText(0, "All Themes")
-			it.SetIcon(0, fwIcon(p.library.AsControl(), "library"))
+			it.SetIcon(0, fwIcon(p.library.AsControl(), "theme"))
 			it.SetIconMaxWidth(0, 16)
 		}
 		selectTreeRow(p.library, 0)

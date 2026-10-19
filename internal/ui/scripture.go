@@ -71,7 +71,7 @@ func NewScripturePanel() *ScripturePanel {
 			}
 		}
 	})
-	s.bibles.AsControl().OnThemeChanged(func() { s.builtBibles = false; s.render() })
+	onThemeReady(s.bibles.AsControl(), func() { s.builtBibles = false; s.render() })
 	left := libraryPane(s.locator.root.AsControl(), s.bibles.AsControl(), libraryFooter())
 
 	s.verses = Tree.New()

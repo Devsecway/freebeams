@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"math"
+
+	"freeworship/internal/ui/uicore"
+
 	"graphics.gd/classdb/BaseButton"
 	"graphics.gd/classdb/BoxContainer"
 	"graphics.gd/classdb/CanvasItem"
@@ -16,6 +20,7 @@ import (
 	"graphics.gd/classdb/TextServer"
 	"graphics.gd/classdb/Texture2D"
 	"graphics.gd/classdb/VBoxContainer"
+	"graphics.gd/variant/Callable"
 	"graphics.gd/variant/Color"
 	"graphics.gd/variant/Float"
 	"graphics.gd/variant/Rect2"
@@ -39,8 +44,27 @@ func fwBox(c Control.Instance, name string) StyleBox.Instance {
 	return c.MoreArgs().GetThemeStylebox(name, tFw)
 }
 
+// fwIcon is a theme icon in palette colors (for built-in controls such as
+// Tree items, and for the multicolor icons that are drawn untinted).
 func fwIcon(c Control.Instance, name string) Texture2D.Instance {
 	return c.MoreArgs().GetThemeIcon(name, tIcons)
+}
+
+// fwMask is a single-color theme icon rasterised white, to be drawn with a
+// tint (see drawGlyph).
+func fwMask(c Control.Instance, name string) Texture2D.Instance {
+	return c.MoreArgs().GetThemeIcon(name, tMasks)
+}
+
+// onThemeReady calls fn at the end of the frame in which c's theme changed
+// (including the change when c enters a themed tree). Godot emits
+// theme_changed *before* it invalidates the control's theme-item cache, so a
+// GetThemeIcon inside the signal handler returns whatever an earlier lookup
+// cached: the fallback (red) icon when that lookup happened before c was in
+// the tree, or the previous palette's texture. Deferring past the
+// notification sees the new theme.
+func onThemeReady(c Control.Instance, fn func()) {
+	c.OnThemeChanged(func() { Callable.Defer(Callable.New(fn)) })
 }
 
 func alpha(c Color.RGBA, a float32) Color.RGBA {
@@ -84,20 +108,48 @@ func fitText(f Font.Instance, size int, text string, width Float.X) string {
 	return ""
 }
 
-// drawIcon draws a theme icon at its logical size (textures are rasterised at
-// iconRasterScale) with its top-left at pos.
+// drawIcon draws a theme icon at its logical size with its top-left at pos.
+// The position is snapped to whole pixels: DPITextures are rasterised for
+// the viewport's scale, and a half-pixel offset would resample them blurry.
 func drawIcon(ci CanvasItem.Instance, tex Texture2D.Instance, pos Vector2.XY, size float32, mod Color.RGBA) {
 	if tex == (Texture2D.Instance{}) {
 		return
 	}
-	ci.MoreArgs().DrawTextureRect(tex, rect(pos.X, pos.Y, size, size), false, mod, false)
+	x, y := float32(math.Floor(float64(pos.X))), float32(math.Floor(float64(pos.Y)))
+	ci.MoreArgs().DrawTextureRect(tex, rect(x, y, size, size), false, mod, false)
 }
 
-// drawArrow draws the small ▾ dropdown triangle centered at (cx, cy).
-func drawArrow(ci CanvasItem.Instance, cx, cy float32, c Color.RGBA) {
-	ci.DrawColoredPolygon([]Vector2.XY{
-		Vector2.New(cx-3, cy-1.5), Vector2.New(cx+3, cy-1.5), Vector2.New(cx, cy+1.75),
-	}, c)
+// drawGlyph draws a named icon with its top-left at pos. Single-color icons
+// are masks tinted with tint; multicolor icons (Go Live, Live on) carry their
+// own palette colors and only take tint's alpha (disabled buttons).
+func drawGlyph(ci CanvasItem.Instance, c Control.Instance, name string, pos Vector2.XY, size float32, tint Color.RGBA) {
+	if iconIsMulti(name) {
+		drawIcon(ci, fwIcon(c, name), pos, size, Color.RGBA{R: 1, G: 1, B: 1, A: tint.A})
+		return
+	}
+	drawIcon(ci, fwMask(c, name), pos, size, tint)
+}
+
+// drawArrow draws the small ▾ dropdown triangle (the 8 px arrow_down icon)
+// centered at (cx, cy).
+func drawArrow(ci CanvasItem.Instance, c Control.Instance, cx, cy float32, tint Color.RGBA) {
+	drawIcon(ci, fwMask(c, "arrow_down"), Vector2.New(cx-4, cy-4), 8, tint)
+}
+
+// glyphTint is the icon tint for a button's draw mode: glyph at rest,
+// glyph_hot under the pointer, glyph_on while pressed (an active toggle), at
+// 35% alpha when disabled.
+func glyphTint(c Control.Instance, bb BaseButton.Instance) Color.RGBA {
+	if bb.Disabled() {
+		return alpha(fwColor(c, "glyph"), 0.35)
+	}
+	switch bb.GetDrawMode() {
+	case BaseButton.DrawHover:
+		return fwColor(c, "glyph_hot")
+	case BaseButton.DrawPressed, BaseButton.DrawHoverPressed:
+		return fwColor(c, "glyph_on")
+	}
+	return fwColor(c, "glyph")
 }
 
 // ---- small node builders --------------------------------------------------
@@ -195,17 +247,27 @@ func (b *toolButton) Draw() {
 	case BaseButton.DrawPressed, BaseButton.DrawHoverPressed:
 		fwBox(c, "toolbutton_sel").Draw(ci, rect(0, 0, size.X, size.Y))
 	}
-	mod := Color.RGBA{R: 1, G: 1, B: 1, A: 1}
-	if bb.Disabled() {
-		mod.A = 0.35
+	tint := glyphTint(c, bb)
+	// An active toggle shows its "_on" artwork when the set has one (Live:
+	// the red indicator); the others brighten to glyph_on.
+	icon := b.icon
+	on := bb.ToggleMode() && bb.ButtonPressed()
+	if on {
+		if _, ok := uicore.Icon(icon + "_on"); ok {
+			icon += "_on"
+		}
 	}
-	iconX := (size.X - 32) / 2
-	drawIcon(ci, fwIcon(c, b.icon), Vector2.New(iconX, 4), 32, mod)
+	iconX := float32(math.Floor(float64((size.X - 32) / 2)))
+	drawGlyph(ci, c, icon, Vector2.New(iconX, 4), 32, tint)
 	if b.dropdown {
-		drawArrow(ci, iconX+32+4, 24, alpha(fwColor(c, "glyph"), mod.A*0.85))
+		drawArrow(ci, c, iconX+32+4, 24, alpha(tint, 0.85))
+	}
+	text := "toolbutton_text"
+	if on {
+		text = "toolbutton_text_sel"
 	}
 	drawText(ci, fwFont(c, "regular"), 12, rect(2, 36, size.X-4, 16), b.text, GUI.HorizontalAlignmentCenter,
-		alpha(fwColor(c, "toolbutton_text"), mod.A))
+		alpha(fwColor(c, text), tint.A))
 }
 
 // ---- mini buttons (sd.button.mini.*) ----------------------------------------
@@ -258,22 +320,19 @@ func (b *miniButton) Draw() {
 	case BaseButton.DrawPressed, BaseButton.DrawHoverPressed:
 		fwBox(c, prefix+"sel").Draw(ci, rect(0, 0, size.X, size.Y))
 	}
-	mod := Color.RGBA{R: 1, G: 1, B: 1, A: 1}
-	if bb.Disabled() {
-		mod.A = 0.35
-	}
-	glyph := alpha(fwColor(c, "glyph"), mod.A)
+	tint := glyphTint(c, bb)
+	iconY := float32(math.Floor(float64((size.Y - 16) / 2)))
 	switch b.kind {
 	case miniDropdown:
-		x := (size.X - 16 - 9) / 2
-		drawIcon(ci, fwIcon(c, b.icon), Vector2.New(x, (size.Y-16)/2), 16, mod)
-		drawArrow(ci, x+16+5, size.Y/2+0.5, glyph)
+		x := float32(math.Floor(float64((size.X - 16 - 9) / 2)))
+		drawGlyph(ci, c, b.icon, Vector2.New(x, iconY), 16, tint)
+		drawArrow(ci, c, x+16+5, size.Y/2+0.5, tint)
 	case miniSplitRight:
-		drawArrow(ci, size.X/2, size.Y/2+0.5, glyph)
+		drawArrow(ci, c, size.X/2, size.Y/2+0.5, tint)
 	case miniText:
-		drawText(ci, fwFont(c, "regular"), fontCaption+1, rect(4, 0, size.X-8, size.Y), b.text, GUI.HorizontalAlignmentCenter, alpha(fwColor(c, "text"), mod.A))
+		drawText(ci, fwFont(c, "regular"), fontCaption+1, rect(4, 0, size.X-8, size.Y), b.text, GUI.HorizontalAlignmentCenter, alpha(fwColor(c, "text"), tint.A))
 	default:
-		drawIcon(ci, fwIcon(c, b.icon), Vector2.New((size.X-16)/2, (size.Y-16)/2), 16, mod)
+		drawGlyph(ci, c, b.icon, Vector2.New((size.X-16)/2, iconY), 16, tint)
 	}
 }
 
