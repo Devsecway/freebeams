@@ -36,7 +36,7 @@ func writeMediaDB(t *testing.T, dataDir, resourcesDir string) {
 		(6, 2, 'Weird Location', NULL, '<dvd>', 'x.jpg', 0, 0, 0),
 		(7, 1, 'Wrong Type', NULL, '<videos>', 'poster.jpg', 10, 10, 0),
 		(8, 2, 'No Name', NULL, '<images>', '', 0, 0, 0)`)
-	for _, f := range []string{"Images/zebra.jpg", "Videos/clouds #1.mp4", "Images/Sub/nested.png", "Videos/poster.jpg"} {
+	for _, f := range []string{"Images/zebra.jpg", "Videos/clouds #1.mp4", "Images/Sub/nested.png", "Videos/poster.jpg", "Audio/song.mp3"} {
 		p := filepath.Join(resourcesDir, f)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
@@ -54,11 +54,15 @@ func TestReadMediaSynthetic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 3 {
+	if len(items) != 4 {
 		t.Fatalf("got %d items: %+v", len(items), items)
 	}
 	// EasyWorship's row order.
-	clouds, nested, zebra := items[0], items[1], items[2]
+	clouds, nested, zebra, audio := items[0], items[1], items[2], items[3]
+	if audio.Kind != models.MediaAudio || audio.Title != "Some Audio" || audio.Duration != 100*time.Millisecond ||
+		audio.Width != 0 || audio.Path != filepath.Join(resDir, "Audio", "song.mp3") {
+		t.Fatalf("audio = %+v", audio)
+	}
 	if clouds.Kind != models.MediaVideo || clouds.Title != "Clouds Loop" || clouds.Width != 1280 || clouds.Height != 720 ||
 		clouds.Duration != 30063367*time.Microsecond || clouds.Path != filepath.Join(resDir, "Videos", "clouds #1.mp4") {
 		t.Fatalf("video = %+v", clouds)
@@ -71,7 +75,7 @@ func TestReadMediaSynthetic(t *testing.T) {
 		t.Fatalf("zebra = %+v", zebra)
 	}
 	// Missing file, unknown location, a video row pointing at an image, and
-	// an empty file name are reported; audio is silently left out.
+	// an empty file name are reported.
 	if len(warnings) != 4 {
 		t.Fatalf("warnings = %q", warnings)
 	}
@@ -106,7 +110,8 @@ func TestMediaFile(t *testing.T) {
 		{"<images>", "/Sub/", "c.png", filepath.Join(res, "Images", "Sub", "c.png"), true},
 		{filepath.Join("/", "Users", "me", "Pictures"), "", "d.jpg", filepath.Join("/", "Users", "me", "Pictures", "d.jpg"), true},
 		{"relative/dir", "", "e.jpg", "", false},
-		{"<audio>", "", "f.mp3", "", false},
+		{"<audio>", "", "f.mp3", filepath.Join(res, "Audio", "f.mp3"), true},
+		{"<feeds>", "", "f.xml", "", false},
 		{"", "", "g.jpg", "", false},
 		{"<images>", "", "  ", "", false},
 	}
@@ -129,22 +134,22 @@ func TestImportMediaSynthetic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.MediaImported != 3 || rep.MediaSkipped != 0 || len(rep.Warnings) != 4 {
+	if rep.MediaImported != 4 || rep.MediaSkipped != 0 || len(rep.Warnings) != 4 {
 		t.Fatalf("report = %+v", rep)
 	}
 	n, _ := st.CountMedia(ctx, "")
 	v, _ := st.CountMedia(ctx, models.MediaVideo)
-	if n != 3 || v != 1 {
+	if n != 4 || v != 1 {
 		t.Fatalf("CountMedia = %d (%d videos)", n, v)
 	}
 	// Second run: nothing new.
 	rep, err = ImportMedia(ctx, st, opt)
-	if err != nil || rep.MediaImported != 0 || rep.MediaSkipped != 3 {
+	if err != nil || rep.MediaImported != 0 || rep.MediaSkipped != 4 {
 		t.Fatalf("second run = %+v, %v", rep, err)
 	}
 	// ImportInto covers media too, unless told not to.
 	rep, err = ImportInto(ctx, st, opt)
-	if err != nil || rep.MediaSkipped != 3 {
+	if err != nil || rep.MediaSkipped != 4 {
 		t.Fatalf("ImportInto = %+v, %v", rep, err)
 	}
 	opt.SkipMedia = true

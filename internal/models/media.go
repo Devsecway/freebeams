@@ -13,16 +13,26 @@ type MediaKind string
 const (
 	MediaImage MediaKind = "image"
 	MediaVideo MediaKind = "video"
+	// MediaAudio is a sound file: an item with no picture of its own that
+	// plays over a black slide.
+	MediaAudio MediaKind = "audio"
 )
 
-// imageExts and videoExts are the file types the media library accepts
-// (lower case, with the dot). Godot decodes every image kind natively; of the
-// video kinds it plays Ogg Theora only, so the others are transcoded first
-// (see internal/media).
+// imageExts, videoExts and audioExts are the file types the media library
+// accepts (lower case, with the dot). Godot decodes every image kind
+// natively. Videos and audio play through the platform's media framework
+// where there is one (AVFoundation on macOS, see internal/render); elsewhere
+// Godot plays Ogg Theora only and the other videos are transcoded first (see
+// internal/media).
 var (
 	imageExts = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".webp": true, ".bmp": true}
 	videoExts = map[string]bool{".mp4": true, ".mov": true, ".m4v": true, ".ogv": true, ".webm": true}
+	audioExts = map[string]bool{".mp3": true, ".m4a": true, ".aac": true, ".wav": true, ".aiff": true, ".aif": true, ".flac": true, ".ogg": true}
 )
+
+// Plays reports whether the kind is media that plays over time (a video or
+// an audio file) rather than a still.
+func (k MediaKind) Plays() bool { return k == MediaVideo || k == MediaAudio }
 
 // MediaKindOf classifies a file by its extension. ok is false for files the
 // library does not accept.
@@ -33,6 +43,8 @@ func MediaKindOf(path string) (kind MediaKind, ok bool) {
 		return MediaImage, true
 	case videoExts[ext]:
 		return MediaVideo, true
+	case audioExts[ext]:
+		return MediaAudio, true
 	}
 	return "", false
 }
@@ -54,16 +66,16 @@ func MediaTitle(path string) string {
 	return strings.Join(strings.Fields(base), " ")
 }
 
-// Media is one item of the media library: a still image or a motion
-// background video on disk, plus what the app derived from it (a thumbnail,
-// and for videos a playable transcode).
+// Media is one item of the media library: a still image, a motion
+// background video or an audio file on disk, plus what the app derived from
+// it (a thumbnail, and for videos a playable transcode where one is needed).
 type Media struct {
 	ID   int64     `json:"id"`
 	Path string    `json:"path"` // absolute path of the source file
 	Kind MediaKind `json:"kind"`
 	// Title is shown in the library and the schedule (defaults to MediaTitle(Path)).
 	Title string `json:"title"`
-	// Duration of a video; 0 for stills.
+	// Duration of a video or audio file; 0 for stills.
 	Duration time.Duration `json:"duration"`
 	Width    int           `json:"width"`  // pixels; 0 when unknown
 	Height   int           `json:"height"` // pixels; 0 when unknown
@@ -148,6 +160,19 @@ func ParseMediaRepeat(s string) (MediaRepeat, error) {
 	return r, nil
 }
 
+// RepeatMode is the item's effective Repeating choice: Repeat when set,
+// else the default for its kind: videos loop (motion backgrounds), audio
+// files play once.
+func (m Media) RepeatMode() MediaRepeat {
+	if m.Repeat.Valid() {
+		return m.Repeat
+	}
+	if m.Kind == MediaAudio {
+		return RepeatOnce
+	}
+	return RepeatLoop
+}
+
 // PlayablePath is the file the renderer can play for a video: the transcode
 // when there is one, else the source if it is already .ogv, else "". Stills
 // return "".
@@ -165,17 +190,21 @@ func (m Media) PlayablePath() string {
 }
 
 // Background is the slide background this item provides, scaled by its
-// Aspect (Fit) and, for a video, looping by its Repeat (Loop). A video
-// background names the source file (so a schedule saved on one computer
-// still identifies the clip on another) with the thumbnail as its poster;
-// the app substitutes the playable file when it has one (see ResolveVideo).
+// Aspect (Fit) and looping by its effective Repeat (Loop, see RepeatMode). A
+// still covers the slide. A video background names the source file (so a
+// schedule saved on one computer still identifies the clip on another) with
+// the thumbnail as its poster; the app substitutes the playable file when it
+// has one (see ResolveVideo). An audio file plays over a black slide.
 func (m Media) Background() Background {
 	bg := Background{Color: RGBA{A: 1}, Path: m.Path, Fit: m.Aspect.Normalized()}
 	switch m.Kind {
 	case MediaVideo:
 		bg.Kind = BackgroundVideo
 		bg.Poster = m.ThumbPath
-		bg.Loop = m.Repeat.Normalized() == RepeatLoop
+		bg.Loop = m.RepeatMode() == RepeatLoop
+	case MediaAudio:
+		bg.Kind = BackgroundAudio
+		bg.Loop = m.RepeatMode() == RepeatLoop
 	default:
 		bg.Kind = BackgroundImage
 	}

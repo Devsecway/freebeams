@@ -50,6 +50,11 @@ type MainWindow struct {
 	// Phase 2 resource tabs (their own block keeps gofmt from realigning the one above).
 	Presentations *PresentationPanel `gd:"-"`
 
+	// Transport bars under the output monitors, shown while the monitor's
+	// slide is a video or an audio file (transport.go).
+	PreviewTransport *Transport `gd:"-"`
+	LiveTransport    *Transport `gd:"-"`
+
 	// Splitters, for persisting their percentages (OnChanged) and restoring
 	// them (SetPercent).
 	MainSplit        *Splitter `gd:"-"`
@@ -341,10 +346,13 @@ func (w *MainWindow) buildPreviewLive() Control.Instance {
 	// Preview column.
 	w.PreviewGrid = NewSlideGrid()
 	w.PreviewMonitor = NewMonitorHost()
+	w.PreviewTransport = NewTransport()
+	w.PreviewTransport.AsControl().AsCanvasItem().SetVisible(false)
 	w.PreviewSplit = NewSplitter(SplitVertical, SlideGridPercent, 150, 0, 0, 200)
 	w.PreviewSplit.SetPanes(
 		column(panelHeader("Preview", nil, gridSizer(w.PreviewGrid)), surface(vGridBk, w.PreviewGrid.AsControl())),
-		columnFooter(w.PreviewMonitor.AsControl(), outputBar(hexpand(label("Preview Output", "").AsControl()))),
+		columnFooter(w.PreviewMonitor.AsControl(), w.PreviewTransport.AsControl(),
+			outputBar(hexpand(label("Preview Output", "").AsControl()))),
 	)
 
 	// Live column: Go Back | Live header.
@@ -361,10 +369,13 @@ func (w *MainWindow) buildPreviewLive() Control.Instance {
 		goBack.AsControl(), withMargins(newDivider(true).AsControl(), 0, 6),
 	}, gridSizer(w.LiveGrid))
 	swap := newMiniButton(miniPlain, "swap", 24, 24, "Output: Live / Foldback")
+	w.LiveTransport = NewTransport()
+	w.LiveTransport.AsControl().AsCanvasItem().SetVisible(false)
 	w.LiveSplit = NewSplitter(SplitVertical, SlideGridPercent, 150, 0, 0, 200)
 	w.LiveSplit.SetPanes(
 		column(liveHeader, surface(vGridBk, w.LiveGrid.AsControl())),
-		columnFooter(w.LiveMonitor.AsControl(), outputBar(swap.AsControl(), fixed(4, 0), hexpand(label("Live Output", "").AsControl()))),
+		columnFooter(w.LiveMonitor.AsControl(), w.LiveTransport.AsControl(),
+			outputBar(swap.AsControl(), fixed(4, 0), hexpand(label("Live Output", "").AsControl()))),
 	)
 
 	w.PreviewLiveSplit = NewSplitter(SplitHorizontal, PreviewLivePercent, 50, 50, 0, 0)
@@ -387,11 +398,12 @@ func column(header, body Control.Instance) Control.Instance {
 	return col.AsControl()
 }
 
-// columnFooter stacks an expanding body over a fixed footer.
-func columnFooter(body, footer Control.Instance) Control.Instance {
+// columnFooter stacks an expanding body over fixed footers.
+func columnFooter(body Control.Instance, footers ...Control.Instance) Control.Instance {
 	col := vbox(0)
 	expand(body)
-	add(col, body, footer)
+	add(col, body)
+	add(col, footers...)
 	return col.AsControl()
 }
 

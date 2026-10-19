@@ -85,7 +85,7 @@ func TestMediaCRUD(t *testing.T) {
 	if err := st.SaveMedia(ctx, &models.Media{Path: "  "}); err == nil {
 		t.Fatal("saving an empty path succeeded")
 	}
-	if err := st.SaveMedia(ctx, &models.Media{Path: "/a.png", Kind: "audio"}); err == nil {
+	if err := st.SaveMedia(ctx, &models.Media{Path: "/a.png", Kind: "feed"}); err == nil {
 		t.Fatal("saving an unknown kind succeeded")
 	}
 	if err := st.SaveMedia(ctx, nil); err == nil {

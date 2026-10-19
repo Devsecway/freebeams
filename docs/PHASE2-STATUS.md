@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 532 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search and tile-menu blocks); screenshots and app.log in test/out/
+test/smoke.sh          # 580 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -42,15 +42,17 @@ test/smoke.sh          # 532 checks (Phase 1: 191; media, presentations, themes,
 |---|---|---|
 | An image item live = full-screen image on the output | **pass** | Smoke: `image live`, `image output has content`; a synthetic solid `#2a7f62` image: `the output shows the image` (exact pixel check on the projector screenshot), `the live monitor shows the image`. Screenshots `media-green-output.png`, `media-green-main.png`. |
 | Media items in the schedule (snapshot, portable) | **pass** | `core.MediaItem` stores the source path and poster; `core.ResolveDeck` substitutes the playable file when the item is selected. Smoke: `add media to schedule`, `select the media schedule item`, `media schedule item live`. `TestMediaDeckAndItem`, `TestResolveDeck`, `TestMediaScheduleItemRoundTrip` (.fws JSON keeps `mediaId` and `poster`). |
-| Looping motion background (`models.BackgroundVideo`) behind the text, muted, low-processor mode off while playing | **untested** | Implemented in `internal/render/video.go`: a `VideoStreamPlayer` per layer between the background texture and the text, `loop`, `-80 dB`, `AcquireAnimating` on play and `ReleaseAnimating` when the layer changes background, is hidden after a crossfade (`visibility_changed`) or leaves the tree (`tree_exiting`). **Not exercised**: this machine's ffmpeg has no `libtheora` encoder and no `.ogv` exists on it, so no Theora file could be produced. Everything up to playback (the poster fallback, the badge, the footer) is covered by the smoke. To verify: install an ffmpeg with libtheora (`brew install ffmpeg` builds include it when `theora` is a dependency) or drop any `.ogv` into a media folder; the next pipeline pass transcodes the EW videos and `media.playable` becomes 8. |
-| Thumbnails never play video | **pass** | `App.thumbnail` turns a video background into its poster (`core.StillBackground`), so Preview/Live/schedule thumbnails are stills. `TestStillAndThumbBackground`. |
-| Preview / Live monitors, resource preview and output all play | **untested** | Same as above (needs a Theora file). All four are `SlideView`s and go through the same `layer.apply`. Four simultaneous software Theora decodes of 720p are expected to be fine on this hardware but have not been measured. |
+| Looping motion background (`models.BackgroundVideo`) behind the text, low-processor mode off while playing | **pass** (macOS, native) / **untested** (Theora path) | macOS plays every video and audio file through AVFoundation (`internal/render/avplayer_darwin.go`, `videosource.go`; [MEDIA.md](MEDIA.md)): no transcode, no `Needs libtheora`. Videos loop by default (`Background.Loop`), gapless (`actionAtItemEnd = None` + seek to 0 on the end notification); `AcquireAnimating` is held while a source plays. Smoke (playback block): `the clip goes live and plays (looping, full volume)`, `the live position advances`, `the clip stops at its end with loop off`, `black off brings the clip back`, `the clip plays again from the start`. The Theora path (`video.go`) is unchanged and still unexercised here (no libtheora, no `.ogv`); it is what Windows / Linux use. |
+| Thumbnails never play video | **pass** | `App.thumbnail` turns a video or audio background into its poster / black (`core.StillBackground`), so Preview/Live/schedule thumbnails are stills; `RoleNone` views open no player. `TestStillAndThumbBackground`. |
+| Preview / Live monitors and output all play | **pass** (macOS) | One decoder per role: `RoleLive` is shared by the Live Output monitor and the projector window (sound plays once), `RolePreview` has its own, paused at 0 (its first frame shows). Smoke: `the output shows the clip` (exact `#2a7f62` pixel check on the projector screenshot), `the live monitor shows the clip`, `the preview monitor shows the clip's first frame`, `play on the preview target (a second decoder)`, `the preview plays while live plays`. A 720p H.264 EasyWorship loop playing to the live monitor and the output window costs ~44 % of one core (Godot process, `ps`), the operator UI redrawing at full rate included. The resource preview is `RoleNone` (poster still). |
+| Audio items (`models.MediaAudio`: mp3, m4a, aac, wav, aiff, aif, flac, ogg) | **pass** (macOS) | An audio item is a one-slide deck with a `BackgroundAudio` (black, sound only, plays once by default); the library lists an Audio collection (`audio` icon), the footer counts `N audio`, `search-media {kind: "audio"}`, `/state.media.audio`, the EasyWorship `Resources/Audio` folder (`<audio>` rows) is imported. Smoke: `add the test clip and tone`, `the audio collection`, `the tone goes live and plays once`, `the live player plays the tone (audio only)` (`hasAudio` and not `hasVideo`), `audio shows a black output`. Audio goes to the system's default output device. |
+| Transport bar under the Preview Output and Live Output monitors | **pass** | `ui.Transport` (`internal/ui/transport.go`): seek slider + `0:00 / 0:30`, round play / pause, skip to start / end, loop toggle, volume; shown only while the monitor's slide is a video or audio file. The state is `core.Playback` per monitor on the App (`internal/app/playback.go`), projected every frame while a file is open; `/state.playback.{live,preview}`. Actions `play`, `pause`, `toggle-play`, `seek {seconds}`, `volume {value}`, `loop {on}` with `target: live\|preview`. Smoke: `pause`, `the position holds while paused`, `the position follows the seek`, `loop off`, `volume`, `the preview's volume is its own`, `a bad target is refused`, `a seek without seconds is refused`, `a volume that is not a number is refused`, `a monitor without media refuses play`. Screenshots `playback-main.png`, `playback-audio-main.png`. |
 
 ## Testability
 
 | Criterion | Status | Verification |
 |---|---|---|
-| Control actions and `/state` | **pass** | Actions: `search-media {q, kind}`, `select-media {index\|title}`, `add-media {path\|paths}`, `remove-media {index\|title, confirm}`, `add-to-schedule {source: "media"}`; `resource-go-live` and `focus {target: "media-grid"}` cover the tab. `/state.media`: `count, videos, images, query, kind, results, selected, current, countText, working, pending, playable, ffmpeg, theora, tools`. |
+| Control actions and `/state` | **pass** | Actions: `search-media {q, kind}` (kind `video`, `image`, `audio`), `select-media {index\|title}`, `add-media {path\|paths}`, `remove-media {index\|title, confirm}`, `add-to-schedule {source: "media"}`; `resource-go-live` and `focus {target: "media-grid"}` cover the tab; `play`, `pause`, `toggle-play`, `seek`, `volume`, `loop` the transport. `/state.media`: `count, videos, images, audio, query, kind, results, selected, current, countText, working, pending, playable, ffmpeg, theora, native, tools`; `/state.playback.{live,preview}`: `playing, position, duration, loop, volume, hasVideo, hasAudio, title, native, media, failed`. |
 | Smoke checks | **pass** | `test/smoke.sh` runs 302 checks (Phase 1 alone: 191; the media section 37; the transitions and settings section 74); the media section is between the schedule and song-editor sections, the transitions and settings section right before the quit section. The launch section is unchanged. Both full runs on 2026-10-19 passed first time, with the TV output open fullscreen. |
 
 ## Presentations (PDF / PowerPoint / Keynote → image slides)
@@ -103,6 +105,21 @@ cleared. Password-protected PDFs are reported as unavailable. Binary `.ppt` need
   `store/migrations.go` (migration 3 appended), `importers/easyworship/easyworship.go` (+4 `Report` fields),
   `test/smoke.sh` (the `# ---- presentations` block before `# ---- quit`). `render/*`, `ui/splitter.go`,
   `ui/monitor.go`, `ui/events.go`, `go.mod` and the smoke launch section are untouched.
+- Native playback milestone (additive): `internal/app/app.go` (+5: `pb playbackState` block, `initPlayback()`,
+  `playbackEvents()` / `renderPlayback()` in `Process`), `view.go` (+5: `seekApplied` block in the view cache,
+  `wirePlayback()` call, `renderPlayback()` in `render`), `control.go` (+6: `Seconds` arg block, `audio` in
+  `search-media`, `handlePlaybackCommand` in the dispatcher chain, `Playback` in `state()`), `media.go` (audio
+  counts, `Native` caps, no transcode when native), `core/state.go` (`MediaState.Audio/Native` block, `Playback`
+  blocks), `core/media.go` (`MediaCaps.Native`, `MediaCounts`, audio badges / footer / item), `render/slideview.go`
+  (`role`, `native` layer, `EnterTree`, `SetVideoRole`, audio case), `render/video.go` (`applyVideo` chooses the
+  player), `render/output.go` (+1), `render/textures.go` (+1), `ui/mainwindow.go` (`PreviewTransport` /
+  `LiveTransport` block, variadic `columnFooter`), `ui/theme.go` (+1), `ui/register.go` (+1), `ui/media.go` (+1 Audio
+  row), `ui/uicore/icons.go` (a `transport & audio` block at the end), `models/media.go` (`MediaAudio`, `Plays()`,
+  `Background.Loop` default), `models/slide.go` (`BackgroundAudio`, `Loop`, `Plays()`), `store/media.go` (+1 kind),
+  `importers/easyworship/media.go` (`<audio>`), `media/*` (audio probing, `Processor.Native`), `test/smoke.sh` (the
+  `# ---- playback` block before `# ---- quit`), `CLAUDE.md` (gotchas appended). New: `render/avplayer_darwin.go`,
+  `render/avplayer_other.go`, `render/videosource.go`, `ui/transport.go`, `app/playback.go`, `core/playback.go`,
+  `docs/MEDIA.md`. No store migration.
 
 ## Themes (PLAN §2 item 6, §4 M4 "Theme editor")
 
@@ -295,7 +312,7 @@ Recorded 2026-10-19 on the same machine (the HDMI TV was not detected: the outpu
 pixel checks read the output window). The right-click and footer-gear menus of the media and presentation tiles now
 follow EasyWorship's (UI-SPEC §3.6 lists both menus and what is deliberately left out). "smoke: X" names a check in the
 `# ---- item menus` section of `test/smoke.sh` (100 checks, between the search and quit sections; the full run is
-532 checks and passed on 2026-10-19 with log hygiene clean).
+580 checks and passed on 2026-10-19 with log hygiene clean).
 
 | Criterion | Status | Verification |
 |---|---|---|
@@ -332,11 +349,14 @@ the schedule keep their snapshots (EasyWorship's behaviour). The Songs and Scrip
 
 ## Remaining for Phase 2
 
-- **Video playback verification** on a machine with a Theora-capable ffmpeg (see above), then: a progress
-  indicator in the resource preview's mini toolbar (the state has `media.working` and per-item `Converting NN%`
-  badges already), and hot-swapping a live poster for the finished transcode.
-- **Video option B** (PLAN §3: ffmpeg pipe → YUV textures) for machines without libtheora, or bundling an ffmpeg
-  with libtheora in the release.
+- **Video playback off macOS**: the Theora path (`render/video.go`) is unverified on a machine with a Theora-capable
+  ffmpeg; audio does not play there at all; the transport bar is greyed out (`playback.*.native` false). Options:
+  a native player per platform (Media Foundation on Windows, GStreamer on Linux, behind the same `nativePlayer`
+  interface), or PLAN §3 option B (ffmpeg pipe → textures) which would also cover audio.
+- **Media polish**: poster frames through `AVAssetImageGenerator` on macOS (videos still need ffmpeg for a
+  thumbnail), a per-item Repeat / Aspect property (`models.Background.Loop` is the hook), keeping a video's
+  position across Black (today a Black longer than the fade re-opens the file from 0), a transport in the resource
+  preview (UI-SPEC §3 mentions mini controls there).
 - **Themes polish**: a video background in the editor ("use as background" from the Media tab is the natural
   hook: `Media.Background()`), the font picker's search bar (`OptionButton.search_bar_enabled`, Godot 4.7) once the
   list grows, honouring `Song.ThemeID` (per-song theme, imported from EasyWorship) in `newSongDeck`, a theme picker

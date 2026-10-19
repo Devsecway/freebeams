@@ -77,6 +77,7 @@ func (a *App) state() core.State {
 		Splitters:     a.splitterPositions(),
 		Import:        a.importDoc(),
 		Bundled:       a.bundled,
+		Playback:      a.playbackStates(),
 		LastError:     a.lastError,
 		Dialog:        dialog,
 		WindowTitle:   a.win.WindowTitle(),
@@ -150,6 +151,9 @@ type actionArgs struct {
 	// Themes (themes.go).
 	Theme *models.Theme `json:"theme"` // save-theme: the theme to save (id 0 inserts)
 	Row   *int          `json:"row"`   // apply-theme: schedule row (default: the selected one)
+
+	// Playback (playback.go); volume takes Value, loop takes On, all take Target.
+	Seconds *float64 `json:"seconds"` // seek: the position in seconds
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -319,8 +323,8 @@ func (a *App) handleCommand(cmd *control.Command) {
 	// Media.
 	case "search-media":
 		kind := models.MediaKind(strings.ToLower(args.Kind))
-		if kind != "" && kind != models.MediaImage && kind != models.MediaVideo {
-			cmd.RespondErr(fmt.Errorf("search-media: kind must be \"\", \"image\" or \"video\", got %q", args.Kind))
+		if kind != "" && kind != models.MediaImage && kind != models.MediaVideo && kind != models.MediaAudio {
+			cmd.RespondErr(fmt.Errorf("search-media: kind must be \"\", \"image\", \"video\" or \"audio\", got %q", args.Kind))
 			return
 		}
 		a.win.Media.SetSearchText(args.Q)
@@ -480,7 +484,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}

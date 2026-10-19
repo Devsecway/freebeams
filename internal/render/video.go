@@ -7,7 +7,6 @@ import (
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/Node"
-	"graphics.gd/classdb/TextureRect"
 	"graphics.gd/classdb/VideoStream"
 	"graphics.gd/classdb/VideoStreamPlayer"
 	"graphics.gd/classdb/VideoStreamTheora"
@@ -138,21 +137,43 @@ func (v *videoLayer) stop() {
 // Playing reports whether the layer's video is running.
 func (v *videoLayer) Playing() bool { return v.playing }
 
-// applyVideo projects a video background onto the layer: the poster still on
-// the texture rect (shown under the video while its first frame decodes, and
-// alone when the video cannot play) and the video on top.
+// applyVideo projects a video or audio background onto the layer: the poster
+// still on the texture rect (shown under the video while its first frame
+// decodes, and alone when the video cannot play; audio has none, so its
+// color shows) and the video on top. On a platform with a native player
+// (macOS) a layer with a role plays the file through it (videosource.go);
+// elsewhere Godot's Theora player takes a playable .ogv.
 func (l *layer) applyVideo(bg models.Background) {
 	if t, ok := imageTexture(bg.Poster); ok {
 		l.tex.SetTexture(t)
-		l.tex.SetStretchMode(TextureRect.StretchKeepAspectCovered)
+		l.tex.SetStretchMode(stretchFor(bg.Fit)) // the item's Aspect Ratio, like the frames
 		l.tex.AsCanvasItem().SetVisible(true)
 	} else {
 		l.tex.AsCanvasItem().SetVisible(false)
 	}
-	l.video.show(bg.Path)
+	if nativeVideoSupported {
+		l.video.hide()
+		if l.native.role == RoleNone {
+			l.native.hide()
+		} else {
+			l.native.rect.SetStretchMode(stretchFor(bg.Fit))
+			l.native.set(bg.Path)
+		}
+		return
+	}
+	l.native.hide()
+	if bg.Kind == models.BackgroundVideo {
+		l.video.show(bg.Path)
+	} else {
+		l.video.hide()
+	}
 }
 
-// VideoPlaying reports whether the view's current layer is playing a video.
+// VideoPlaying reports whether the view's current layer is playing a video
+// or audio file.
 func (v *SlideView) VideoPlaying() bool {
-	return v.built && v.cur != nil && v.cur.video != nil && v.cur.video.Playing()
+	if !v.built || v.cur == nil {
+		return false
+	}
+	return (v.cur.video != nil && v.cur.video.Playing()) || (v.cur.native != nil && v.cur.native.playing())
 }

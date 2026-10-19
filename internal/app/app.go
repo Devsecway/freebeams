@@ -112,6 +112,8 @@ type App struct {
 
 	pr presentationState // the Presentations tab (presentations.go)
 
+	pb playbackState // video / audio transport per monitor (playback.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -164,6 +166,7 @@ func (a *App) Ready() {
 	a.schedSel, a.songSel, a.bibleSel, a.verseSel = -1, -1, -1, -1
 	a.view = newViewCache()
 	a.inputRec = openInputRecorder()
+	a.initPlayback()
 
 	SceneTree.Get(a.AsNode()).SetAutoAcceptQuit(false)
 	a.buildUI()
@@ -398,9 +401,14 @@ func (a *App) Process(delta Float.X) {
 		a.shutdown()
 		return
 	}
+	if a.playbackEvents() { // a file ended, a new item arrived on a monitor (playback.go)
+		a.dirty = true
+	}
 	if a.dirty || a.pres.State.Seq != a.view.seq {
 		a.render()
 		a.dirty = false
+	} else if render.AnyMediaActive() {
+		a.renderPlayback() // the transport follows the player every frame
 	}
 	a.flushReplies()
 	a.serveWaiters()

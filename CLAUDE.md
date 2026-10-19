@@ -210,6 +210,26 @@ internal/app               Godot: the App node that wires store + presenter + ui
   `$MEDIA_COUNT`: the themes block adds images of its own.
 - The scratchpad directory is shared by every agent of one session. Prefix scratch scripts and logs with the worktree
   id (`adbc-run-smoke.sh`), or another agent's same-named wrapper (for its own worktree) runs instead of yours.
+- Native video (macOS, `render/avplayer_darwin.go`, see `docs/MEDIA.md`): an `AVPlayerItemVideoOutput` hands out BGRA
+  frames; Godot's `Image` has no BGRA8, so swizzle with `vImagePermuteChannels_ARGB8888` (map `{2,1,0,3}`, honours
+  `bytesPerRow` padding) straight into a Go `[]byte`, then `Image.SetData` + `ImageTexture.Update` (same size) or
+  `SetImage` (size changed). A paused item still delivers its first frame once `ReadyToPlay`, which is how the preview
+  shows frame 0 without a poster. Gapless looping is `actionAtItemEnd = None` plus a `DidPlayToEndTime` observer on the
+  main queue that seeks to 0 (the rate stays 1); Godot's `NSApp` run loop delivers it between frames.
+- A `MediaSource`'s `Image` / `ImageTexture` are Go-held and must be `pin`ned; the engine keeps its own reference while a
+  `TextureRect` shows the texture, so an outgoing crossfade layer keeps its last frame after the source is unpinned.
+- `visibility_changed` on a layer root is how the outgoing side of a finished crossfade (and a view whose window
+  closed) releases its player; a Black and back inside the fade keeps the decoder, a longer one re-opens from 0. Keep
+  a view's `Process` on while it holds a source (`SetProcess(transitioning || holdsMedia)`); the pump is guarded by
+  `Engine.GetProcessFrames()` so several views advance each source once per frame.
+- HSlider: user drags come as `drag_started` … `value_changed` … `drag_ended(changed)`; a click on the track or a
+  keyboard step is a bare `value_changed`. Seek on `drag_ended` (and on a bare `value_changed`), and never project the
+  position into the slider while `seeking`. `Control.Instance` has no `SetVisible`: it is `AsCanvasItem().SetVisible`.
+- A synthetic test clip must be tagged for the matrix the decoder assumes, or an exact pixel check misses by more than
+  ±3: `-vf scale=out_color_matrix=bt709:out_range=tv,format=yuv420p -colorspace bt709 -color_primaries bt709
+  -color_trc bt709 -color_range tv` makes AVFoundation reproduce `#2a7f62` exactly (`test/smoke.sh` playback block).
+- A single-screen machine has the output closed until `output {"on":true}`; `/screenshot?window=output` then returns
+  a JSON error, not a PNG (`pngcheck.py` says "not a PNG").
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

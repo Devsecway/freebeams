@@ -42,6 +42,18 @@ func TestMediaDeckAndItem(t *testing.T) {
 	if it := MediaItem(models.Media{Kind: models.MediaVideo, Path: "/v/x.mp4", Title: "X"}); it.Subtitle != "Video" {
 		t.Fatalf("video without duration: subtitle %q", it.Subtitle)
 	}
+	// A video loops by default; an audio file plays once over a black slide.
+	if bg := it.Slides[0].Background; !bg.Loop {
+		t.Fatalf("video item must loop by default: %+v", bg)
+	}
+	snd := models.Media{ID: 6, Kind: models.MediaAudio, Path: "/a/tone.wav", Title: "Tone", Duration: 3 * time.Second}
+	if it := MediaItem(snd); it.Subtitle != "Audio · 0:03" || it.Slides[0].Background.Kind != models.BackgroundAudio ||
+		it.Slides[0].Background.Path != "/a/tone.wav" || it.Slides[0].Background.Loop || it.Slides[0].Background.Poster != "" {
+		t.Fatalf("audio MediaItem = %+v / %+v", it, it.Slides[0].Background)
+	}
+	if d := MediaDeck(snd, lookup); d.Slides[0].Background.Kind != models.BackgroundAudio || d.Slides[0].Background.Path != "/a/tone.wav" {
+		t.Fatalf("audio MediaDeck = %+v", d.Slides[0].Background)
+	}
 
 	// ItemDeck → ResolveDeck gives the playable path; the item is untouched.
 	deck := ResolveDeck(ItemDeck(it), lookup)
@@ -104,6 +116,10 @@ func TestStillAndThumbBackground(t *testing.T) {
 	if got := StillBackground(noPoster); got.Kind != models.BackgroundColor || got.Color != noPoster.Color || got.Path != "" {
 		t.Fatalf("StillBackground(video without poster) = %+v", got)
 	}
+	audio := &models.Background{Kind: models.BackgroundAudio, Path: "/a.mp3", Color: models.RGBA{A: 1}}
+	if got := StillBackground(audio); got.Kind != models.BackgroundColor || got.Color != audio.Color || got.Path != "" {
+		t.Fatalf("StillBackground(audio) = %+v", got)
+	}
 
 	tests := []struct {
 		m    models.Media
@@ -162,37 +178,52 @@ func TestMediaBadge(t *testing.T) {
 		{"failed", video, false, all, 0, true, "Unavailable"},
 		{"failed but playable", video, true, all, 0, true, "0:30"},
 		{"queued", video, false, all, 0, false, "Queued"},
+		// A native player (macOS) plays every video as it is: never a complaint.
+		{"native plays an unconverted video", video, false, MediaCaps{Native: true}, 0, false, "0:30"},
+		{"native without duration", models.Media{Kind: models.MediaVideo}, false, MediaCaps{Native: true}, 0, true, "Video"},
+		{"audio shows its duration", models.Media{Kind: models.MediaAudio, Duration: 3 * time.Second}, false, MediaCaps{}, 0, false, "0:03"},
+		{"audio without duration", models.Media{Kind: models.MediaAudio}, false, MediaCaps{}, 0, true, "Audio"},
 	}
 	for _, tc := range tests {
 		if got := MediaBadge(tc.m, tc.playable, tc.caps, tc.progress, tc.failed); got != tc.want {
 			t.Errorf("%s: MediaBadge = %q, want %q", tc.name, got, tc.want)
 		}
 	}
+	if !(MediaCaps{Native: true}).CanPlay(false) || (MediaCaps{}).CanPlay(false) || !(MediaCaps{}).CanPlay(true) {
+		t.Error("CanPlay")
+	}
 }
 
 func TestMediaFooter(t *testing.T) {
 	all := MediaCaps{FFmpeg: true, Theora: true}
+	native := MediaCaps{FFmpeg: true, Native: true}
 	tests := []struct {
-		name           string
-		videos, images int
-		kind           models.MediaKind
-		caps           MediaCaps
-		working        bool
-		want           string
+		name    string
+		counts  MediaCounts
+		kind    models.MediaKind
+		caps    MediaCaps
+		working bool
+		want    string
 	}{
-		{"empty", 0, 0, "", MediaCaps{}, false, "0 items"},
-		{"all", 8, 15, "", all, false, "23 items · 8 videos · 15 images"},
-		{"one each", 1, 1, "", all, false, "2 items · 1 video · 1 image"},
-		{"videos", 8, 15, models.MediaVideo, all, false, "8 videos"},
-		{"images", 8, 15, models.MediaImage, all, false, "15 images"},
-		{"working", 8, 15, "", all, true, "23 items · 8 videos · 15 images · preparing media…"},
-		{"no ffmpeg", 8, 15, "", MediaCaps{}, false, "23 items · 8 videos · 15 images · ffmpeg not found: videos cannot play"},
-		{"no theora", 8, 15, models.MediaVideo, MediaCaps{FFmpeg: true}, false, "8 videos · ffmpeg has no Theora encoder: videos cannot play"},
-		{"images ignore ffmpeg", 8, 15, models.MediaImage, MediaCaps{}, false, "15 images"},
-		{"no videos ignore ffmpeg", 0, 3, "", MediaCaps{}, false, "3 items · 0 videos · 3 images"},
+		{"empty", MediaCounts{}, "", MediaCaps{}, false, "0 items"},
+		{"all", MediaCounts{8, 15, 0}, "", all, false, "23 items · 8 videos · 15 images"},
+		{"one each", MediaCounts{1, 1, 0}, "", all, false, "2 items · 1 video · 1 image"},
+		{"videos", MediaCounts{8, 15, 0}, models.MediaVideo, all, false, "8 videos"},
+		{"images", MediaCounts{8, 15, 0}, models.MediaImage, all, false, "15 images"},
+		{"working", MediaCounts{8, 15, 0}, "", all, true, "23 items · 8 videos · 15 images · preparing media…"},
+		{"no ffmpeg", MediaCounts{8, 15, 0}, "", MediaCaps{}, false, "23 items · 8 videos · 15 images · ffmpeg not found: videos cannot play"},
+		{"no theora", MediaCounts{8, 15, 0}, models.MediaVideo, MediaCaps{FFmpeg: true}, false, "8 videos · ffmpeg has no Theora encoder: videos cannot play"},
+		{"images ignore ffmpeg", MediaCounts{8, 15, 0}, models.MediaImage, MediaCaps{}, false, "15 images"},
+		{"no videos ignore ffmpeg", MediaCounts{0, 3, 0}, "", MediaCaps{}, false, "3 items · 0 videos · 3 images"},
+		{"native never complains", MediaCounts{8, 15, 0}, "", native, false, "23 items · 8 videos · 15 images"},
+		{"native without ffmpeg", MediaCounts{8, 15, 0}, models.MediaVideo, MediaCaps{Native: true}, false, "8 videos"},
+		{"audio counted", MediaCounts{8, 15, 2}, "", native, false, "25 items · 8 videos · 15 images · 2 audio"},
+		{"audio collection", MediaCounts{8, 15, 2}, models.MediaAudio, MediaCaps{}, false, "2 audio files"},
+		{"one audio file", MediaCounts{0, 0, 1}, models.MediaAudio, MediaCaps{}, false, "1 audio file"},
+		{"audio collection ignores ffmpeg", MediaCounts{8, 0, 1}, models.MediaAudio, MediaCaps{}, false, "1 audio file"},
 	}
 	for _, tc := range tests {
-		if got := MediaFooter(tc.videos, tc.images, tc.kind, tc.caps, tc.working); got != tc.want {
+		if got := MediaFooter(tc.counts, tc.kind, tc.caps, tc.working); got != tc.want {
 			t.Errorf("%s: MediaFooter = %q, want %q", tc.name, got, tc.want)
 		}
 	}

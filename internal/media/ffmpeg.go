@@ -109,12 +109,18 @@ func (t Tools) Probe(ctx context.Context, path string) (Info, error) {
 	if t.FFprobe == "" {
 		return Info{}, ErrUnavailable
 	}
-	out, err := t.run(ctx, t.FFprobe, "-v", "error", "-select_streams", "v:0",
+	kind, _ := models.MediaKindOf(path)
+	audio := kind == models.MediaAudio
+	streams := "v:0"
+	if audio {
+		streams = "a:0"
+	}
+	out, err := t.run(ctx, t.FFprobe, "-v", "error", "-select_streams", streams,
 		"-show_entries", "stream=width,height:format=duration", "-of", "json", path)
 	if err != nil {
 		return Info{}, fmt.Errorf("probe %s: %w", filepath.Base(path), err)
 	}
-	info, err := parseProbe(out)
+	info, err := parseProbe(out, audio)
 	if err != nil {
 		return Info{}, fmt.Errorf("probe %s: %w", filepath.Base(path), err)
 	}
@@ -122,7 +128,8 @@ func (t Tools) Probe(ctx context.Context, path string) (Info, error) {
 }
 
 // parseProbe decodes ffprobe's JSON (stream width/height, format duration).
-func parseProbe(out []byte) (Info, error) {
+// A picture needs a video stream; an audio file needs a duration.
+func parseProbe(out []byte, audio bool) (Info, error) {
 	var doc struct {
 		Streams []struct {
 			Width  int `json:"width"`
@@ -144,6 +151,12 @@ func parseProbe(out []byte) (Info, error) {
 		if err == nil && secs > 0 {
 			info.Duration = time.Duration(secs * float64(time.Second))
 		}
+	}
+	if audio {
+		if info.Duration <= 0 {
+			return info, errors.New("no audio duration")
+		}
+		return info, nil
 	}
 	if info.Width <= 0 || info.Height <= 0 {
 		return info, errors.New("no video stream")

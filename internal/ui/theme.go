@@ -137,6 +137,7 @@ func BuildTheme(p Palette) Theme.Instance {
 	buildTreeTheme(th, p)
 	buildScrollTheme(th, p)
 	buildMenuTheme(th, p)
+	buildSliderTheme(th, p) // the transport bars' sliders (transport.go)
 
 	// Tooltips.
 	tip := flat(p.MenuFill)

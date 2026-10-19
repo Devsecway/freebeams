@@ -124,11 +124,11 @@ func saveMediaTx(ctx context.Context, tx *sql.Tx, m *models.Media, now time.Time
 	if m.Kind == "" {
 		kind, ok := models.MediaKindOf(path)
 		if !ok {
-			return fmt.Errorf("save media %q: not an image or video file", path)
+			return fmt.Errorf("save media %q: not an image, video or audio file", path)
 		}
 		m.Kind = kind
 	}
-	if m.Kind != models.MediaImage && m.Kind != models.MediaVideo {
+	if m.Kind != models.MediaImage && m.Kind != models.MediaVideo && m.Kind != models.MediaAudio {
 		return fmt.Errorf("save media %q: unknown kind %q", path, m.Kind)
 	}
 	title := strings.TrimSpace(m.Title)
@@ -145,7 +145,7 @@ func saveMediaTx(ctx context.Context, tx *sql.Tx, m *models.Media, now time.Time
 	if m.Repeat != "" && !m.Repeat.Valid() {
 		return fmt.Errorf("save media %q: unknown repeat mode %q", path, m.Repeat)
 	}
-	aspect, repeat := m.Aspect.Normalized(), m.Repeat.Normalized()
+	aspect, repeat := m.Aspect.Normalized(), m.RepeatMode() // audio defaults to once
 	if m.ID == 0 {
 		added := m.Added
 		if added.IsZero() {

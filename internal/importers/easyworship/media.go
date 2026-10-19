@@ -17,16 +17,18 @@ import (
 )
 
 // EasyWorship's media library (Media.db, next to Songs.db) lists the stock
-// images and motion backgrounds under Resources/{Images,Videos}. Rows have a
-// media_type (1 video, 2 image, others: audio, feeds, DVDs), a title, a
-// `path` placeholder ("<images>", "<videos>"), an optional sub `folder`, the
-// file name, the pixel size and, for videos, the duration in 100 ns ticks.
+// images, motion backgrounds and sounds under Resources/{Images,Videos,Audio}.
+// Rows have a media_type (1 video, 2 image, 3 audio; others: feeds, DVDs), a
+// title, a `path` placeholder ("<images>", "<videos>", "<audio>"), an
+// optional sub `folder`, the file name, the pixel size and, for videos and
+// audio, the duration in 100 ns ticks.
 const mediaDB = "Media.db"
 
 // EasyWorship media_type values.
 const (
 	ewMediaVideo = 1
 	ewMediaImage = 2
+	ewMediaAudio = 3
 )
 
 // ewTick is the unit of EasyWorship's duration column (100 ns, as in Windows FILETIME).
@@ -97,8 +99,10 @@ func ReadMedia(dataDir, resourcesDir string) (items []models.Media, warnings []s
 			kind = models.MediaVideo
 		case ewMediaImage:
 			kind = models.MediaImage
+		case ewMediaAudio:
+			kind = models.MediaAudio
 		default:
-			continue // audio, feeds, DVDs
+			continue // feeds, DVDs
 		}
 		file, ok := mediaFile(resourcesDir, path.String, folder.String, filename.String)
 		if !ok {
@@ -123,7 +127,7 @@ func ReadMedia(dataDir, resourcesDir string) (items []models.Media, warnings []s
 		if m.Title == "" {
 			m.Title = models.MediaTitle(file)
 		}
-		if kind == models.MediaVideo && duration.Int64 > 0 {
+		if kind.Plays() && duration.Int64 > 0 {
 			m.Duration = time.Duration(duration.Int64) * ewTick
 		}
 		list = append(list, row{id: id, item: m})
@@ -152,6 +156,8 @@ func mediaFile(resourcesDir, path, folder, filename string) (string, bool) {
 		base = filepath.Join(resourcesDir, "Images")
 	case "<videos>":
 		base = filepath.Join(resourcesDir, "Videos")
+	case "<audio>":
+		base = filepath.Join(resourcesDir, "Audio")
 	case "":
 		return "", false
 	default:

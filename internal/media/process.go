@@ -26,6 +26,10 @@ type Processor struct {
 	Transcoder  Transcoder  // nil: no transcodes
 	CacheDir    string      // where derived files go
 	ThumbWidth  int         // 0 = DefaultThumbWidth
+
+	// Native means the renderer plays every video and audio file as it is
+	// (the platform's media framework), so no transcode is ever made.
+	Native bool
 }
 
 // NewProcessor returns a processor using t for every tool.
@@ -40,16 +44,22 @@ func (p *Processor) thumbWidth() int {
 	return p.ThumbWidth
 }
 
-// NeedsThumbnail reports whether m lacks a thumbnail file.
-func NeedsThumbnail(m models.Media) bool { return !exists(m.ThumbPath) }
+// NeedsThumbnail reports whether m lacks a thumbnail file. Audio has no
+// picture, so it never needs one.
+func NeedsThumbnail(m models.Media) bool { return m.Kind != models.MediaAudio && !exists(m.ThumbPath) }
 
-// NeedsTranscode reports whether m is a video without a playable file.
+// NeedsTranscode reports whether m is a video without a playable file (for
+// the Theora path; a native renderer plays the source, see Processor.Native).
 func NeedsTranscode(m models.Media) bool {
 	return m.Kind == models.MediaVideo && !exists(m.PlayablePath())
 }
 
-// NeedsDescribe reports whether m lacks its dimensions (or, for a video, its duration).
+// NeedsDescribe reports whether m lacks its dimensions (or, for a video or
+// audio file, its duration). Audio has no dimensions.
 func NeedsDescribe(m models.Media) bool {
+	if m.Kind == models.MediaAudio {
+		return m.Duration <= 0
+	}
 	return m.Width <= 0 || m.Height <= 0 || (m.Kind == models.MediaVideo && m.Duration <= 0)
 }
 
@@ -81,7 +91,7 @@ func (p *Processor) Describe(ctx context.Context, m *models.Media) (changed bool
 		return false, err
 	}
 	m.Width, m.Height = info.Width, info.Height
-	if m.Kind == models.MediaVideo {
+	if m.Kind.Plays() {
 		m.Duration = info.Duration
 	}
 	return true, nil
@@ -132,7 +142,7 @@ func (p *Processor) Transcode(ctx context.Context, m *models.Media, progress fun
 	if m == nil {
 		return false, errors.New("transcode media: nil item")
 	}
-	if !NeedsTranscode(*m) {
+	if p.Native || !NeedsTranscode(*m) {
 		return false, nil
 	}
 	if p.CacheDir == "" {
