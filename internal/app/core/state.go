@@ -159,6 +159,9 @@ type State struct {
 	// Presentations is the Presentations tab (its own block keeps gofmt from
 	// realigning the fields above).
 	Presentations PresentationsState `json:"presentations"`
+
+	// Bundled is the bundled translations' installation (bundled.go).
+	Bundled BundledState `json:"bundled"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -192,6 +195,8 @@ type StateInput struct {
 	Idle             bool
 
 	Presentations PresentationsState
+
+	Bundled BundledState
 }
 
 // deckState summarises deck d with slide i selected.
@@ -250,6 +255,13 @@ func BuildState(in StateInput) State {
 	}
 	if st.Scripture.CopyrightedAvailable == nil {
 		st.Scripture.CopyrightedAvailable = []string{}
+	}
+	st.Bundled = in.Bundled
+	if st.Bundled.Installed == nil {
+		st.Bundled.Installed = []string{}
+	}
+	if st.Bundled.Skipped == nil {
+		st.Bundled.Skipped = []string{}
 	}
 	st.Bibles = make([]string, 0, len(in.Bibles))
 	for _, b := range in.Bibles {
