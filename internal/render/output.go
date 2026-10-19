@@ -3,6 +3,7 @@ package render
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"graphics.gd/classdb/InputEvent"
 	"graphics.gd/classdb/Node"
 	"graphics.gd/classdb/Window"
+	"graphics.gd/variant/Callable"
 	"graphics.gd/variant/Vector2i"
 )
 
@@ -78,20 +80,21 @@ func defaultScreen(screens []ScreenInfo) int {
 type FullscreenStrategy int
 
 const (
-	// ExclusiveFullscreen uses Window.ModeExclusiveFullscreen on the target
-	// screen. It is the default. On macOS the output gets its own Space with
-	// no menu bar, and the menu bar does not slide in when the mouse touches
-	// the top edge. Verified on an HDMI TV: covers the whole screen and leaves
-	// the operator display untouched.
-	ExclusiveFullscreen FullscreenStrategy = iota
-	// NativeFullscreen uses Window.ModeFullscreen (a new Space on macOS). It
-	// also hides the menu bar, but the menu bar reappears when the mouse
-	// touches the top edge of that screen.
+	// CoverScreen is the default: a borderless window over the whole screen.
+	// On macOS it is raised above the menu bar and its status items and kept
+	// out of Spaces (see cover_darwin.go), so nothing shows over the output
+	// and the menu bar never slides in when the mouse touches the top edge.
+	// Elsewhere it is an always-on-top borderless window.
+	CoverScreen FullscreenStrategy = iota
+	// ExclusiveFullscreen uses Window.ModeExclusiveFullscreen (a new Space on
+	// macOS). It hides the menu bar, but because the output never takes focus
+	// the menu bar still slides in at the top edge (seen on an HDMI TV).
+	ExclusiveFullscreen
+	// NativeFullscreen uses Window.ModeFullscreen (a new Space on macOS); the
+	// menu bar slides in at the top edge.
 	NativeFullscreen
-	// Borderless positions a borderless, always-on-top window over the screen
-	// rect. Do not use it on macOS: with "Displays have separate Spaces" (the
-	// default) every display has a menu bar, and the menu bar stays drawn over
-	// the top of the output.
+	// Borderless is a plain always-on-top borderless window. On macOS the
+	// per-display menu bar stays drawn over the top of it.
 	Borderless
 )
 
@@ -105,7 +108,7 @@ type Output struct {
 	// keyboard focus (the windowed single-screen output is focusable), so the
 	// app can run its hotkeys there too. A fullscreen output is unfocusable.
 	OnInput func(ev InputEvent.Instance)
-	// Strategy selects how a secondary display is covered (default ExclusiveFullscreen).
+	// Strategy selects how a secondary display is covered (default CoverScreen).
 	Strategy FullscreenStrategy
 
 	parent     Node.Instance
@@ -200,6 +203,8 @@ func (o *Output) Open(screen int) {
 		win.SetPosition(Vector2i.New(info.Position[0], info.Position[1]))
 		win.SetSize(Vector2i.New(info.Size[0], info.Size[1]))
 		switch o.Strategy {
+		case CoverScreen:
+			win.SetAlwaysOnTop(!coverSupported)
 		case NativeFullscreen:
 			win.SetMode(Window.ModeFullscreen)
 		case ExclusiveFullscreen:
@@ -254,9 +259,47 @@ func (o *Output) Open(screen int) {
 	o.win = win
 	o.view = view
 	o.parent.AddChild(win.AsNode())
+	if o.fullscreen {
+		if o.Strategy == CoverScreen && coverSupported {
+			o.cover()
+		}
+		o.syncToOutput(true)
+	}
 	if o.hasFrame {
 		view.SetFrame(o.frame) // first frame is a cut
 	}
+}
+
+// cover raises the native output window above the menu bar (macOS). The
+// native window exists once the Window is in the tree; Godot may still move it
+// while the first frame is set up, so it is applied again a frame later.
+func (o *Output) cover() {
+	apply := func() {
+		if !o.IsOpen() {
+			return
+		}
+		h := DisplayServer.WindowGetNativeHandle(DisplayServer.WindowHandle, DisplayServer.Window(o.win.GetWindowId()))
+		if !coverScreen(uintptr(h)) {
+			log.Printf("[render] could not raise the output window above the menu bar")
+		}
+	}
+	apply()
+	Callable.Defer(Callable.New(apply))
+}
+
+// syncToOutput paces the frame loop by the projector while the output is up:
+// with vsync on in both windows every frame waits for two displays with
+// different refresh rates (a 120 Hz laptop and a 60 Hz TV), which makes the
+// crossfade on the TV stutter. The operator window drops vsync instead (a torn
+// frame there is harmless) and gets it back when the output closes.
+func (o *Output) syncToOutput(on bool) {
+	main := DisplayServer.Window(DisplayServer.MainWindowId)
+	if on {
+		DisplayServer.WindowSetVsyncMode(DisplayServer.VsyncDisabled, main)
+		DisplayServer.WindowSetVsyncMode(DisplayServer.VsyncEnabled, DisplayServer.Window(o.win.GetWindowId()))
+		return
+	}
+	DisplayServer.WindowSetVsyncMode(DisplayServer.VsyncEnabled, main)
 }
 
 func (o *Output) showCursor() {
@@ -273,6 +316,9 @@ func (o *Output) Close() { o.closeWindow() }
 func (o *Output) closeWindow() {
 	if !o.IsOpen() {
 		return
+	}
+	if o.fullscreen {
+		o.syncToOutput(false)
 	}
 	o.showCursor()
 	win := o.win
