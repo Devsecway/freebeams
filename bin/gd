@@ -2,9 +2,17 @@
 # FreeWorship's gd: the graphics.gd build tool pinned in go.mod (`tool`),
 # with its own Godot install so other graphics.gd projects on this machine
 # (which may need a different Godot) are unaffected.
-#   ./bin/gd run            run the app
-#   GOOS=macos ./bin/gd build
+#   ./bin/gd run                 run the app
+#   GOOS=macos ./bin/gd build    release build into releases/ (also windows, linux)
 set -e
 export GDPATH="${GDPATH:-$HOME/gd/freeworship}"
 cd "$(dirname "$0")/.."
-exec go tool gd "$@"
+# `go tool gd` would build gd itself for $GOOS/$GOARCH and then try to run
+# that (GOOS=macos is not even a Go target: "unsupported GOOS/GOARCH pair"),
+# so resolve the host binary with the target cleared and exec it with the
+# target back in the environment, where gd reads it.
+gd="$(GOOS= GOARCH= go tool -n gd)"
+if command -v cygpath >/dev/null 2>&1; then # MSYS2 on Windows: go prints a C:\ path
+	gd="$(cygpath -u "$gd")"
+fi
+exec "$gd" "$@"

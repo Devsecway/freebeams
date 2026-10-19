@@ -1,0 +1,31 @@
+#!/bin/sh
+# Print the release version: config/version in graphics/project.godot, the
+# single source of truth. The Godot exports fall back to it for their bundle
+# and file versions, the app reads it at startup (internal/app/version.go),
+# and the packaging scripts name their artifacts with it.
+#   bin/version            -> 0.1.0
+#   bin/version --check vX -> fails unless X is the version (release.yml)
+set -e
+cd "$(dirname "$0")/.."
+v="$(sed -n 's/^config\/version="\(.*\)"$/\1/p' graphics/project.godot)"
+if [ -z "$v" ]; then
+	echo "bin/version: no config/version in graphics/project.godot" >&2
+	exit 1
+fi
+case "${1:-}" in
+"")
+	echo "$v"
+	;;
+--check)
+	tag="${2#v}"
+	if [ "$tag" != "$v" ]; then
+		echo "bin/version: tag ${2:-} does not match config/version $v in graphics/project.godot" >&2
+		exit 1
+	fi
+	echo "$v"
+	;;
+*)
+	echo "usage: bin/version [--check vX.Y.Z]" >&2
+	exit 2
+	;;
+esac
