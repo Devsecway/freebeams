@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- FreeBeams icon variant c: three rays -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1A1750"/>
+      <stop offset="1" stop-color="#4740D8"/>
+    </linearGradient>
+    <clipPath id="tileClip"><rect x="100" y="100" width="824" height="824" rx="232"/></clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="232" fill="url(#tile)"/>
+  <g clip-path="url(#tileClip)">
+  <polygon points="321.7,727.8 278.3,720.2 293.9,113.7 514.5,152.6" fill="#FFC94D" fill-opacity="0.95"/>
+  <circle cx="404.2" cy="133.1" r="112" fill="#FFC94D" fill-opacity="0.95"/>
+  <polygon points="317.3,737.5 282.7,710.5 605.8,150.7 782.3,288.6" fill="#FFC94D" fill-opacity="1.0"/>
+  <circle cx="694.0" cy="219.7" r="112" fill="#FFC94D" fill-opacity="1.0"/>
+  <polygon points="308.9,744.1 291.1,703.9 802.6,377.6 893.7,582.3" fill="#FFC94D" fill-opacity="0.95"/>
+  <circle cx="848.1" cy="480.0" r="112" fill="#FFC94D" fill-opacity="0.95"/>
+  </g>
+  <circle cx="300.0" cy="724.0" r="90" fill="#FFFFFF" fill-opacity="0.35"/>
+  <circle cx="300.0" cy="724.0" r="60" fill="#FFFFFF"/>
+</svg>
