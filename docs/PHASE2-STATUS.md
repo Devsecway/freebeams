@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 583 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback and tile-menu blocks)
+test/smoke.sh          # 586 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -312,7 +312,7 @@ Recorded 2026-10-19 on the same machine (the HDMI TV was not detected: the outpu
 pixel checks read the output window). The right-click and footer-gear menus of the media and presentation tiles now
 follow EasyWorship's (UI-SPEC §3.6 lists both menus and what is deliberately left out). "smoke: X" names a check in the
 `# ---- item menus` section of `test/smoke.sh` (100 checks, between the search and quit sections; the full run is
-583 checks and passed on 2026-10-19 with log hygiene clean).
+586 checks and passed on 2026-10-19 with log hygiene clean; the Logo screen's default is the FreeBeams logo on the brand gradient since the rename, see docs/branding/README.md).
 
 | Criterion | Status | Verification |
 |---|---|---|

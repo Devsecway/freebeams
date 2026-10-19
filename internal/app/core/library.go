@@ -53,9 +53,6 @@ func ImportSummary(r easyworship.Report) string {
 	return strings.Join(parts, "; ")
 }
 
-// EWImagesDir is EasyWorship's shared image folder on macOS.
-const EWImagesDir = "/Users/Shared/Softouch/Easyworship/Default/Resources/Images"
-
 // LogoGradient is the default logo background: a dark gradient.
 func LogoGradient() models.Background {
 	return models.Background{Kind: models.BackgroundGradient, Color: models.Hex(0x1B2735), Color2: models.Hex(0x090A0F)}
