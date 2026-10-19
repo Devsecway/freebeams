@@ -37,6 +37,7 @@ type MainWindow struct {
 	Resources       *ResourceTabs     `gd:"-"`
 	Songs           *SongLibraryPanel `gd:"-"`
 	Scriptures      *ScripturePanel   `gd:"-"`
+	Media           *MediaPanel       `gd:"-"`
 	ResourcePreview *MonitorHost      `gd:"-"` // host slot for the resource preview
 	Editor          *SongEditor       `gd:"-"`
 	Confirm         *ConfirmDialog    `gd:"-"`
@@ -359,10 +360,11 @@ func (w *MainWindow) buildResourcePages() Control.Instance {
 	host.SetClipContents(true)
 	w.Songs = NewSongLibraryPanel()
 	w.Scriptures = NewScripturePanel()
+	w.Media = NewMediaPanel()
 	w.pages = []Control.Instance{
 		w.Songs.AsControl(),
 		w.Scriptures.AsControl(),
-		placeholderPage(),
+		w.Media.AsControl(),
 		placeholderPage(),
 		placeholderPage(),
 	}

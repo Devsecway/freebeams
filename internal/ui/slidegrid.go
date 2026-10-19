@@ -13,6 +13,7 @@ import (
 	"graphics.gd/classdb/InputEventKey"
 	"graphics.gd/classdb/InputEventMouseButton"
 	"graphics.gd/classdb/ScrollContainer"
+	"graphics.gd/classdb/TextServer"
 	"graphics.gd/variant/Object"
 	"graphics.gd/variant/Vector2"
 )
@@ -22,6 +23,9 @@ import (
 type SlideGridItem struct {
 	Label  string
 	Number int
+	// Badge is drawn where the number goes when Number is 0 (e.g. a media
+	// item's duration or status).
+	Badge string
 }
 
 // Default tile geometry (TsdSlideSelector).
@@ -47,6 +51,8 @@ type SlideGrid struct {
 	OnSelect func(i int) `gd:"-"`
 	// OnActivate reports a double-click or Enter on a tile.
 	OnActivate func(i int) `gd:"-"`
+	// OnContextMenu reports a right-click on a tile (after selecting it).
+	OnContextMenu func(i int) `gd:"-"`
 
 	items    []SlideGridItem
 	selected int
@@ -279,12 +285,17 @@ func (t *slideTile) Draw() {
 	f := fwFont(c, "regular")
 	ly := float32(th.Y + th.H)
 	lr := rect(float32(th.X)+1, ly, float32(th.W)-2, tileLabelH)
-	num := ""
+	num := item.Badge
 	if item.Number > 0 {
 		num = strconv.Itoa(item.Number)
 	}
+	badgeW := float32(22)
+	if item.Number == 0 && num != "" {
+		badgeW = min(f.MoreArgs().GetStringSize(num, GUI.HorizontalAlignmentLeft, -1, fontCaption, 0,
+			TextServer.DirectionAuto, TextServer.OrientationHorizontal).X+6, lr.Size.X/2)
+	}
 	drawText(ci, f, fontCaption, lr, num, GUI.HorizontalAlignmentRight, textColor)
-	lr.Size.X -= 22
+	lr.Size.X -= badgeW
 	drawText(ci, f, fontCaption, lr, item.Label, GUI.HorizontalAlignmentLeft, textColor)
 }
 
@@ -293,13 +304,22 @@ func (t *slideTile) GuiInput(ev InputEvent.Instance) {
 	if !ok || !mb.AsInputEvent().IsPressed() {
 		return
 	}
-	if mb.ButtonIndex() != Input.MouseButtonLeft {
+	switch mb.ButtonIndex() {
+	case Input.MouseButtonLeft:
+		t.grid.AsControl().GrabFocus()
+		t.grid.userSelect(t.index)
+		if mb.DoubleClick() {
+			t.grid.userActivate(t.index)
+		}
+	case Input.MouseButtonRight:
+		if t.grid.OnContextMenu == nil {
+			return
+		}
+		t.grid.AsControl().GrabFocus()
+		t.grid.userSelect(t.index)
+		t.grid.OnContextMenu(t.index)
+	default:
 		return
-	}
-	t.grid.AsControl().GrabFocus()
-	t.grid.userSelect(t.index)
-	if mb.DoubleClick() {
-		t.grid.userActivate(t.index)
 	}
 	acceptEvent(t.AsControl())
 }
