@@ -140,6 +140,7 @@ func TestSearchMedia(t *testing.T) {
 		{Path: "/Resources/Videos/plexus.mp4", Title: "Plexus Orange"},
 		{Path: "/Other/100%_done.png", Title: "100%_done"},
 		{Path: "/Other/Zebra.webp", Title: "Zebra"},
+		{Path: "/Other/Café Lumière.jpg"},
 	}
 	if err := st.SaveMediaItems(ctx, seed); err != nil {
 		t.Fatal(err)
@@ -151,8 +152,11 @@ func TestSearchMedia(t *testing.T) {
 		limit int
 		want  []string
 	}{
-		{"all, by title", "", "", 0, []string{"100%_done", "Boho Cross White Corner Cross", "Plexus Orange", "Snowfall Loop 02 Still", "The Cross Loop 04 Still", "Zebra"}},
-		{"images only", "", models.MediaImage, 0, []string{"100%_done", "Snowfall Loop 02 Still", "The Cross Loop 04 Still", "Zebra"}},
+		{"all, by title", "", "", 0, []string{"100%_done", "Boho Cross White Corner Cross", "Café Lumière", "Plexus Orange", "Snowfall Loop 02 Still", "The Cross Loop 04 Still", "Zebra"}},
+		{"images only", "", models.MediaImage, 0, []string{"100%_done", "Café Lumière", "Snowfall Loop 02 Still", "The Cross Loop 04 Still", "Zebra"}},
+		{"diacritics folded", "cafe lumiere", "", 0, []string{"Café Lumière"}},
+		{"accented query, any case", "LUMIÈRE", "", 0, []string{"Café Lumière"}},
+		{"limit applies to the matches", "cross", "", 1, []string{"Boho Cross White Corner Cross"}},
 		{"videos only", "", models.MediaVideo, 0, []string{"Boho Cross White Corner Cross", "Plexus Orange"}},
 		{"word, any case", "CROSS", "", 0, []string{"Boho Cross White Corner Cross", "The Cross Loop 04 Still"}},
 		{"word and kind", "cross", models.MediaVideo, 0, []string{"Boho Cross White Corner Cross"}},
@@ -174,7 +178,7 @@ func TestSearchMedia(t *testing.T) {
 			}
 		})
 	}
-	counts := map[models.MediaKind]int{"": 6, models.MediaImage: 4, models.MediaVideo: 2}
+	counts := map[models.MediaKind]int{"": 7, models.MediaImage: 5, models.MediaVideo: 2}
 	for kind, want := range counts {
 		if n, err := st.CountMedia(ctx, kind); err != nil || n != want {
 			t.Errorf("CountMedia(%q) = %d, %v; want %d", kind, n, err, want)

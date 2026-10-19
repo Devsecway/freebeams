@@ -181,31 +181,26 @@ func (s *Store) DeleteMedia(ctx context.Context, id int64) error {
 }
 
 // SearchMedia lists media items whose title or path contains every word of
-// query (case-insensitive), of the given kind ("" for both), ordered by
-// title. An empty query lists all. limit <= 0 means no limit.
+// query (case- and diacritic-insensitive, like the song search), of the
+// given kind ("" for both), ordered by title. An empty query lists all.
+// limit <= 0 means no limit.
+//
+// The words are matched in Go (fold), so the rows are read in title order
+// and the limit applies to the matches.
 func (s *Store) SearchMedia(ctx context.Context, query string, kind models.MediaKind, limit int) ([]models.Media, error) {
-	if limit <= 0 {
-		limit = -1
-	}
-	var (
-		where []string
-		args  []any
-	)
-	if kind != "" {
-		where = append(where, `kind = ?`)
-		args = append(args, string(kind))
-	}
-	for _, w := range strings.Fields(strings.ToLower(query)) {
-		pat := "%" + likeEscape(w) + "%"
-		where = append(where, `(lower(title) LIKE ? ESCAPE '\' OR lower(path) LIKE ? ESCAPE '\')`)
-		args = append(args, pat, pat)
+	terms := textTerms(query)
+	sqlLimit := limit
+	if sqlLimit <= 0 || len(terms) > 0 {
+		sqlLimit = -1
 	}
 	q := `SELECT ` + mediaColumns + ` FROM media`
-	if len(where) > 0 {
-		q += ` WHERE ` + strings.Join(where, ` AND `)
+	var args []any
+	if kind != "" {
+		q += ` WHERE kind = ?`
+		args = append(args, string(kind))
 	}
 	q += ` ORDER BY title COLLATE NOCASE, id LIMIT ?`
-	args = append(args, limit)
+	args = append(args, sqlLimit)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search media %q: %w", query, err)
@@ -217,18 +212,18 @@ func (s *Store) SearchMedia(ctx context.Context, query string, kind models.Media
 		if err != nil {
 			return nil, fmt.Errorf("search media %q: %w", query, err)
 		}
+		if !matchesAll(terms, m.Title, m.Path) {
+			continue
+		}
 		out = append(out, m)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("search media %q: %w", query, err)
 	}
 	return out, nil
-}
-
-// likeEscape escapes the LIKE wildcards in a literal word (ESCAPE '\').
-func likeEscape(w string) string {
-	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-	return r.Replace(w)
 }
 
 // CountMedia returns the number of media items of a kind ("" for all).
