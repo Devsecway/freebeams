@@ -22,6 +22,8 @@ type ScheduleRow struct {
 	Title    string
 	Subtitle string
 	Live     bool
+	// Theme is the name of the item's theme (checked in the Theme submenu).
+	Theme string
 }
 
 // Row geometry (TsdScheduleSelector, large view).
@@ -47,18 +49,23 @@ type ScheduleList struct {
 	OnActivate func(i int)        `gd:"-"` // double-click / Enter
 	OnRemove   func(i int)        `gd:"-"` // context menu "Remove" or Delete key
 	OnMove     func(from, to int) `gd:"-"` // context menu Move Up / Move Down
+	// OnSetTheme reports a choice in the context menu's Theme submenu: theme
+	// index (into SetThemeNames) for row i.
+	OnSetTheme func(i, theme int) `gd:"-"`
 
 	rows       []ScheduleRow
 	selected   int
 	factory    func(i int) Control.Instance
 	thumbnails bool
+	themes     []string // Theme submenu entries
 
-	scroll  ScrollContainer.Instance
-	list    VBoxContainer.Instance
-	views   []*scheduleRowView
-	menu    PopupMenu.Instance
-	menuRow int
-	built   bool
+	scroll    ScrollContainer.Instance
+	list      VBoxContainer.Instance
+	views     []*scheduleRowView
+	menu      PopupMenu.Instance
+	themeMenu PopupMenu.Instance
+	menuRow   int
+	built     bool
 }
 
 // NewScheduleList creates an empty schedule list.
@@ -85,10 +92,28 @@ func NewScheduleList() *ScheduleList {
 	s.menu.MoreArgs().AddItem("Move Item Up", schedMenuUp, 0)
 	s.menu.MoreArgs().AddItem("Move Item Down", schedMenuDown, 0)
 	s.menu.AddSeparator()
+	s.themeMenu = PopupMenu.New()
+	s.themeMenu.OnIdPressed(func(id int) {
+		if s.OnSetTheme != nil && s.menuRow >= 0 && s.menuRow < len(s.rows) && id >= 0 && id < len(s.themes) {
+			s.OnSetTheme(s.menuRow, id)
+		}
+	})
+	// The submenu is named and referenced by name: passing the node itself
+	// (add_submenu_node_item) trips graphics.gd's ownership check.
+	s.themeMenu.AsNode().SetName("ThemeMenu")
+	s.menu.AsNode().AddChild(s.themeMenu.AsNode())
+	s.menu.AddSubmenuItem("Theme", "ThemeMenu")
+	s.menu.AddSeparator()
 	s.menu.MoreArgs().AddItem("Remove Item from Schedule", schedMenuRemove, 0)
 	s.menu.OnIdPressed(s.menuPressed)
 	s.AsNode().AddChild(s.menu.AsNode())
 	return s
+}
+
+// SetThemeNames sets the themes the context menu's Theme submenu offers (the
+// per-item theme override), in the order OnSetTheme reports them.
+func (s *ScheduleList) SetThemeNames(names []string) {
+	s.themes = append([]string(nil), names...)
 }
 
 // SetRows replaces the rows. The selection is kept when still in range.
@@ -225,6 +250,20 @@ func (s *ScheduleList) showMenu(i int) {
 	s.menuRow = i
 	s.menu.SetItemDisabled(0, i <= 0)
 	s.menu.SetItemDisabled(1, i >= len(s.rows)-1)
+	// The Theme submenu: one radio entry per theme, the row's own checked.
+	s.themeMenu.Clear()
+	current := ""
+	if i >= 0 && i < len(s.rows) {
+		current = s.rows[i].Theme
+	}
+	for k, name := range s.themes {
+		s.themeMenu.MoreArgs().AddRadioCheckItem(name, k, 0)
+		s.themeMenu.SetItemChecked(k, name == current)
+	}
+	if len(s.themes) == 0 {
+		s.themeMenu.MoreArgs().AddItem("No themes", -1, 0)
+		s.themeMenu.SetItemDisabled(0, true)
+	}
 	popupAtMouse(s.menu)
 }
 

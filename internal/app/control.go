@@ -41,7 +41,7 @@ func (a *App) flushReplies() {
 // state builds the GET /state document.
 func (a *App) state() core.State {
 	_, resTitle, resCaption := a.resourcePreviewFrame()
-	dialog := core.DialogState{Editor: a.win.Editor.Visible(), Alerts: len(a.alerts)}
+	dialog := core.DialogState{Editor: a.win.Editor.Visible(), ThemeEditor: a.win.ThemeEditor.Visible(), Alerts: len(a.alerts)}
 	if a.win.Confirm.Visible() {
 		dialog.Confirm = a.win.Confirm.Title()
 	}
@@ -69,6 +69,7 @@ func (a *App) state() core.State {
 		},
 		Media:         a.mediaStateDoc(),
 		Presentations: a.presentationsStateDoc(),
+		Themes:        a.themesStateDoc(),
 		Resource:      core.ResourceState{Title: resTitle, Caption: resCaption},
 		Splitters:     a.splitterPositions(),
 		Import:        a.importState,
@@ -136,6 +137,10 @@ type actionArgs struct {
 	Delta     float64 `json:"delta"`   // drag-split: logical pixels per frame
 	Steps     int     `json:"steps"`   // drag-split: number of frames to drag
 	Burst     int     `json:"burst"`   // drag-split: mouse motions per frame (default 1)
+
+	// Themes (themes.go).
+	Theme *models.Theme `json:"theme"` // save-theme: the theme to save (id 0 inserts)
+	Item  *int          `json:"item"`  // apply-theme: schedule row (default: the selected one)
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -463,7 +468,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}
@@ -480,6 +485,8 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(SceneTree.Get(a.AsNode()).Root())
 	case "editor":
 		png, err = render.WindowScreenshot(a.win.Editor.AsWindow())
+	case "theme-editor":
+		png, err = render.WindowScreenshot(a.win.ThemeEditor.AsWindow())
 	case "dialog":
 		png, err = render.WindowScreenshot(a.win.Confirm.AsWindow())
 	case "message":

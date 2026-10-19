@@ -676,6 +676,77 @@ act "search presentations" search-presentations '{"q":"zzz-nothing"}' 's["presen
 act "all presentations" search-presentations '{"q":""}' "s[\"presentations\"][\"results\"] == $PRES_COUNT"
 act "Songs tab (presentations)" tab '{"tab":"songs"}' 's["tab"] == 0'
 act "save the schedule (presentations)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+# ---- themes --------------------------------------------------------------------------
+# The Themes tab lists the seeded defaults. A theme with an unusual solid
+# background reaches the output through the songs-default setting and through
+# a per-item override, and editing a theme that is live re-renders the output.
+act "Themes tab" tab '{"tab":"themes"}' 's["tab"] == 4'
+act "themes listed (seeded defaults)" themes '' 's["themes"]["count"] == 2 and s["themes"]["songDefault"] == "Default Song" and s["themes"]["scriptureDefault"] == "Default Scripture"'
+act "select the song default theme" select-theme '{"name":"Default Song"}' 's["themes"]["current"] == "Default Song" and s["resource"]["title"] == "Default Song" and s["resource"]["caption"] == "Verse 1 · 1 / 1"'
+wait_idle
+shot themes-tab main
+pixel "themes tab has content" "$OUT/themes-tab.png" notblank
+# A copy of the song default with a solid magenta background (#991a80).
+THEME_JSON="$(post get-theme '{"name":"Default Song"}')"
+check "get-theme returns the theme" "$THEME_JSON" 'd["theme"]["name"] == "Default Song" and d["theme"]["font"]["size"] > 0'
+recolor() { # THEME-RESPONSE NAME RRGGBB [ID]: a save-theme body with that name and solid color
+	python3 -c 'import json,sys
+t = json.loads(sys.argv[1])["data"]["theme"]
+t["name"] = sys.argv[2]
+t["id"] = int(sys.argv[4]) if len(sys.argv) > 4 else t["id"]
+c = sys.argv[3]
+t["background"] = {"kind": "color", "color": {"R": int(c[0:2], 16) / 255, "G": int(c[2:4], 16) / 255, "B": int(c[4:6], 16) / 255, "A": 1}}
+print(json.dumps({"theme": t}))' "$@"
+}
+act "save a new theme" save-theme "$(recolor "$THEME_JSON" "Smoke Magenta" 991a80 0)" 's["themes"]["count"] == 3 and "Smoke Magenta" in s["themes"]["names"] and s["themes"]["current"] == "Smoke Magenta"'
+act "make it the songs default" set-default-theme '{"name":"Smoke Magenta","kind":"song"}' 's["themes"]["songDefault"] == "Smoke Magenta" and s["themes"]["scriptureDefault"] == "Default Scripture"'
+act "search amazing (themes)" search-songs '{"q":"amazing"}' 's["songs"]["results"] >= 1'
+act "a new song deck picks up the default" select-song '{"title":"Amazing Grace"}' 's["preview"]["title"] == "Amazing Grace"'
+act "the themed song goes live" go-live '' 's["live"]["title"] == "Amazing Grace"'
+wait_idle
+shot theme-magenta-output output
+shot theme-magenta-main main
+pixel "the output shows the theme background" "$OUT/theme-magenta-output.png" has 991a80 0.0 0.0 0.2 0.08 5000
+pixel "the live monitor shows the theme background" "$OUT/theme-magenta-main.png" has 991a80 0.68 0.42 0.91 0.61 2000
+# Editing the live theme (same id, teal background) re-renders the output.
+act "edit the live theme" save-theme "$(recolor "$(post get-theme '{"name":"Smoke Magenta"}')" "Smoke Magenta" 1a8099)" 's["themes"]["count"] == 3 and s["live"]["title"] == "Amazing Grace"'
+wait_idle
+shot theme-teal-output output
+pixel "the output follows the edited theme" "$OUT/theme-teal-output.png" has 1a8099 0.0 0.0 0.2 0.08 5000
+pixel "the old background is gone" "$OUT/theme-teal-output.png" lacks 991a80 0.0 0.0 0.2 0.08 50
+# Per-item override from the schedule.
+act "look up a scripture (themes)" reference '{"text":"jn 3:16"}' 's["scripture"]["passage"] == "John 3:16"'
+act "add it to the schedule (themes)" add-to-schedule '{"source":"scripture"}' 's["schedule"]["items"][-1] == "John 3:16"'
+THEME_ROW=$(( $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST") - 1 ))
+act "select the scripture item" select-schedule "{\"index\":$THEME_ROW}" "s[\"preview\"][\"title\"] == \"John 3:16\" and s[\"schedule\"][\"selected\"] == $THEME_ROW"
+act "scripture item live with the scripture default" go-live '' 's["live"]["title"] == "John 3:16"'
+wait_idle
+shot theme-scripture-output output
+pixel "the scripture item does not use the song theme" "$OUT/theme-scripture-output.png" lacks 1a8099 0.0 0.0 0.2 0.08 50
+act "apply the theme to the selected schedule item" apply-theme '{"name":"Smoke Magenta"}' 's["schedule"]["dirty"] and s["live"]["title"] == "John 3:16"'
+wait_idle
+shot theme-override-output output
+pixel "the per-item override is live" "$OUT/theme-override-output.png" has 1a8099 0.0 0.0 0.2 0.08 5000
+# Defaults cannot be deleted; copies and the editor.
+act "deleting a default theme is refused" delete-theme '{"name":"Smoke Magenta","confirm":true}' 'not r["ok"] and "default theme" in r["error"]'
+wait_idle
+check "the refusal is shown to the operator" "$LAST" 's["dialog"]["message"]["title"] == "Delete Theme" and s["themes"]["count"] == 3'
+act "dismiss the refusal" dismiss '' 'not s["dialog"].get("message")'
+act "restore the songs default" set-default-theme '{"name":"Default Song","kind":"song"}' 's["themes"]["songDefault"] == "Default Song"'
+act "duplicate a theme" duplicate-theme '{"name":"Smoke Magenta"}' 's["themes"]["count"] == 4 and s["themes"]["current"] == "Smoke Magenta Copy"'
+act "open the theme editor on it" editor '{"mode":"theme"}' 's["dialog"]["themeEditor"] and s["themes"]["editing"] == "Smoke Magenta Copy" and s["focus"] == "dialog"'
+wait_idle
+shot theme-editor theme-editor
+pixel "theme editor has content" "$OUT/theme-editor.png" notblank
+act "hotkeys are off while the theme editor is open" key '{"name":"n"}' 'not d["consumed"]'
+act "close the theme editor" editor '{"mode":"close"}' 'not s["dialog"].get("themeEditor") and s["focus"] != "dialog"'
+act "delete asks first (theme)" delete-theme '{"name":"Smoke Magenta Copy"}' 's["dialog"]["confirm"] == "Delete Theme"'
+act "cancel the theme delete" dismiss '' 's["focus"] != "dialog" and s["themes"]["count"] == 4'
+act "delete the copy" delete-theme '{"name":"Smoke Magenta Copy","confirm":true}' 's["themes"]["count"] == 3'
+act "delete the smoke theme" delete-theme '{"name":"Smoke Magenta","confirm":true}' 's["themes"]["count"] == 2 and s["live"]["title"] == "John 3:16"'
+act "remove the scripture item (themes)" remove-schedule "{\"index\":$THEME_ROW}" "len(s[\"schedule\"][\"items\"]) == $THEME_ROW"
+act "save the schedule (themes)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+act "Songs tab (themes)" tab '{"tab":"songs"}' 's["tab"] == 0'
 
 # ---- quit ------------------------------------------------------------------------------------
 LAST="$(post close)"

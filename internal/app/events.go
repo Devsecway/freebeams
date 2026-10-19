@@ -197,6 +197,8 @@ func (a *App) addCurrentToSchedule(cmd *control.Command) {
 		return
 	case ui.TabPresentations:
 		a.addPresentationToSchedule(cmd)
+	case ui.TabThemes:
+		a.answer(cmd, errors.New("themes are applied to schedule items, not added"))
 		return
 	}
 	if a.songSel < 0 {
@@ -207,7 +209,7 @@ func (a *App) addCurrentToSchedule(cmd *control.Command) {
 }
 
 func (a *App) addSongToSchedule(song models.Song) {
-	a.addToSchedule(core.SongItem(song, core.SongDeck(song)))
+	a.addToSchedule(core.SongItem(song, a.newSongDeck(song)))
 }
 
 // addScriptureToSchedule adds the looked-up passage. After a failed or empty
@@ -415,7 +417,7 @@ func (a *App) useSong(song models.Song, purpose songPurpose) {
 		a.win.Editor.Open(song, models.FormatLyrics(song.Sections))
 		return
 	}
-	deck := core.SongDeck(song)
+	deck := a.newSongDeck(song)
 	a.songRes = resourcePreview{deck: &deck, index: 0}
 	switch purpose {
 	case songSchedule:
@@ -461,7 +463,7 @@ func (a *App) saveSong(song models.Song, lyrics string, cmd *control.Command) {
 			log.Printf("[freeworship] saved song %d %q", song.ID, song.Title)
 			if isNew || current {
 				a.song = &song
-				deck := core.SongDeck(song)
+				deck := a.newSongDeck(song)
 				a.songRes = resourcePreview{deck: &deck}
 				a.previewDeck(&deck)
 			}
@@ -622,7 +624,7 @@ func (a *App) lookupReference(text string, cmd *control.Command) {
 				a.setScriptStatus("Could not load "+p.String(), true)
 				return err
 			}
-			deck := core.ScriptureDeck(p, bible.Abbrev, verses)
+			deck := a.newScriptureDeck(p, bible.Abbrev, verses)
 			if len(deck.Slides) == 0 { // no verses, or only empty ones
 				a.clearPassage()
 				a.setScriptStatus("No verses found for "+p.String()+" ("+bible.Abbrev+")", true)

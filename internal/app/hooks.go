@@ -49,8 +49,18 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 			a.useSong(*a.song, songEdit)
 		case "close":
 			a.win.Editor.Close()
+			a.win.ThemeEditor.Close()
+			a.th.editing = nil
+		case "theme": // the theme editor on the selected theme
+			if a.th.sel < 0 || a.th.sel >= len(a.th.list) {
+				cmd.RespondErr(errors.New("editor: no theme selected"))
+				return true
+			}
+			a.editTheme(a.th.sel)
+		case "new-theme":
+			a.newTheme()
 		default:
-			cmd.RespondErr(fmt.Errorf("editor: mode must be new, edit or close"))
+			cmd.RespondErr(fmt.Errorf("editor: mode must be new, edit, theme, new-theme or close"))
 			return true
 		}
 		a.answer(cmd, nil)
@@ -297,6 +307,8 @@ func (a *App) focusTarget(target string) error {
 		c = a.win.Media.Grid().AsControl()
 	case "presentation-grid":
 		c = a.win.Presentations.Grid().AsControl()
+	case "theme-grid":
+		c = a.win.Themes.Grid().AsControl()
 	default:
 		return fmt.Errorf("focus: unknown target %q", target)
 	}

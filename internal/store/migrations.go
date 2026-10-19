@@ -111,6 +111,18 @@ CREATE TABLE presentations (
 );
 CREATE INDEX presentations_title ON presentations (title COLLATE NOCASE);
 `,
+	// 4: themes (the look of slides). json is the models.Theme; name is
+	// duplicated for listing and ordering.
+	`
+CREATE TABLE themes (
+	id      INTEGER PRIMARY KEY,
+	name    TEXT    NOT NULL,
+	json    TEXT    NOT NULL,
+	created TEXT    NOT NULL,
+	updated TEXT    NOT NULL
+);
+CREATE INDEX themes_name ON themes (name COLLATE NOCASE);
+`,
 }
 
 // migrate brings the schema up to date. Each migration runs in its own

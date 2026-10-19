@@ -20,6 +20,7 @@ func RegisterAll() {
 	classdb.Register[tabStrip]()
 	classdb.Register[tabButton]()
 	classdb.Register[PresentationPanel]()
+	classdb.Register[ThemePanel]()
 	classdb.Register[MainWindow]()
 	classdb.Register[demoDriver]()
 	classdb.Register[demoThumb]()
