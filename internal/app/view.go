@@ -58,6 +58,10 @@ type viewCache struct {
 	presRows   []ui.PresentationRow
 	presSel    int
 	presStatus string
+
+	// The tile menus' View ▸ / Sort by ▸ (menus_items.go).
+	mediaView, mediaSort string
+	presView, presSort   string
 }
 
 func newViewCache() viewCache {
@@ -323,6 +327,11 @@ func (a *App) render() {
 		v.mediaStatus = a.md.status
 		w.Media.SetCountText(a.md.status)
 	}
+	if view, sort := string(a.md.view), string(a.md.sort); view != v.mediaView || sort != v.mediaSort || !v.init {
+		v.mediaView, v.mediaSort = view, sort
+		w.Media.SetView(view)
+		w.Media.SetSort(sort)
+	}
 
 	// Presentations tab, as the Media tab: tiles rebuilt when the list
 	// changes or when rendered pages / badges arrived.
@@ -341,6 +350,11 @@ func (a *App) render() {
 	if a.pr.status != v.presStatus || !v.init {
 		v.presStatus = a.pr.status
 		w.Presentations.SetCountText(a.pr.status)
+	}
+	if view, sort := string(a.pr.view), string(a.pr.sort); view != v.presView || sort != v.presSort || !v.init {
+		v.presView, v.presSort = view, sort
+		w.Presentations.SetView(view)
+		w.Presentations.SetSort(sort)
 	}
 	// Themes tab: tiles (and their thumbnails) follow the list and defaults;
 	// the schedule's Theme submenu lists the same names.

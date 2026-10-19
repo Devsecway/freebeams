@@ -58,6 +58,10 @@ type presentationState struct {
 	again    bool                          // rerun when the current pass ends
 	progress map[int64]core.RenderProgress // render progress by presentation id
 	failed   map[int64]bool                // items whose render failed this session (not retried)
+
+	// The tile menu's View ▸ and Sort by ▸, persisted (menus_items.go).
+	view core.ItemView
+	sort core.ItemSort
 }
 
 // presentationFilters are the native dialog filters for Add Presentation….
@@ -86,6 +90,7 @@ func (a *App) initPresentations() {
 			return nil
 		}
 	})
+	a.pr.view, a.pr.sort = a.loadItemPrefs(core.SettingPresentationsView, core.SettingPresentationsSort)
 	a.loadPresentations("", nil)
 	a.startPresentationImport()
 }
@@ -130,6 +135,7 @@ func (a *App) wirePresentations() {
 	pp.OnAddToSchedule = func(i int) { a.event(func() { a.selectPresentation(i, presSchedule, nil) }) }
 	pp.OnRemove = func(i int) { a.event(func() { a.removePresentation(i) }) }
 	pp.OnAdd = func() { a.event(a.addPresentationDialog) }
+	a.wirePresentationMenu() // the tile menu's further items (menus_items.go)
 }
 
 // presentationRows builds the grid rows (title + badge) for the listed items.
@@ -141,6 +147,8 @@ func (a *App) presentationRows() []ui.PresentationRow {
 			Title: p.Title,
 			Badge: core.PresentationBadge(p, a.pr.progress[p.ID], a.pr.failed[p.ID], caps),
 			Thumb: core.PresentationThumb(p, a.pr.cache).Path,
+
+			Rendered: p.Rendered(),
 		}
 	}
 	return rows
@@ -156,6 +164,7 @@ func (a *App) presentationsStateDoc() core.PresentationsState {
 	if p := a.pr.item; p != nil {
 		st.Current, st.CurrentPages, st.CurrentPartial, st.CurrentRenderer = p.Title, p.Pages, p.Partial, p.Renderer
 	}
+	st.View, st.Sort = string(a.pr.view), string(a.pr.sort)
 	for _, p := range a.pr.list {
 		if !p.Rendered() {
 			st.Pending++
@@ -195,7 +204,7 @@ func (a *App) loadPresentations(q string, cmd *control.Command) {
 				a.pr.status = "Search failed"
 				return err
 			}
-			a.pr.list = rows
+			a.pr.list = core.SortPresentations(rows, a.pr.sort)
 			a.pr.ver++
 			a.pr.sel = -1
 			for _, p := range rows {

@@ -480,7 +480,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}

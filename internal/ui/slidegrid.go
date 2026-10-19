@@ -41,6 +41,9 @@ const (
 // TileWidths are the view-sizer presets: Small, Medium, Large.
 var TileWidths = []float64{110, DefaultTileWidth, 210}
 
+// rowThumbW is the thumbnail width of a Details row (SlideGrid.SetDetails).
+const rowThumbW = 64
+
 // SlideGrid is the Preview / Live slide selector: a wrapping grid of 16:9
 // thumbnails with a label row. The selected tile is highlighted; the Live
 // grid's selection is the live slide. Thumbnails come from an injected factory.
@@ -59,6 +62,7 @@ type SlideGrid struct {
 	marked   int
 	tileW    float64
 	factory  func(i int) Control.Instance
+	details  bool // the Details list: one row per item (SetDetails)
 
 	scroll ScrollContainer.Instance
 	flow   *tileFlow
@@ -130,9 +134,22 @@ func (g *SlideGrid) SetTileWidth(px float64) {
 // TileWidth returns the minimum tile width.
 func (g *SlideGrid) TileWidth() float64 { return g.tileW }
 
+// SetDetails switches between the thumbnail grid and the Details list (one
+// row per item: a small thumbnail with the label beside it).
+func (g *SlideGrid) SetDetails(on bool) {
+	if g.details == on {
+		return
+	}
+	g.details = on
+	g.render()
+}
+
+// Details reports whether the Details list is shown.
+func (g *SlideGrid) Details() bool { return g.details }
+
 func (g *SlideGrid) layout(width float64) uicore.TileGrid {
 	return uicore.TileGrid{Width: width, MinTileW: g.tileW, Gap: tileGap, Pad: tilePad,
-		Inset: tileInset, LabelH: tileLabelH, Aspect: 16.0 / 9.0}
+		Inset: tileInset, LabelH: tileLabelH, Aspect: 16.0 / 9.0, Rows: g.details, RowThumbW: rowThumbW}
 }
 
 // layoutWidth is the width the tiles are laid out in: the scroll area minus the
@@ -284,13 +301,15 @@ func (t *slideTile) Draw() {
 	item := t.grid.items[t.index]
 	selected := t.index == t.grid.selected
 	textColor := fwColor(c, "text")
-	th := t.grid.layout(float64(size.X)).Thumb(float64(size.X), float64(size.Y))
+	l := t.grid.layout(float64(size.X))
+	th := l.Thumb(float64(size.X), float64(size.Y))
+	lb := l.Label(float64(size.X), float64(size.Y))
 	switch {
 	case selected:
 		// A muted tile.frame around the thumbnail with the caption bar under
 		// it in tile.caption (EasyWorship's Mac look).
 		fwBox(c, "tile_sel").Draw(ci, rect(0, 0, size.X, size.Y))
-		ci.DrawRect(rect(float32(th.X), float32(th.Y+th.H), float32(th.W), tileLabelH), fwColor(c, "tile_caption"))
+		ci.DrawRect(rect(float32(lb.X)-1, float32(lb.Y), float32(lb.W)+2, float32(lb.H)), fwColor(c, "tile_caption"))
 		textColor = fwColor(c, "tile_text_sel")
 	case t.hover:
 		fwBox(c, "tile_hot").Draw(ci, rect(0, 0, size.X, size.Y))
@@ -300,8 +319,7 @@ func (t *slideTile) Draw() {
 		ci.MoreArgs().DrawRect(rect(float32(th.X)-1, float32(th.Y)-1, float32(th.W)+2, float32(th.H)+2), fwColor(c, "red"), false, 2, false)
 	}
 	f := fwFont(c, "regular")
-	ly := float32(th.Y + th.H)
-	lr := rect(float32(th.X)+1, ly, float32(th.W)-2, tileLabelH)
+	lr := rect(float32(lb.X), float32(lb.Y), float32(lb.W), float32(lb.H))
 	num := item.Badge
 	if item.Number > 0 {
 		num = strconv.Itoa(item.Number)

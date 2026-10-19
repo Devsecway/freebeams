@@ -60,6 +60,10 @@ type mediaState struct {
 	again    bool              // rerun when the current pass ends
 	progress map[int64]float64 // transcode progress by media id
 	failed   map[int64]bool    // items whose derivation failed this session (not retried)
+
+	// The tile menu's View ▸ and Sort by ▸, persisted (menus_items.go).
+	view core.ItemView
+	sort core.ItemSort
 }
 
 // progressInterval throttles transcode progress posts to the main thread.
@@ -91,6 +95,7 @@ func (a *App) initMedia() {
 			return nil
 		}
 	})
+	a.md.view, a.md.sort = a.loadItemPrefs(core.SettingMediaView, core.SettingMediaSort)
 	a.loadMedia("", "", nil)
 }
 
@@ -133,6 +138,7 @@ func (a *App) wireMedia() {
 	m.OnRemove = func(i int) { a.event(func() { a.removeMedia(i) }) }
 	m.OnAddFiles = func() { a.event(a.addMediaFilesDialog) }
 	m.OnAddFolder = func() { a.event(a.addMediaFolderDialog) }
+	a.wireMediaMenu() // the tile menu's further items (menus_items.go)
 }
 
 // mediaRows builds the grid rows (title + badge) for the listed items.
@@ -145,6 +151,8 @@ func (a *App) mediaRows() []ui.MediaRow {
 			Title: m.Title,
 			Badge: core.MediaBadge(m, playable, caps, a.md.progress[m.ID], a.md.failed[m.ID]),
 			Thumb: m.ThumbPath,
+
+			Kind: m.Kind, Aspect: m.Aspect, Repeat: m.Repeat,
 		}
 	}
 	return rows
@@ -160,7 +168,9 @@ func (a *App) mediaStateDoc() core.MediaState {
 	}
 	if a.md.item != nil {
 		st.Current = a.md.item.Title
+		st.Aspect, st.Repeat = string(a.md.item.Aspect.Normalized()), string(a.md.item.Repeat.Normalized())
 	}
+	st.View, st.Sort = string(a.md.view), string(a.md.sort)
 	for _, m := range a.md.list {
 		if media.NeedsThumbnail(m) {
 			st.Pending++
@@ -201,7 +211,7 @@ func (a *App) loadMedia(q string, kind models.MediaKind, cmd *control.Command) {
 				a.md.status = "Search failed"
 				return err
 			}
-			a.md.list = rows
+			a.md.list = core.SortMedia(rows, a.md.sort)
 			a.md.ver++
 			a.md.sel = -1
 			if a.md.item != nil {
@@ -481,6 +491,11 @@ func (a *App) runMediaWork(ctx context.Context, st *store.Store, proc *media.Pro
 		return
 	}
 	save := func(m models.Media) {
+		// The operator may have changed the item's Aspect Ratio / Repeating
+		// since this pass read it (menus_items.go): keep the current choices.
+		if cur, err := st.GetMedia(ctx, m.ID); err == nil {
+			m.Aspect, m.Repeat = cur.Aspect, cur.Repeat
+		}
 		if err := st.SaveMedia(ctx, &m); err != nil {
 			a.post(func() { a.fail("save media "+m.Title, err) })
 			return

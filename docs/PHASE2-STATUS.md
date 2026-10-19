@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 432 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles and search blocks); screenshots and app.log in test/out/
+test/smoke.sh          # 532 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search and tile-menu blocks); screenshots and app.log in test/out/
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -288,6 +288,47 @@ EasyWorship's search-mode choice (title / lyrics / author); the Match column is 
 - `internal/ui/songs.go`: the fifth column and the tooltip in `render`; `internal/ui/uicore/match.go` is new.
   `splitter.go`, `monitor.go`, `events.go`, `icons.go`, `theme.go` and `internal/render` are untouched.
 - `test/smoke.sh`: one block before `# ---- quit`.
+
+## Tile menus (media and presentations)
+
+Recorded 2026-10-19 on the same machine (the HDMI TV was not detected: the output ran windowed at 960×540 and the
+pixel checks read the output window). The right-click and footer-gear menus of the media and presentation tiles now
+follow EasyWorship's (UI-SPEC §3.6 lists both menus and what is deliberately left out). "smoke: X" names a check in the
+`# ---- item menus` section of `test/smoke.sh` (100 checks, between the search and quit sections; the full run is
+532 checks and passed on 2026-10-19 with log hygiene clean).
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Aspect Ratio ▸ Fill / Fit / Stretch and Repeating ▸ Loop / Play Once per media item, persisted | **pass** | Migration 5 (`media.aspect`, `media.repeat`), `models.Media.Aspect` / `Repeat` (`MediaAspect`, `MediaRepeat` with `Valid` / `Normalized` / `Parse…`), `store.SetMediaOptions` (targeted update; the pipeline re-reads the choices before its whole-row `SaveMedia`). `TestMediaAspectAndRepeat`, `TestMediaOptions`. Smoke: `select the square: Fill and Loop by default`, `Aspect Ratio ▸ Fit`, `Aspect Ratio ▸ Stretch`, `Repeating ▸ Play Once`, `Repeating ▸ Loop`, `the aspect ratio is read back from the library`. |
+| The choice reaches the slide: `Background.Fit` / `Background.Loop` from `Media.Background()`, thumbnails included; the renderer letterboxes / stretches images | **pass** | `render.stretchFor` (`KeepAspectCovered` / `KeepAspectCentered` / `Scale`), `normalizeBackground` keeps `Fit` and `Loop` (a video layer re-applies when they change; playback itself reads `Loop` in `video.go`). Smoke, on a 200×200 image with a green top quarter: `Fill covers the canvas: no bars`, `Fill crops the band to the top edge`, `Fit letterboxes: black bars beside the square`, `Fit shows the whole image: the band is a quarter high`, `Stretch fills the canvas: no bars`, `Stretch keeps the band a quarter high` (screenshots `menu-fill-output.png`, `menu-fit-output.png`, `menu-stretch-output.png`). |
+| Use As Logo Background (media item with its aspect ratio; a presentation's page 1) | **pass** | `core.MediaLogo`, `core.PresentationLogo` → `App.setLogo` (the same path as the Options dialog). `TestItemLogos`. Smoke: `Use As Logo Background (media)`, `the logo screen shows the square`, `the logo screen letterboxes like the slide`, `Use As Logo Background (presentation): page 1`, `the logo screen shows the PDF's first page`. |
+| Delete File… moves the file to the Trash and removes the item (macOS: `NSFileManager trashItemAtURL`, no Automation prompt); other platforms leave the item out of the menu | **pass** (macOS) | `trash_darwin.go` / `trash_other.go`; asks first. Smoke: `Delete File… asks first`, `cancel the delete`, `Delete File… (confirmed) trashes the file and drops the item` (the file is checked gone from disk; it lands in the user's Trash as `smoke-trash.png`). |
+| Update items in Schedule rewrites the schedule's snapshots of the item (title, aspect ratio, repeat, poster) | **pass** | `core.UpdateMediaItems` (`TestUpdateMediaItems`); the selected row reloads into Preview. Smoke: `the snapshot still letterboxes (Fit)` (the schedule kept Fit after the library item went back to Fill), `Update items in Schedule`, `the updated snapshot fills the canvas (Fill)`. |
+| Open File Location (Finder `open -R`, Explorer `/select,`, `xdg-open` of the folder) | **pass** | `core.RevealCommand` (`TestRevealCommand`), `App.revealFile` in the background. Smoke: `Open File Location shows the square in the Finder` (last in the section: the Finder window takes the focus). |
+| View ▸ Large / Medium / Small Thumbnails / Details and Sort by ▸ Name / Date Added / Kind, per tab, persisted, also from the footer sizer | **pass** | `core.ItemView` / `ItemSort` (`TestItemViewAndSort`), `core.SortMedia` / `SortPresentations` (`TestSortMedia`, `TestSortPresentations`), settings `ui.media.view|sort`, `ui.presentations.view|sort`. Details is a real list: `uicore.TileGrid.Rows` (`TestTileGridRows`; the row height never depends on the width), `SlideGrid.SetDetails`. Smoke: `View ▸ Small Thumbnails`, `View ▸ Details`, `the media Details list has content` (`media-details.png`), `Sort by ▸ Date Added puts the newest item first`, `Sort by ▸ Kind`, `view and sort survive a reload of the list`, and the presentation equivalents (`presentations-details.png`). |
+| Refresh re-checks every file: missing ones are removed after a question, failed derivations retried, the list reloaded | **pass** | `core.MissingMedia` / `MissingPresentations` / `RefreshQuestion` (`TestMissingFilesAndRefreshQuestion`). Smoke: `Refresh asks about the missing file`, `cancel the refresh`, `Refresh (confirmed) drops the missing file`, `Refresh with nothing missing asks nothing`, `Refresh asks about the missing deck`, `Refresh (confirmed) drops the missing deck`. |
+| Every menu item is a control action | **pass** | `media-menu {item, index\|title, confirm}`, `presentation-menu {…}` (`internal/app/menus_items.go`, chained after the settings actions); `/state.media.aspect|repeat|view|sort`, `/state.presentations.view|sort`. Smoke: `an unknown menu item is refused`, `an unknown tile is refused`, `a presentation menu item needs a tile`. |
+
+Left out on purpose (no disabled placeholders): Edit Video Properties…, Media Usage ▸ and Copy to Theme ▸ (media);
+New / Edit Presentation… (no editor), Import PowerPoint File… (Add Presentation… takes every type), Export
+Presentation File… (no native format) and Update items in Schedule (presentation items re-resolve their pages by
+path). Changing an item's aspect ratio updates the library deck and Preview when it shows the library item; Live and
+the schedule keep their snapshots (EasyWorship's behaviour). The Songs and Scriptures lists already had their menus.
+
+### Shared files touched (tile menus)
+
+- `internal/models/media.go` (`Aspect` / `Repeat` in their own block, the two enums), `internal/models/slide.go`
+  (`Background.Fit` / `Loop`, own block), `internal/store/migrations.go` (migration 5 appended), `internal/store/media.go`
+  (the two columns, `SetMediaOptions`).
+- `internal/render/slideview.go` (+14: `Fit` / `Loop` in `normalizeBackground`, `stretchFor`); `video.go` untouched.
+- `internal/app/control.go` (one line: `handleItemMenuCommand` in the default chain), `core/state.go` (two own
+  blocks), `view.go` (own block in `viewCache`, two projection blocks), `media.go` / `presentations.go` (the `view` /
+  `sort` fields, `wire…Menu()` calls, the row fields, the state fields, the sort on load, the prefs on init; the
+  pipeline's `save` re-reads the options), `core/media.go` (`Fit` in `ThumbBackground` / `StillBackground`).
+- `internal/ui/slidegrid.go` (`SetDetails`, the label rect from `TileGrid.Label`), `uicore/grid.go` (`Rows` /
+  `RowThumbW`, `Label`); `ui/media.go` and `ui/presentations.go` rebuilt around one menu builder each;
+  `ui/itemmenus.go` is new. `mainwindow.go`, `splitter.go`, `monitor.go`, `events.go`, `icons.go` are untouched.
+- `test/smoke.sh`: the `# ---- item menus` block before `# ---- quit`.
 
 ## Remaining for Phase 2
 

@@ -90,13 +90,14 @@ func StillBackground(bg *models.Background) *models.Background {
 	}
 	still := models.Background{Kind: models.BackgroundColor, Color: bg.Color}
 	if bg.Poster != "" {
-		still = models.Background{Kind: models.BackgroundImage, Color: bg.Color, Path: bg.Poster}
+		still = models.Background{Kind: models.BackgroundImage, Color: bg.Color, Path: bg.Poster, Fit: bg.Fit}
 	}
 	return &still
 }
 
 // ThumbBackground is what the media grid draws for an item: its thumbnail
-// file when made, else the image itself for a still, else the plain color.
+// file when made, else the image itself for a still, else the plain color,
+// scaled by the item's aspect ratio (Fit) like the slide.
 func ThumbBackground(m models.Media) models.Background {
 	bg := models.Background{Kind: models.BackgroundColor, Color: models.Hex(0x2A2A2A)}
 	switch {
@@ -104,6 +105,9 @@ func ThumbBackground(m models.Media) models.Background {
 		bg.Kind, bg.Path = models.BackgroundImage, m.ThumbPath
 	case m.Kind == models.MediaImage && m.Path != "":
 		bg.Kind, bg.Path = models.BackgroundImage, m.Path
+	}
+	if bg.Kind == models.BackgroundImage {
+		bg.Color, bg.Fit = models.RGBA{A: 1}, m.Aspect.Normalized()
 	}
 	return bg
 }
