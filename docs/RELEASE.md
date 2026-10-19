@@ -109,7 +109,7 @@ Cutting a release:
 # 1. bump config/version in graphics/project.godot, commit
 # 2. tag and push
 git tag v0.1.0 && git push origin v0.1.0
-# 3. wait for the Release workflow, review the draft at github.com/<org>/freeworship/releases, publish
+# 3. wait for the Release workflow, review the draft at github.com/<org>/freebeams/releases, publish
 ```
 
 ## Verified on 2026-10-19 (macOS 26.6, Apple M3 Max, Godot 4.7.2, go 1.27.2)
