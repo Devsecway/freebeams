@@ -108,6 +108,7 @@ type App struct {
 	songRes resourcePreview // the Scriptures preview derives from verseSelection
 
 	md mediaState // the Media tab (media.go)
+	th themeState // the Themes tab and theme editor (themes.go)
 
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
@@ -176,6 +177,7 @@ func (a *App) Ready() {
 	log.Printf("[freeworship] %d screen(s); output %s", len(screens), map[bool]string{true: "on", false: "off until Live is pressed"}[len(screens) > 1])
 
 	a.startImport()
+	a.initThemes()
 	a.scanEWBibles()
 	a.searchSongs("", nil)
 	a.loadBibles(nil)

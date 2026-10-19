@@ -37,6 +37,10 @@ type viewCache struct {
 	schedVer    int
 	schedRows   []ui.ScheduleRow
 	schedSel    int
+	themesVer   int
+	themeSel    int
+	themeStatus string
+	themeTarget string
 	title       string
 	titleDirty  bool
 	resTitle    string
@@ -48,7 +52,7 @@ type viewCache struct {
 
 func newViewCache() viewCache {
 	return viewCache{previewSel: -2, liveSel: -2, songSel: -2, songsVer: -1, biblesVer: -1, bibleSel: -2,
-		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2}
+		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2, themesVer: -1, themeSel: -2}
 }
 
 // buildUI creates the main window, the monitors and the output, and connects
@@ -148,6 +152,7 @@ func (a *App) buildUI() {
 	}
 
 	a.wireMedia()
+	a.wireThemes()
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -227,7 +232,7 @@ func (a *App) render() {
 	liveItem := core.LiveItemIndex(a.sched, st.Live)
 	rows := make([]ui.ScheduleRow, len(a.sched.Items))
 	for i, it := range a.sched.Items {
-		rows[i] = ui.ScheduleRow{Title: it.Title, Subtitle: it.Subtitle, Live: i == liveItem}
+		rows[i] = ui.ScheduleRow{Title: it.Title, Subtitle: it.Subtitle, Live: i == liveItem, Theme: it.Theme.Name}
 	}
 	if a.schedVer != v.schedVer || !reflect.DeepEqual(rows, v.schedRows) {
 		v.schedVer, v.schedRows = a.schedVer, rows
@@ -300,6 +305,34 @@ func (a *App) render() {
 		w.Media.SetCountText(a.md.status)
 	}
 
+	// Themes tab: tiles (and their thumbnails) follow the list and defaults;
+	// the schedule's Theme submenu lists the same names.
+	if a.th.ver != v.themesVer {
+		v.themesVer = a.th.ver
+		w.Themes.SetItems(a.themeRows())
+		w.Schedule.SetThemeNames(a.themeNames())
+		v.themeSel = -2
+	}
+	if a.th.sel != v.themeSel {
+		v.themeSel = a.th.sel
+		w.Themes.SetSelected(a.th.sel)
+	}
+	if status := core.ThemeCountText(len(a.th.list)); status != v.themeStatus || !v.init {
+		v.themeStatus = status
+		w.Themes.SetCountText(status)
+	}
+	target := ""
+	if a.schedSel >= 0 && a.schedSel < len(a.sched.Items) {
+		target = a.sched.Items[a.schedSel].Title
+	}
+	if target != v.themeTarget || !v.init {
+		v.themeTarget = target
+		w.Themes.SetApplyTarget(target)
+	}
+	if a.th.editing != nil {
+		a.th.editView.SetFrame(editorFrame(*a.th.editing)) // compared by content
+	}
+
 	// Resource preview for the visible tab.
 	frame, title, caption := a.resourcePreviewFrame()
 	a.resView.SetFrame(frame)
@@ -333,6 +366,8 @@ func (a *App) resourcePreview() resourcePreview {
 		return resourcePreview{deck: a.scriptureDeck, index: max(a.verseSelection(), 0)}
 	case ui.TabMedia:
 		return resourcePreview{deck: a.md.deck}
+	case ui.TabThemes:
+		return resourcePreview{deck: a.th.deck}
 	}
 	return resourcePreview{}
 }
