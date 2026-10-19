@@ -115,7 +115,8 @@ type App struct {
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
-	bundled core.BundledState // the bundled translations' installation (bundled.go)
+	bundled   core.BundledState // the bundled translations' installation (bundled.go)
+	bibleFile *bibleFileImport  // a parsed Bible file awaiting confirmation (biblefile.go)
 
 	layout           core.Layout // splitter positions, persisted (layout.go)
 	layoutSaveQueued bool

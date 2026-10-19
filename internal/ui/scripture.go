@@ -16,6 +16,7 @@ const (
 	scriptMenuAddToSchedule = iota
 	scriptMenuGoLive
 	scriptMenuImportCopyrighted
+	scriptMenuImportFile
 )
 
 // ScripturePanel is the Scriptures resource tab: translations and the
@@ -30,6 +31,9 @@ type ScripturePanel struct {
 	// OnImportCopyrighted is the gear menu's "Import Copyrighted Bibles from
 	// EasyWorship…" (enabled by SetImportCopyrightedAvailable).
 	OnImportCopyrighted func()
+	// OnImportFile is the gear menu's "Import Bible File…" (a Bible JSON
+	// file or folder, or an .ewb file, chosen in the native dialog).
+	OnImportFile func()
 
 	split    *Splitter
 	locator  *searchLocator
@@ -101,6 +105,7 @@ func NewScripturePanel() *ScripturePanel {
 	s.gearMenu.MoreArgs().AddItem("Add to Schedule", scriptMenuAddToSchedule, 0)
 	s.gearMenu.MoreArgs().AddItem("Go Live", scriptMenuGoLive, 0)
 	s.gearMenu.AddSeparator()
+	s.gearMenu.MoreArgs().AddItem("Import Bible File…", scriptMenuImportFile, 0)
 	s.gearMenu.MoreArgs().AddItem("Import Copyrighted Bibles from EasyWorship…", scriptMenuImportCopyrighted, 0)
 	s.gearMenu.OnIdPressed(s.menuPressed)
 	s.verses.OnItemMouseSelected(func(_ Vector2.XY, button int) {
@@ -181,6 +186,8 @@ func (s *ScripturePanel) menuPressed(id int) {
 		s.OnGoLive()
 	case id == scriptMenuImportCopyrighted && s.OnImportCopyrighted != nil:
 		s.OnImportCopyrighted()
+	case id == scriptMenuImportFile && s.OnImportFile != nil:
+		s.OnImportFile()
 	}
 }
 

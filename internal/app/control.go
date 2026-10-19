@@ -448,6 +448,9 @@ func (a *App) handleCommand(cmd *control.Command) {
 	case "import-bibles":
 		// EasyWorship's copyrighted Bibles; asks first unless confirm is set.
 		a.importCopyrightedBibles(cmd, args.Confirm)
+	case "import-bible-file":
+		// A Bible file or translation folder (biblefile.go); asks first unless confirm is set.
+		a.importBibleFile(cmd, args.Path, args.Confirm)
 	case "key":
 		name := core.NormalizeKeyName(args.Name)
 		if name == "" {
