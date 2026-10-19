@@ -304,6 +304,11 @@ func TestImportSummary(t *testing.T) {
 	if got != want {
 		t.Errorf("got %q want %q", got, want)
 	}
+	got = ImportSummary(easyworship.Report{MediaImported: 23, MediaSkipped: 2, Warnings: []string{"x"}})
+	want = "0 songs imported; 23 media items (2 already present); 1 warnings"
+	if got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
 }
 
 func TestLogoBackground(t *testing.T) {

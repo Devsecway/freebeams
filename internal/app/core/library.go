@@ -39,6 +39,13 @@ func ImportSummary(r easyworship.Report) string {
 	if len(r.BiblesSkipped) > 0 {
 		parts = append(parts, "skipped "+strings.Join(r.BiblesSkipped, ", "))
 	}
+	if r.MediaImported > 0 || r.MediaSkipped > 0 {
+		media := fmt.Sprintf("%d media items", r.MediaImported)
+		if r.MediaSkipped > 0 {
+			media += fmt.Sprintf(" (%d already present)", r.MediaSkipped)
+		}
+		parts = append(parts, media)
+	}
 	if len(r.Warnings) > 0 {
 		parts = append(parts, fmt.Sprintf("%d warnings", len(r.Warnings)))
 	}
