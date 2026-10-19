@@ -184,8 +184,9 @@ wait_idle
 shot song-live-main main
 shot song-live-output output
 check "song row selected" "$LAST" 's["songs"]["current"] == "Amazing Grace" and s["songs"]["selected"] >= 0'
-# The selected song row is drawn highlighted (highlight.2 #395792, unfocused list).
-pixel "selected song row is highlighted" "$OUT/song-live-main.png" has 395792 0.22 0.76 0.58 0.95 30000
+# The selected song row is drawn highlighted (list.sel.inactive #313131: the
+# list is unfocused, so it is the subtle grey, not the blue).
+pixel "selected song row is highlighted" "$OUT/song-live-main.png" has 313131 0.22 0.76 0.58 0.95 30000
 pixel "song output has content" "$OUT/song-live-output.png" notblank
 
 # Hotkeys with no control focused (a stray click on the window would otherwise
@@ -292,12 +293,12 @@ act "drag the resource splitter left" drag-split '{"name":"resource","delta":-6,
 act "drag the resource splitter back" drag-split '{"name":"resource","delta":6,"steps":40,"burst":3}' 'r["ok"]'
 wait_idle
 # Review #13: after the deck changes above (13, 3, 1, then 3 slides) the
-# first Preview tile (selected, #3a6dce) must sit at the grid padding, not
-# at the grid's top-left corner.
+# first Preview tile (selected: its tile.frame is #233563) must sit at the
+# grid padding, not at the grid's top-left corner.
 wait_idle
 shot grid-deck-change main
-pixel "first preview tile is not drawn at the grid corner" "$OUT/grid-deck-change.png" lacks 3a6dce 0.196 0.1008 0.31 0.1067
-pixel "first preview tile is at the grid padding" "$OUT/grid-deck-change.png" has 3a6dce 0.196 0.108 0.31 0.1114 500
+pixel "first preview tile is not drawn at the grid corner" "$OUT/grid-deck-change.png" lacks 233563 0.196 0.1008 0.31 0.1067
+pixel "first preview tile is at the grid padding" "$OUT/grid-deck-change.png" has 233563 0.196 0.108 0.31 0.1114 500
 
 # Review #2: the verse Go Live sends is the highlighted one, also after
 # moving in the Preview grid (not the last clicked verse row).

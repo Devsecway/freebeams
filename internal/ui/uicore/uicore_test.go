@@ -45,7 +45,7 @@ func TestPaletteMatchesSpec(t *testing.T) {
 		{"border.tl", dark.BorderTL, light.BorderTL, "#000000", "#8C8C8C"},
 		{"selectorline", dark.SelectorLine, light.SelectorLine, "#4D4D4D", "#D0D0D0"},
 		{"headercolumn.stroke", dark.HeaderColumnStroke, light.HeaderColumnStroke, "#000000", "#D0D0D0"},
-		{"libraryselector.bk", dark.LibraryBk, light.LibraryBk, "#202020", "#DEDEE7"},
+		{"libraryselector.bk", dark.LibraryBk, light.LibraryBk, "#0F1010", "#DEDEE7"}, // dark: Mac measurement
 		{"preseditor", dark.PresEditor, light.PresEditor, "#1F1F1F", "#D0D0D0"},
 		{"divider.menu", dark.DividerMenu, light.DividerMenu, "#5D5D5D", "#D7D7D7"},
 		{"divider.button.leading", dark.DividerLeading, light.DividerLeading, "#242424", "#A0A0A0"},
@@ -55,6 +55,20 @@ func TestPaletteMatchesSpec(t *testing.T) {
 		{"menuitem.fill", dark.MenuItemFill, light.MenuItemFill, "#395792", "#CCE4F7"},
 		{"menugutter.fill", dark.MenuGutter, light.MenuGutter, "#303030", "#E6E6E6"},
 		{"red", dark.Red, light.Red, "#FF0000", "#FF0000"},
+
+		// Mac measurements (UI-SPEC §1, "Mac measurements"); light = the
+		// Windows style's token for the same surface.
+		{"grid.bk", dark.GridBk, light.GridBk, "#2B2B2C", "#F0F0F0"},
+		{"output.surround", dark.OutputSurround, light.OutputSurround, "#161616", "#F9F9F9"},
+		{"resource.bk", dark.ResourceBk, light.ResourceBk, "#161616", "#F9F9F9"},
+		{"card.bk", dark.CardBk, light.CardBk, "#626161", "#E1E1E1"},
+		{"tab.sel", dark.TabSel, light.TabSel, "#3F3F3F", "#CECECE"},
+		{"tab.divider", dark.TabDivider, light.TabDivider, "#303030", "#E3E3E3"},
+		{"tile.frame", dark.TileFrame, light.TileFrame, "#233563", "#529AEF"},
+		{"tile.caption", dark.TileCaption, light.TileCaption, "#395792", "#529AEF"},
+		{"list.sel.inactive", dark.ListSelInactive, light.ListSelInactive, "#313131", "#CCE4F7"},
+		{"icon.green", dark.IconGreen, light.IconGreen, "#5BB55B", "#4FA64F"},
+		{"icon.blue", dark.IconBlue, light.IconBlue, "#4B8CE9", "#4A8CE0"},
 	}
 	for _, tt := range tests {
 		if got := hexOf(tt.dark); got != tt.wantD {
@@ -80,6 +94,10 @@ func TestGradientsMatchSpec(t *testing.T) {
 		{"dark tabbar.1", dark.TabBar1, "#6E6E6E", "#424242"},
 		{"light tabbar.1", light.TabBar1, "#F7F7F7", "#CECECE"},
 		{"dark hsplitter closed", dark.HSplitterClosed, "#555555", "#2C2C2C"},
+		{"dark tabbar.resource (Mac: flat)", dark.ResourceTabBar, "#2B2B2B", "#2B2B2B"},
+		{"light tabbar.resource", light.ResourceTabBar, "#F7F7F7", "#CECECE"},
+		{"dark footer (Mac: flat)", dark.Footer, "#161616", "#161616"},
+		{"light footer", light.Footer, "#E5E5E5", "#F4F4F4"},
 	}
 	for _, tt := range tests {
 		if got := hexOf(tt.g.Sample(0)); got != tt.top {

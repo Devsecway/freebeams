@@ -16,8 +16,8 @@ import (
 
 // MonitorHost keeps a 16:9 letterboxed area (EasyWorship's Frame_LivePreview /
 // Panel_PreviewOutput) and fits every child control into it. The app adds its
-// render.SlideView with SetContent or AsNode().AddChild. The window.bk1
-// surround and the black screen with its 1px frame are internal child panels
+// render.SlideView with SetContent or AsNode().AddChild. The output.surround
+// letterbox and the black screen with its 1px frame are internal child panels
 // (themed, so Light/Dark restyles them), not custom drawing.
 type MonitorHost struct {
 	Container.Extension[MonitorHost] `gd:"FwMonitorHost"`
@@ -28,7 +28,7 @@ type MonitorHost struct {
 	// spanning the full width), for use in vertical boxes.
 	FitWidth bool `gd:"-"`
 
-	bg     PanelContainer.Instance // surround (FwBk1), hidden for thumbnails
+	bg     PanelContainer.Instance // surround (FwOutput), hidden for thumbnails
 	screen PanelContainer.Instance // black screen + frame (FwScreen)
 }
 
@@ -44,13 +44,13 @@ func (m *MonitorHost) GetMinimumSize() Vector2.XY {
 }
 
 // NewMonitorHost creates a host with EasyWorship's output-monitor defaults:
-// 4px margin, window.bk1 surround and a framed black screen.
+// 4px margin, output.surround letterbox and a framed black screen.
 func NewMonitorHost() *MonitorHost {
 	m := &MonitorHost{Aspect: 16.0 / 9.0, Margin: 4}
 	c := m.AsControl()
 	c.SetClipContents(true)
 	c.SetMouseFilter(Control.MouseFilterPass)
-	m.bg = panel(vBk1)
+	m.bg = panel(vOutput)
 	m.screen = panel(vScreen)
 	for _, p := range []PanelContainer.Instance{m.bg, m.screen} {
 		p.AsControl().SetMouseFilter(Control.MouseFilterIgnore)

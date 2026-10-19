@@ -55,6 +55,11 @@ const (
 	vResTitle    = "FwResTitle"    // Label: resource preview title
 	vScreen      = "FwScreen"      // PanelContainer: black output screen with 1px frame
 	vThumb       = "FwThumb"       // PanelContainer: black thumbnail backing
+
+	// Surfaces with Mac-measured tokens of their own (UI-SPEC §1).
+	vGridBk   = "FwGridBk"   // PanelContainer: Preview / Live slide grid body (grid.bk)
+	vOutput   = "FwOutput"   // PanelContainer: output monitor surround (output.surround)
+	vResource = "FwResource" // PanelContainer: resource area surfaces (resource.bk)
 )
 
 // Base font sizes (UI-SPEC §2).
@@ -75,6 +80,7 @@ func BuildTheme(p Palette) Theme.Instance {
 	setPaletteColors(th, p)
 	th.SetFont("regular", tFw, regular)
 	th.SetFont("semibold", tFw, semibold)
+	th.SetFont("italic", tFw, systemFontStyle(400, true))
 	th.SetFont("mono", tFw, monoFont())
 	setIcons(th, p)
 
@@ -86,6 +92,9 @@ func BuildTheme(p Palette) Theme.Instance {
 	panelVariation(th, vBk1, flat(p.Bk1).AsStyleBox())
 	panelVariation(th, vBk2, flat(p.Bk2).AsStyleBox())
 	panelVariation(th, vLibrary, flat(p.LibraryBk).AsStyleBox())
+	panelVariation(th, vGridBk, flat(p.GridBk).AsStyleBox())
+	panelVariation(th, vOutput, flat(p.OutputSurround).AsStyleBox())
+	panelVariation(th, vResource, flat(p.ResourceBk).AsStyleBox())
 	screen := flat(uicore.Hex(0x000000))
 	screen.SetBorderWidthAll(1)
 	screen.SetBorderColor(uicore.Hex(0x000000))
@@ -101,10 +110,12 @@ func BuildTheme(p Palette) Theme.Instance {
 	margins(mini.AsStyleBox(), 6, 1, 4, 3)
 	panelVariation(th, vMiniBar, mini.AsStyleBox())
 
-	miniTL := gradBox(p.ToolbarMini, 28, uicore.Edge{Width: 1, Color: p.BorderTL}, uicore.Edge{}, uicore.Edge{}, uicore.Edge{})
+	// Footers take the footer gradient (flat resource.bk on the Mac) instead
+	// of toolbar.mini.
+	miniTL := gradBox(p.Footer, 28, uicore.Edge{Width: 1, Color: p.BorderTL}, uicore.Edge{}, uicore.Edge{}, uicore.Edge{})
 	margins(miniTL.AsStyleBox(), 8, 3, 8, 1)
 	panelVariation(th, vMiniBarTL, miniTL.AsStyleBox())
-	th.SetStylebox("tabbar1", tFw, gradBox(p.TabBar1, 32, uicore.Edge{}, uicore.Edge{}, uicore.Edge{}, uicore.Edge{}).AsStyleBox())
+	th.SetStylebox("tabbar1", tFw, gradBox(p.ResourceTabBar, 32, uicore.Edge{}, uicore.Edge{}, uicore.Edge{}, uicore.Edge{}).AsStyleBox())
 	th.SetStylebox("hsplit_closed", tFw, gradBox(p.HSplitterClosed, 8, uicore.Edge{}, uicore.Edge{}, uicore.Edge{}, uicore.Edge{}).AsStyleBox())
 
 	// Labels.
@@ -173,7 +184,7 @@ func setPaletteColors(th Theme.Instance, p Palette) {
 		"divmini_lead":    p.DividerMiniLeading,
 		"divmini_trail":   p.DividerMiniTrailing,
 		"tab_div_stroke":  p.TabDividerStroke,
-		"tab_div_fill":    p.TabDividerFill,
+		"tab_div_fill":    p.TabDivider, // tab.divider (Mac); tabbardivider.fill in the Windows style
 		"red":             p.Red,
 		"thumb_bg":        uicore.Hex(0x000000),
 		"monitor_border":  uicore.Hex(0x000000),
@@ -194,6 +205,19 @@ func setPaletteColors(th Theme.Instance, p Palette) {
 		"grip_b":              p.HSplitterClosed.Sample(1),
 		"vgrip_a":             p.VSplitterClosed.Sample(0),
 		"vgrip_b":             p.VSplitterClosed.Sample(1),
+
+		// Mac-measured surfaces (UI-SPEC §1): the selected tile's frame and
+		// caption bar (with highlight.text on both), the selected tab, the
+		// unfocused list selection and the schedule cards.
+		"grid_bk":           p.GridBk,
+		"output_surround":   p.OutputSurround,
+		"resource_bk":       p.ResourceBk,
+		"card_bk":           p.CardBk,
+		"tab_sel":           p.TabSel,
+		"tile_frame":        p.TileFrame,
+		"tile_caption":      p.TileCaption,
+		"tile_text_sel":     p.HighlightText,
+		"list_sel_inactive": p.ListSelInactive,
 	}
 	for name, c := range colors {
 		th.SetColor(name, tFw, c)
@@ -259,20 +283,32 @@ func buildWidgetBoxes(th Theme.Instance, p Palette) {
 	th.SetStylebox("mini_r_hot", tFw, box(p.HighlightHot, right4))
 	th.SetStylebox("mini_r_sel", tFw, box(p.Highlight, right4))
 
-	// Resource tab button (sd.tabbarbutton.1.style): selected fill is
-	// highlight.inactive with 2px top corners.
-	tab := flat(p.HighlightInactive)
+	// Resource tab button (sd.tabbarbutton.1.style): the selected fill is
+	// tab.sel (highlight.inactive in the Windows style) with 2px top corners.
+	tab := flat(p.TabSel)
 	tab.SetCornerRadiusTopLeft(2)
 	tab.SetCornerRadiusTopRight(2)
 	th.SetStylebox("tab_sel", tFw, tab.AsStyleBox())
 
-	// Slide / schedule selection backgrounds.
-	sel := flat(p.Highlight)
-	sel.SetCornerRadiusAll(3)
-	th.SetStylebox("tile_sel", tFw, sel.AsStyleBox())
-	hot := flat(uicore.WithAlpha(p.HighlightHot, 0.35))
-	hot.SetCornerRadiusAll(3)
-	th.SetStylebox("tile_hot", tFw, hot.AsStyleBox())
+	// Slide tile selection: the muted tile.frame around the thumbnail (the
+	// caption bar is drawn in tile.caption by the tile), hover a translucent
+	// highlight.hot wash.
+	th.SetStylebox("tile_sel", tFw, rounded(p.TileFrame, 3))
+	th.SetStylebox("tile_hot", tFw, rounded(uicore.WithAlpha(p.HighlightHot, 0.35), 3))
+
+	// Schedule item cards: raised card.bk, highlight when selected, the same
+	// wash when hovered.
+	th.SetStylebox("card", tFw, rounded(p.CardBk, 4))
+	th.SetStylebox("card_sel", tFw, rounded(p.Highlight, 4))
+	th.SetStylebox("card_hot", tFw, rounded(uicore.WithAlpha(p.HighlightHot, 0.35), 4))
+}
+
+// rounded is a flat, anti-aliased stylebox with one corner radius.
+func rounded(fill Color.RGBA, radius int) StyleBox.Instance {
+	sb := flat(fill)
+	sb.SetCornerRadiusAll(radius)
+	sb.SetAntiAliasing(true)
+	return sb.AsStyleBox()
 }
 
 func buildButtonTheme(th Theme.Instance, p Palette) {
@@ -327,8 +363,9 @@ func buildEditTheme(th Theme.Instance, p Palette) {
 	th.SetColor("current_line_color", "TextEdit", uicore.WithAlpha(p.Highlight2, 0.25))
 
 	// Embedded search locator (sd.searchlocator.embedded.style): a flat strip
-	// with a bottom border.bl line; the field inside has no frame.
-	strip := flat(p.Bk0)
+	// on resource.bk with a bottom border.bl line; the field inside has no
+	// frame.
+	strip := flat(p.ResourceBk)
 	strip.SetBorderWidthBottom(1)
 	strip.SetBorderColor(p.BorderBL)
 	margins(strip.AsStyleBox(), 6, 1, 3, 2)
@@ -343,9 +380,11 @@ func buildEditTheme(th Theme.Instance, p Palette) {
 }
 
 func buildTreeTheme(th Theme.Instance, p Palette) {
-	th.SetStylebox("panel", "Tree", flat(p.Bk1).AsStyleBox())
+	th.SetStylebox("panel", "Tree", flat(p.ResourceBk).AsStyleBox())
 	th.SetStylebox("focus", "Tree", StyleBoxEmpty.New().AsStyleBox())
-	sel := flat(p.Highlight2)
+	// The selected row is highlight only while the list has focus; unfocused
+	// it is the subtle list.sel.inactive (highlight.2 in the Windows style).
+	sel := flat(p.ListSelInactive)
 	selFocus := flat(p.Highlight)
 	th.SetStylebox("selected", "Tree", sel.AsStyleBox())
 	th.SetStylebox("selected_focus", "Tree", selFocus.AsStyleBox())
@@ -455,11 +494,16 @@ func labelVariation(th Theme.Instance, name string, font Font.Instance, size int
 	th.SetColor("font_color", name, c)
 }
 
-func systemFont(weight int) Font.Instance {
+func systemFont(weight int) Font.Instance { return systemFontStyle(weight, false) }
+
+func systemFontStyle(weight int, italic bool) Font.Instance {
 	f := SystemFont.New()
 	f.SetFontNames([]string{".AppleSystemUIFont", "SF Pro Text", "SF Pro", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"})
 	if weight != 400 {
 		f.SetFontWeight(weight)
+	}
+	if italic {
+		f.SetFontItalic(true)
 	}
 	return f.AsFont()
 }

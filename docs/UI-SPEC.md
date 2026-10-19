@@ -19,9 +19,9 @@ The default interface is **Dark** (`InterfaceColorSelector.ActiveColor = icDark`
 
 | Token | Dark | Light | Used for |
 |---|---|---|---|
-| `window.bk0` | `#202020` | `#F9F9F9` | deepest background (library list) |
-| `window.bk1` | `#2C2C2C` | `#F9F9F9` | output preview surrounds, panels |
-| `window.bk2` | `#363636` | `#F0F0F0` | **main window background** |
+| `window.bk0` | `#202020` | `#F9F9F9` | deepest background (text fields) |
+| `window.bk1` | `#2C2C2C` | `#F9F9F9` | panels (schedule body); the output surrounds and the resource area take the Mac tokens below |
+| `window.bk2` | `#363636` | `#F0F0F0` | **main window background** (the slide grids take `grid.bk` below) |
 | `window.bk3` | `#484848` | `#D0D0D0` | raised areas |
 | `window.border` | `#000000` | `#646464` | window border |
 | `text` | `#B9B9B9` | `#2A2A2A` | normal text |
@@ -68,6 +68,37 @@ The default interface is **Dark** (`InterfaceColorSelector.ActiveColor = icDark`
 | mini button hot | `#606060 → #4A4A4A → #505050` | `#F0F0F0 → #E6E6E6 → #F0F0F0` |
 | mini button selected/pressed | `#363636 → #303030 → #363636` | `#DCDCDC → #C8C8C8 → #DCDCDC` |
 | inactive selection overlay | `#828282` @ 90% | `#000000` @ 50% |
+
+### Mac measurements (the dark interface's surfaces)
+
+The tokens above come from the Windows binary's style resources. The user's screenshots of
+EasyWorship **for Mac** (dark interface, Retina; measured with PIL at the pixel) are darker and more
+neutral on several surfaces, and the Mac build gives some surfaces a colour of their own where the
+Windows style shares a token. FreeWorship's dark interface follows the Mac screenshots. These tokens
+live in `uicore.Palette` next to the spec tokens (`TestPaletteMatchesSpec` checks both tables); the
+light values are the Windows style's token for the same surface, so the light interface is unchanged
+(there is no light Mac reference).
+
+| Token | Dark (Mac) | Light | Was (Windows token) | Used for |
+|---|---|---|---|---|
+| `grid.bk` | `#2B2B2C` | `#F0F0F0` | `window.bk2` `#363636` | Preview / Live slide grid bodies (`FwGridBk`) |
+| `output.surround` | `#161616` | `#F9F9F9` | `window.bk1` `#2C2C2C` | the letterbox around the Preview / Live output monitors (`MonitorHost`) |
+| `resource.bk` | `#161616` | `#F9F9F9` | `window.bk1` `#2C2C2C` / `window.bk0` `#202020` | the resource area: item lists (`Tree` panel), media / presentation / theme grids, the search strip, the resource preview pane |
+| `libraryselector.bk` | `#0F1010` | `#DEDEE7` | `#202020` | library (collections) list; the spec token itself, re-measured |
+| `card.bk` | `#626161` | `#E1E1E1` (`button.bk`) | flat rows on `window.bk1` | schedule items: raised rounded cards with a white semibold title and an italic grey subtitle |
+| `tab.sel` | `#3F3F3F` | `#CECECE` (`highlight.inactive`) | `highlight.inactive` `#626262` | body of the selected resource tab |
+| `tab.divider` | `#303030` | `#E3E3E3` (`tabbardivider.fill`) | `tabbardivider.fill` `#606060` | the 5px band under the resource tab bar |
+| `tile.frame` | `#233563` | `#529AEF` (`highlight`) | `highlight` `#3A6DCE` | frame of a selected slide / media tile; underline of the selected tab |
+| `tile.caption` | `#395792` | `#529AEF` (`highlight`) | (part of the `highlight` fill) | the caption bar under a selected tile's thumbnail (`highlight.text` on it) |
+| `list.sel.inactive` | `#313131` | `#CCE4F7` (`highlight.2`) | `highlight.2` `#395792` | the selected list row while the list is unfocused (blue `highlight` only with focus) |
+| `icon.green` | `#5BB55B` | `#4FA64F` | – | icon placeholder `{g}`: Go Live screen, Web globe, New badge ([ICONS.md](ICONS.md)) |
+| `icon.blue` | `#4B8CE9` | `#4A8CE0` | – | icon placeholder `{b}`: Alerts bubble |
+| `tabbar.resource` (gradient) | `#2B2B2B` flat | `#F7F7F7 → #CECECE` (`tabbar.1`) | `tabbar.1` `#6E6E6E → #424242` | the resource tab bar |
+| `footer` (gradient) | `#161616` flat | `#E5E5E5 → #F4F4F4` (`toolbar.mini`) | `toolbar.mini` | the 28px footer bars under lists and grids (`FwMiniBarTL`) |
+
+Unchanged because they already match the Mac screenshots: the main toolbar gradient (`#6D6D6D → #4D4D4D`
+measured), the panel headers and output bars (`toolbar.mini`, `#2F2F2F` measured), the schedule panel
+body (`window.bk1`, `#2D2D2D` measured) and the 1px black splitter lines.
 
 ## 2. Typography
 - Family: platform default (macOS: SF Pro / system; Windows: Segoe UI). In Godot use `SystemFont` with no family names, which gives the OS default.
@@ -136,7 +167,7 @@ its design-time value. Positions the user drags to are saved in the `ui.layout` 
 
 ### 3.4 Preview / Live content
 - Each column has two modes (a hidden tab control): **Slide Selector** (thumbnail grid, the default) and **Outline View** (text outline editor).
-- Output monitor (`Frame_LivePreview`): margins 4 all round, a 16:9 letterboxed rectangle on `window.bk1`, with **video controls**
+- Output monitor (`Frame_LivePreview`): margins 4 all round, a 16:9 letterboxed rectangle on `window.bk1` (`output.surround` `#161616` in the Mac-measured dark palette, §1), with **video controls**
   (position trackbar using the `gutter` gradients, buttons, message line) underneath for media items.
 - View → *Side by Side Preview* (default) / *Preview & Live Combined* / *No Preview*. These swap between the
   `TabItem_SideBySide`, `TabItem_Stacked` and `TabItem_Contiguous` layouts.

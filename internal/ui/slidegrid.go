@@ -284,14 +284,17 @@ func (t *slideTile) Draw() {
 	item := t.grid.items[t.index]
 	selected := t.index == t.grid.selected
 	textColor := fwColor(c, "text")
+	th := t.grid.layout(float64(size.X)).Thumb(float64(size.X), float64(size.Y))
 	switch {
 	case selected:
+		// A muted tile.frame around the thumbnail with the caption bar under
+		// it in tile.caption (EasyWorship's Mac look).
 		fwBox(c, "tile_sel").Draw(ci, rect(0, 0, size.X, size.Y))
-		textColor = fwColor(c, "highlight_text")
+		ci.DrawRect(rect(float32(th.X), float32(th.Y+th.H), float32(th.W), tileLabelH), fwColor(c, "tile_caption"))
+		textColor = fwColor(c, "tile_text_sel")
 	case t.hover:
 		fwBox(c, "tile_hot").Draw(ci, rect(0, 0, size.X, size.Y))
 	}
-	th := t.grid.layout(float64(size.X)).Thumb(float64(size.X), float64(size.Y))
 	ci.DrawRect(rect(float32(th.X), float32(th.Y), float32(th.W), float32(th.H)), fwColor(c, "thumb_bg"))
 	if t.index == t.grid.marked {
 		ci.MoreArgs().DrawRect(rect(float32(th.X)-1, float32(th.Y)-1, float32(th.W)+2, float32(th.H)+2), fwColor(c, "red"), false, 2, false)

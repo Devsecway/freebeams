@@ -16,8 +16,9 @@ import (
 	"graphics.gd/variant/Vector2"
 )
 
-// ScheduleRow is one schedule item: title (semibold) over a dim subtitle.
-// Live marks the item that is on the output (red thumbnail outline).
+// ScheduleRow is one schedule item: title (semibold) over an italic subtitle
+// on a raised card. Live marks the item that is on the output (red thumbnail
+// outline).
 type ScheduleRow struct {
 	Title    string
 	Subtitle string
@@ -32,6 +33,10 @@ const (
 	schedRowSmallH = 38
 	schedThumbW    = 64
 	schedThumbH    = 36
+
+	// schedCardInset is the horizontal inset of an item's card in its row
+	// (1px above and below); the thumbnail at x = 8 sits 4px inside it.
+	schedCardInset = 4
 )
 
 // Context menu ids.
@@ -308,15 +313,19 @@ func (v *scheduleRowView) Draw() {
 	size := c.Size()
 	row := v.list.rows[v.index]
 	selected := v.index == v.list.selected
+	// Each item is a raised card (card.bk, EasyWorship's Mac look) inset in
+	// its row; the row background shows in the gaps between cards.
+	card := rect(schedCardInset, 1, size.X-2*schedCardInset, size.Y-2)
 	title, sub := fwColor(c, "text_semibold"), alpha(fwColor(c, "text"), 0.8)
-	switch {
-	case selected:
-		ci.DrawRect(rect(0, 0, size.X, size.Y), fwColor(c, "highlight"))
+	if selected {
+		fwBox(c, "card_sel").Draw(ci, card)
 		title, sub = fwColor(c, "highlight_text"), alpha(fwColor(c, "highlight_text"), 0.8)
-	case v.hover:
-		ci.DrawRect(rect(0, 0, size.X, size.Y), alpha(fwColor(c, "highlight2_hot"), 0.3))
+	} else {
+		fwBox(c, "card").Draw(ci, card)
+		if v.hover {
+			fwBox(c, "card_hot").Draw(ci, card)
+		}
 	}
-	ci.DrawRect(rect(0, size.Y-1, size.X, 1), fwColor(c, "selectorline"))
 	x := float32(10)
 	if v.thumb != nil {
 		tr := rect(8, (size.Y-schedThumbH)/2-0.5, schedThumbW, schedThumbH)
@@ -326,12 +335,12 @@ func (v *scheduleRowView) Draw() {
 		}
 		x = 8 + schedThumbW + 9
 	} else if row.Live {
-		ci.DrawRect(rect(0, 0, 3, size.Y-1), fwColor(c, "red"))
+		ci.DrawRect(rect(card.Position.X, card.Position.Y+2, 3, card.Size.Y-4), fwColor(c, "red"))
 	}
-	w := size.X - x - 6
+	w := size.X - x - 6 - schedCardInset
 	mid := (size.Y - 1) / 2
 	drawText(ci, fwFont(c, "semibold"), fontBase, rect(x, mid-17, w, 18), row.Title, GUI.HorizontalAlignmentLeft, title)
-	drawText(ci, fwFont(c, "regular"), fontCaption, rect(x, mid+1, w, 15), row.Subtitle, GUI.HorizontalAlignmentLeft, sub)
+	drawText(ci, fwFont(c, "italic"), fontCaption, rect(x, mid+1, w, 15), row.Subtitle, GUI.HorizontalAlignmentLeft, sub)
 }
 
 func (v *scheduleRowView) GuiInput(ev InputEvent.Instance) {

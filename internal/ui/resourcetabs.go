@@ -165,7 +165,8 @@ func (s *tabStrip) Draw() {
 }
 
 // tabButton is a resource tab (sd.tabbarbutton.1.style): transparent at rest;
-// selected = highlight.inactive body with a 4px highlight strip at the bottom.
+// selected = tab.sel body with a 4px tile.frame strip at the bottom (the
+// muted blue of the Mac build; highlight in the light interface).
 type tabButton struct {
 	BaseButton.Extension[tabButton] `gd:"FwTabButton"`
 
@@ -178,7 +179,7 @@ func (t *tabButton) Draw() {
 	size := c.Size()
 	if t.AsBaseButton().ButtonPressed() {
 		fwBox(c, "tab_sel").Draw(ci, rect(0, 0, size.X, size.Y-4))
-		ci.DrawRect(rect(0, size.Y-4, size.X, 4), fwColor(c, "highlight"))
+		ci.DrawRect(rect(0, size.Y-4, size.X, 4), fwColor(c, "tile_frame"))
 		ci.DrawRect(rect(0, size.Y-4, size.X, 1), alpha(fwColor(c, "window_border"), 0.5))
 	}
 	col := fwColor(c, "tab_text")

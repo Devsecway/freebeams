@@ -343,7 +343,7 @@ func (w *MainWindow) buildPreviewLive() Control.Instance {
 	w.PreviewMonitor = NewMonitorHost()
 	w.PreviewSplit = NewSplitter(SplitVertical, SlideGridPercent, 150, 0, 0, 200)
 	w.PreviewSplit.SetPanes(
-		column(panelHeader("Preview", nil, gridSizer(w.PreviewGrid)), w.PreviewGrid.AsControl()),
+		column(panelHeader("Preview", nil, gridSizer(w.PreviewGrid)), surface(vGridBk, w.PreviewGrid.AsControl())),
 		columnFooter(w.PreviewMonitor.AsControl(), outputBar(hexpand(label("Preview Output", "").AsControl()))),
 	)
 
@@ -363,13 +363,20 @@ func (w *MainWindow) buildPreviewLive() Control.Instance {
 	swap := newMiniButton(miniPlain, "swap", 24, 24, "Output: Live / Foldback")
 	w.LiveSplit = NewSplitter(SplitVertical, SlideGridPercent, 150, 0, 0, 200)
 	w.LiveSplit.SetPanes(
-		column(liveHeader, w.LiveGrid.AsControl()),
+		column(liveHeader, surface(vGridBk, w.LiveGrid.AsControl())),
 		columnFooter(w.LiveMonitor.AsControl(), outputBar(swap.AsControl(), fixed(4, 0), hexpand(label("Live Output", "").AsControl()))),
 	)
 
 	w.PreviewLiveSplit = NewSplitter(SplitHorizontal, PreviewLivePercent, 50, 50, 0, 0)
 	w.PreviewLiveSplit.SetPanes(w.PreviewSplit.AsControl(), w.LiveSplit.AsControl())
 	return w.PreviewLiveSplit.AsControl()
+}
+
+// surface puts a control on a themed panel (the surface's own palette token).
+func surface(variation string, c Control.Instance) Control.Instance {
+	bg := panel(variation)
+	add(bg, c)
+	return bg.AsControl()
 }
 
 // column stacks a fixed header over an expanding body.
@@ -429,7 +436,7 @@ func placeholderPage() Control.Instance {
 }
 
 func (w *MainWindow) buildResourcePreview() Control.Instance {
-	bg := panel(vBk1)
+	bg := panel(vResource)
 	col := vbox(0)
 	add(bg, col.AsControl())
 	w.ResourcePreview = NewMonitorHost()

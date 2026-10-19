@@ -328,9 +328,9 @@ func libraryPane(search, list, footer Control.Instance) Control.Instance {
 	return bg.AsControl()
 }
 
-// itemsPane stacks the item list over its footer on window.bk1.
+// itemsPane stacks the item list over its footer on resource.bk.
 func itemsPane(list, footer Control.Instance) Control.Instance {
-	bg := panel(vBk1)
+	bg := panel(vResource)
 	col := vbox(0)
 	add(bg, col.AsControl())
 	expand(list)

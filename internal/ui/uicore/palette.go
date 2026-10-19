@@ -108,6 +108,25 @@ type Palette struct {
 	PlayerButton       Gradient // "mini button normal" in the spec (player buttons)
 	PlayerButtonHot    Gradient
 	PlayerButtonSelect Gradient
+
+	// Surfaces measured from EasyWorship's Mac screenshots (docs/UI-SPEC.md
+	// §1, "Mac measurements"): colors the Mac build gives a surface of its
+	// own where the Windows style resources share a token. The light values
+	// keep the Windows style's look (no light Mac reference).
+	GridBk          Color.RGBA // grid.bk: Preview / Live slide grid bodies
+	OutputSurround  Color.RGBA // output.surround: the letterbox around the output monitors
+	ResourceBk      Color.RGBA // resource.bk: item lists and grids, search strip, resource preview, footers
+	CardBk          Color.RGBA // card.bk: schedule item cards
+	TabSel          Color.RGBA // tab.sel: body of the selected resource tab
+	TabDivider      Color.RGBA // tab.divider: the 5px band under the resource tab bar (tabbardivider.fill in the Windows style)
+	TileFrame       Color.RGBA // tile.frame: frame of a selected tile; underline of the selected tab
+	TileCaption     Color.RGBA // tile.caption: caption bar of a selected tile
+	ListSelInactive Color.RGBA // list.sel.inactive: selected list row while the list is unfocused
+	IconGreen       Color.RGBA // icon.green: the {g} of the icon set (Go Live screen, Web globe, New badge)
+	IconBlue        Color.RGBA // icon.blue: the {b} of the icon set (Alerts bubble)
+
+	ResourceTabBar Gradient // tabbar.resource: the resource tab bar (flat on the Mac)
+	Footer         Gradient // footer: the 28px bars under lists and grids
 }
 
 // IsDark reports whether this is the dark interface.
@@ -141,7 +160,7 @@ func DarkPalette() Palette {
 		BorderTL:             Hex(0x000000),
 		SelectorLine:         Hex(0x4D4D4D),
 		HeaderColumnStroke:   Hex(0x000000),
-		LibraryBk:            Hex(0x202020),
+		LibraryBk:            Hex(0x0F1010), // Mac measurement; the Windows style says #202020
 		PresEditor:           Hex(0x1F1F1F),
 		DividerMenu:          Hex(0x5D5D5D),
 		DividerLeading:       Hex(0x242424),
@@ -170,6 +189,21 @@ func DarkPalette() Palette {
 		PlayerButton:       Gradient{{0, Hex(0x515151)}, {0.5466, Hex(0x3D3D3D)}, {1, Hex(0x424242)}},
 		PlayerButtonHot:    Gradient{{0, Hex(0x606060)}, {0.4845, Hex(0x4A4A4A)}, {1, Hex(0x505050)}},
 		PlayerButtonSelect: Gradient{{0, Hex(0x363636)}, {0.4752, Hex(0x303030)}, {0.9969, Hex(0x363636)}},
+
+		GridBk:          Hex(0x2B2B2C),
+		OutputSurround:  Hex(0x161616),
+		ResourceBk:      Hex(0x161616),
+		CardBk:          Hex(0x626161),
+		TabSel:          Hex(0x3F3F3F),
+		TabDivider:      Hex(0x303030),
+		TileFrame:       Hex(0x233563),
+		TileCaption:     Hex(0x395792),
+		ListSelInactive: Hex(0x313131),
+		IconGreen:       Hex(0x5BB55B),
+		IconBlue:        Hex(0x4B8CE9),
+
+		ResourceTabBar: Flat(Hex(0x2B2B2B)),
+		Footer:         Flat(Hex(0x161616)),
 	}
 }
 
@@ -230,5 +264,23 @@ func LightPalette() Palette {
 		PlayerButton:       Gradient{{0.0093, Hex(0xE6E6E6)}, {0.5217, Hex(0xD2D2D2)}, {1, Hex(0xE6E6E6)}},
 		PlayerButtonHot:    Gradient{{0, Hex(0xF0F0F0)}, {0.472, Hex(0xE6E6E6)}, {0.9938, Hex(0xF0F0F0)}},
 		PlayerButtonSelect: Gradient{{0.0031, Hex(0xDCDCDC)}, {0.4845, Hex(0xC8C8C8)}, {1, Hex(0xDCDCDC)}},
+
+		// Light counterparts: the Windows style's tokens for the same surfaces
+		// (window.bk2, window.bk1, button.bk, highlight.inactive, highlight,
+		// highlight.2), so the light interface looks as it did.
+		GridBk:          Hex(0xF0F0F0),
+		OutputSurround:  Hex(0xF9F9F9),
+		ResourceBk:      Hex(0xF9F9F9),
+		CardBk:          Hex(0xE1E1E1),
+		TabSel:          Hex(0xCECECE),
+		TabDivider:      Hex(0xE3E3E3),
+		TileFrame:       Hex(0x529AEF),
+		TileCaption:     Hex(0x529AEF),
+		ListSelInactive: Hex(0xCCE4F7),
+		IconGreen:       Hex(0x4FA64F),
+		IconBlue:        Hex(0x4A8CE0),
+
+		ResourceTabBar: Lin(Hex(0xF7F7F7), Hex(0xCECECE)),
+		Footer:         Gradient{{0, Hex(0xE5E5E5)}, {0.9938, Hex(0xF4F4F4)}},
 	}
 }

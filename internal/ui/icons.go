@@ -35,13 +35,18 @@ func rasterIcon(name string, c uicore.IconColors) (Texture2D.Instance, bool) {
 
 // paletteIconColors are the colors the FwIcons set is rasterised with.
 func paletteIconColors(p Palette) uicore.IconColors {
-	return uicore.IconColors{Glyph: uicore.GlyphColor(p), Accent: uicore.AccentColor(p), Red: p.Red}
+	return uicore.PaletteIconColors(p)
 }
 
-// maskIconColors rasterise a single-color icon white, to be tinted on draw.
+// maskIconColors rasterise a single-color icon white, to be tinted on draw
+// (only {c} occurs in such an icon; the rest is set for completeness).
 func maskIconColors() uicore.IconColors {
 	white := Color.RGBA{R: 1, G: 1, B: 1, A: 1}
-	return uicore.IconColors{Glyph: white, Accent: white, Red: white}
+	c := uicore.IconColors{Glyph: white, Accent: white, Red: white, Green: white, Blue: white}
+	for i := range c.Bars {
+		c.Bars[i] = white
+	}
+	return c
 }
 
 // iconIsMulti reports whether an icon carries its own colors (drawn untinted).

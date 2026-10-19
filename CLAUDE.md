@@ -181,6 +181,18 @@ internal/app               Godot: the App node that wires store + presenter + ui
   dir (`~/Library/Caches/FreeWorship/media`) and let the factory load the 640 px JPEG.
 - Godot plays Ogg Theora only. Guard `VideoStreamPlayer.Play()` behind an "is .ogv and exists" check: a missing or
   unsupported file logs a Godot ERROR, which fails the smoke test's log hygiene.
+- Icon SVGs (`uicore/icons.go`): cut details out of a filled shape as evenodd subpaths of the same `<path>`, never
+  paint a "lighter" part over a semi-transparent fill (alphas compound: 50 % over 85 % is 92 %); a hole subpath that
+  pokes outside its shape is filled there (it is inside one subpath). ThorVG honours `fill-rule`, `fill-opacity` and
+  `stroke-opacity`, and those opacities survive the white-mask + modulate tint as alpha.
+- Preview an SVG without the app: `qlmanage -t -s 128 -o <dir> x.svg`. QuickLook does not scale the intrinsic size,
+  so set the SVG `width`/`height` to the thumbnail size (keep the `viewBox`) and put a toolbar-grey `<rect>` behind
+  the body; `FW_ICON_DUMP=<dir> go test ./internal/ui/uicore/ -run Dump` writes the whole set.
+- Measure EasyWorship reference PNGs with `python3 -I` + PIL (`Image.getpixel`, a 1×1 `BOX` resize for an area
+  average); the Mac screenshots are 2× (3024 px wide), so scale displayed coordinates before sampling.
+- The dark palette's surfaces come from EasyWorship's Mac screenshots, not only the Windows `.dfm` style tokens
+  (`docs/UI-SPEC.md` §1 "Mac measurements"). Give a surface its own `uicore.Palette` token (`GridBk`, `ResourceBk`, …)
+  and a `Fw…` panel variation instead of pointing it at `window.bk1/2`, and add the token to `TestPaletteMatchesSpec`.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

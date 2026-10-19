@@ -13,7 +13,7 @@ import (
 	"graphics.gd/variant/Color"
 )
 
-var testColors = IconColors{Glyph: Hex(0xDADADA), Accent: Hex(0x4B8CE9), Red: Hex(0xFF0000)}
+var testColors = IconColors{Glyph: Hex(0xDADADA), Accent: Hex(0x4B8CE9), Red: Hex(0xFF0000), Green: Hex(0x5BB55B), Blue: Hex(0x4B8CE9), Bars: SMPTEBars}
 
 func TestIconSVGWellFormed(t *testing.T) {
 	names := IconNames()
@@ -103,8 +103,9 @@ func TestIconGrid(t *testing.T) {
 
 func TestIconMulti(t *testing.T) {
 	tests := map[string]bool{
-		"golive": true, "golive16": true, "live_on": true,
-		"live": false, "black": false, "logo": false, "plus": false, "gear": false,
+		"golive": true, "golive16": true, "live_on": true, "alerts": true, "new": true, "web": true,
+		"live": false, "black": false, "logo": false, "clear": false, "open": false, "save": false,
+		"remote": false, "plus": false, "gear": false,
 	}
 	for name, want := range tests {
 		spec, ok := Icon(name)
@@ -117,6 +118,34 @@ func TestIconMulti(t *testing.T) {
 	}
 	if _, ok := IconSVG("nope", testColors); ok {
 		t.Error("unknown icon reported ok")
+	}
+}
+
+// TestLiveBars checks that the Live screens' seven bars tile the 20 px
+// interior (x 6..26) edge to edge, and that live_on uses the SMPTE colours.
+func TestLiveBars(t *testing.T) {
+	bar := regexp.MustCompile(`<rect x="(\d+)" y="9" width="(\d+)" height="11" fill="([^"]+)"`)
+	for _, name := range []string{"live", "live_on"} {
+		svg, _ := IconSVG(name, testColors)
+		bars := bar.FindAllStringSubmatch(svg, -1)
+		if len(bars) != 7 {
+			t.Fatalf("%s: %d bars, want 7", name, len(bars))
+		}
+		x := 6
+		for i, b := range bars {
+			bx, _ := strconv.Atoi(b[1])
+			w, _ := strconv.Atoi(b[2])
+			if bx != x {
+				t.Errorf("%s: bar %d starts at %d, want %d", name, i, bx, x)
+			}
+			x += w
+			if name == "live_on" && b[3] != HexColor(SMPTEBars[i]) {
+				t.Errorf("live_on: bar %d is %s, want %s", i, b[3], HexColor(SMPTEBars[i]))
+			}
+		}
+		if x != 26 {
+			t.Errorf("%s: bars end at %d, want 26", name, x)
+		}
 	}
 }
 
@@ -158,8 +187,7 @@ func TestDumpIcons(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	p := DarkPalette()
-	c := IconColors{Glyph: GlyphColor(p), Accent: AccentColor(p), Red: p.Red}
+	c := PaletteIconColors(DarkPalette())
 	for _, name := range IconNames() {
 		svg, _ := IconSVG(name, c)
 		if err := os.WriteFile(filepath.Join(dir, name+".svg"), []byte(svg), 0o644); err != nil {
