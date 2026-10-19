@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Concept "Window": a church arch (the nave, the sanctuary door) in white with
+       a gold light inside. Original artwork for this project. The arch is a single
+       stroked path so the stroke stays 2 px wide at 16 px. Rasterised by
+       docs/branding/tools/build.py. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4379DD"/>
+      <stop offset="1" stop-color="#2447A3"/>
+    </linearGradient>
+  </defs>
+  <rect id="bg" x="100" y="100" width="824" height="824" rx="186" fill="url(#tile)"/>
+  <g id="mark">
+    <path d="M 316 788 V 496 A 196 196 0 0 1 708 496 V 788" fill="none" stroke="#FFFFFF" stroke-width="128" stroke-linecap="butt"/>
+    <circle cx="512" cy="572" r="84" fill="#F6B73C"/>
+  </g>
+</svg>
