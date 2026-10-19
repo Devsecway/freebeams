@@ -115,6 +115,9 @@ type App struct {
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
+	bundled   core.BundledState // the bundled translations' installation (bundled.go)
+	bibleFile *bibleFileImport  // a parsed Bible file awaiting confirmation (biblefile.go)
+
 	layout           core.Layout // splitter positions, persisted (layout.go)
 	layoutSaveQueued bool
 
@@ -178,6 +181,7 @@ func (a *App) Ready() {
 	}
 	log.Printf("[freeworship] %d screen(s); output %s", len(screens), map[bool]string{true: "on", false: "off until Live is pressed"}[len(screens) > 1])
 
+	a.startBundledInstall()
 	a.startImport()
 	a.initThemes()
 	a.scanEWBibles()
@@ -242,9 +246,10 @@ func (a *App) startImport() {
 	a.importState = core.ImportState{Running: true}
 	a.songsStatus = core.SongsFooter(0, a.importState)
 	st := a.st
+	opt := a.ewImportOptions()
 	log.Printf("[freeworship] importing from EasyWorship…")
 	a.async(nil, func(ctx context.Context) func() error {
-		rep, err := easyworship.ImportInto(ctx, st, easyworship.Options{})
+		rep, err := easyworship.ImportInto(ctx, st, opt)
 		summary := core.ImportSummary(rep)
 		if err == nil {
 			err = st.SetSetting(ctx, core.SettingImportDone, core.ImportRecord{Done: true, Summary: summary})

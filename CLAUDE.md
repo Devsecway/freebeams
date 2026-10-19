@@ -150,6 +150,16 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - A `MenuBar` with `prefer_global_menu` lives in the macOS system menu bar and has zero minimum size in the window;
   automation cannot click native menus, so every handler is also a control action (`menu {item}`).
 - `debug.ReadBuildInfo().Main.Version` is the VCS pseudo-version under `gd run`, usable for an About box.
+- A `//go:build ignore` generator cannot be run as a package (`go run ./pkg/gen` → "build constraints exclude all Go
+  files"); run it by file: `go run internal/bibles/bundled/gen/main.go …`. `//go:embed data/*.json.gz` needs at least one
+  matching file to compile, so keep the data files in place when regenerating.
+- Go 1.27's `encoding/json` error strings name `jsontext.Value` internals; never assert on them. Decode objects with
+  `json.Decoder` tokens to keep document order and own the error texts.
+- `ui.ConfirmDialog` is a fixed 420×150 window: a question longer than a heading line plus one sentence pushes
+  OK/Cancel out of view (see `core.BibleFileQuestion`).
+- Two first-run imports writing the same table race on a unique key; tell the second about the first
+  (`easyworship.Options.BundledBibles`) instead of relying on `ErrExists` after a full insert. SQLite's
+  `_txlock=immediate` + `busy_timeout` serialize the concurrent bundled and EasyWorship imports (~1 s per translation).
 - `screencapture -D 2` and `DisplayServer.ScreenGetImage` need Screen Recording permission for the terminal. Without
   it, check the TV by eye and the content with `/screenshot?window=output`.
 - A node that only reacts to its own lifecycle needs no extension class: connect `OnVisibilityChanged` /

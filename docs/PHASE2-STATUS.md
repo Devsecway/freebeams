@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 388 checks (Phase 1: 191; media, presentations, themes, transitions and settings blocks); screenshots and app.log in test/out/
+test/smoke.sh          # 415 checks (Phase 1: 191; media, presentations, themes, transitions and settings, bundled Bibles blocks); screenshots and app.log in test/out/
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -212,6 +212,37 @@ transitions").
 | One icon language (32 px toolbar / 16 px mini grids, 2 / 1.5 px rounded strokes on the pixel grid), own artwork, crisp at 1× and 2× | **pass** | `internal/ui/uicore/icons.go` (artwork, pure Go) + `internal/ui/icons.go` (DPITextures). `TestIconSVGWellFormed`, `TestIconGrid`, `TestIconMulti`, `TestIconColors`. Before/after at native Retina pixels: `docs/screens/icons-{before,after}-{toolbar,panels}-{dark,light}.png`; design notes and the audit in [ICONS.md](ICONS.md). The Media / Themes / Presentations library lists no longer show Godot's red fallback icon (`onThemeReady`; `docs/screens/icons-after-trees.png`). |
 | State colors from palette tokens: Go Live accent, Live red only while on, Logo/Black/Clear brightened when active, hover, disabled; light palette | **pass** | Single-color icons are white masks tinted at draw time (`drawGlyph`, `glyphTint`); `live_on` / `golive` carry their own colors. Theme colors `glyph`, `glyph_hot`, `glyph_on`, `accent`, `toolbutton_text_sel` in `theme.go`; no hex in widgets. Smoke screenshots `black-main.png` (Black active), `light-main.png`. |
 | Smoke | **pass** | 388/388 on 2026-10-19 after the redesign; no pixel check changed (none asserts an icon color). A first run failed once at `the output shows the image` (the media monitors still showed the previous image although `/state` had `live.title == smoke-green` and was idle; intermittent, not icon-related, passed on the rerun). |
+
+## Bundled Bibles and Import Bible File… (PLAN §1 "Bibles")
+
+Recorded 2026-10-19 on the same machine. Policy and formats: [BIBLES.md](BIBLES.md).
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Only public-domain translations are bundled: KJV and ASV, nothing else | **pass** | `internal/bibles/bundled`: manifest `Translations` (abbrev, name, language, licence, attribution, source URL `github.com/hargarpay/bible-translations` + commit `98b32df`, bundle `Version` 1). `TestBundledTranslations` fails if `Abbrevs()` is anything but `[KJV ASV]` or a manifest entry is not `models.IsPublicDomainBible`. Repository fixtures use KJV or made-up verses only. |
+| Embedded data, correct and clean | **pass** | gzip single-file Bible JSON, `go:embed`ded (in the Go dylib on every platform): KJV 1,259,917 B + ASV 1,259,101 B = **2,519,018 B** (2.4 MiB). KJV 31,102 verses / 66 books; ASV 31,086 / 66 (it omits 16 NT verses by design; the test checks each of the 16 is absent from the ASV and present in the KJV). Text checks: John 3:16 in both, ASV Psalm 36:1 (leaked heading removed), 1 Samuel 13:1 (`[[a]forty]` → "forty"), Matthew 18:24 (the one source patch, `TestPatchesApplied`), no brackets / no-break spaces anywhere. `gen/main.go` regenerates the data reproducibly (same hashes) and refuses to drift from the manifest. |
+| `bibletext` reader: bible-translations folders, chapter files, single-file JSON; book-name mapping, cleaning, warnings not panics | **pass** | `internal/importers/bibletext`, pure Go. `TestCleanText` (12 cases), `TestDecode` (unknown book, bad chapter/verse keys, non-string, empty, duplicates, combined "16-17" keys → 10 warnings, verses in canonical order, document order decides duplicates), `TestReadDir` (folder, chapter file inside it and the folder itself give the same result; stray files warn), `TestReadErrors`, `TestEncodeDecodeRoundTrip`, `TestWarningsAreBounded` (50 + "… and N more"). `TestRealTranslations` decodes the raw repository when `FREEWORSHIP_BIBLE_TRANSLATIONS` points at a clone (31,102 / 31,086, no warnings; skips otherwise). |
+| First launch installs the bundled translations off the main thread, idempotently, tracked by a bundle version | **pass** | `App.startBundledInstall` → `bundled.Install` (one transaction per translation; abbreviation match is case-insensitive; `bibles.bundled.version` setting). `TestInstall` (fresh library → KJV, ASV; second run adds nothing; lookups and FTS work), `TestInstallSkipsExistingAbbrev` (a lower-case `kjv` from EasyWorship is kept), `TestInstallErrors` (cancelled context leaves no Bible and no version). Smoke: `bundled KJV and ASV are installed`, `the bundled install accounted for both`, `ASV wording` (`believeth on him`, footer `John 3:16 (ASV)`), `KJV wording differs`, `ASV Psalm 36:1 carries no leaked heading`, `ASV omits Acts 8:37 by design` / `KJV has Acts 8:37`. Footer: "Installing bundled Bibles…" → "Installed KJV, ASV". |
+| The EasyWorship import does not duplicate the KJV; the default translation stays KJV | **pass** | `easyworship.Options.BundledBibles` reports the EasyWorship KJV as `KJV (bundled)` (`TestImportIntoSkipsBundledBibles`), on top of the existing abbreviation check. Log on this machine: `223 songs imported; Bibles: RVA; skipped HCSB (copyrighted), KJV (bundled); 23 media items`. `core.DefaultBible` is unchanged (smoke: the `(KJV)` footers). |
+| Import Bible File… (gear menu): native dialog, parse off-thread, confirmation with the licence statement, import, refresh | **pass** | `internal/app/biblefile.go`, `ui.ScripturePanel.OnImportFile`. `DisplayServer.FileDialogShow` in `FileDialogModeOpenAny` (a file or a translation folder; filters `*.json`, `*.ewb`). `core.BibleFileQuestion` names the translation, its verse count and copyright notice (or "public domain") and states the user's licence responsibility (`TestBibleFileQuestion`). Smoke: `import-bible-file (confirmed) imports the folder` (fixture tree `SMK` in the repository layout, with the source's quirks), `the imported translation works, with cleaned text` (`Psalms 23:1 (SMK)`), `import-bible-file asks first` (screenshot `import-bible-file-confirm.png`), `cancel the question`, `OK imports it` / `SMK2 is installed after OK` (single-file JSON), `a single-chapter book in the imported file` (`Jude 1:3 (SMK2)`). |
+| Duplicates reported, errors to the message dialog | **pass** | Smoke: `a chapter file of the folder is the same translation: a duplicate` (`SMK is already installed`), `the duplicate is reported, not imported twice` (message dialog, screenshot `import-bible-file-duplicate.png`, one `SMK` in `/state.bibles`), `a missing file is an error` / `the read error is in the message dialog`, `import-bible-file needs a path`. |
+| Control and state | **pass** | `import-bible-file {path, confirm}`; `/state.bundled {running, done, installed, skipped, version, error}`; `/state.import.running` is also true while the bundled install runs, so the existing first-launch wait covers both imports; `/state.bibles` lists imported translations. |
+| Smoke | **pass** | The "bundled Bibles and Import Bible File…" block adds 27 checks (415 in all, three of them `app idle` waits), one block before `# ---- quit`. |
+
+### Shared files touched (bundled Bibles and Import Bible File…)
+
+- `internal/app/app.go`: two fields in their own block (`bundled`, `bibleFile`), `a.startBundledInstall()` before
+  `a.startImport()` in `Ready`, and `startImport` passes `a.ewImportOptions()` (3 lines). `control.go`: `Import:
+  a.importDoc()`, `Bundled: a.bundled`, the `import-bible-file` case. `view.go`: `sc.OnImportFile` (1 line).
+  `core/state.go`: `State.Bundled` / `StateInput.Bundled` in their own blocks, two nil-to-empty lines in `BuildState`.
+- `internal/ui/scripture.go`: `scriptMenuImportFile`, `OnImportFile`, one gear-menu item, one `menuPressed` case.
+  `splitter.go`, `monitor.go`, `events.go`, `icons.go`, `theme.go` and `internal/render/*` are untouched.
+- `internal/importers/easyworship`: `Options.BundledBibles` and one `switch` case in `importBibles`; `ewb.go`'s
+  public-domain list moved to `models.IsPublicDomainBible` (`isPublicDomain` delegates).
+- `test/smoke.sh`: one block before `# ---- quit`. New: `internal/importers/bibletext`, `internal/bibles/bundled`
+  (+ `data/*.json.gz`, `gen/main.go`), `internal/app/bundled.go`, `internal/app/biblefile.go`,
+  `internal/app/core/bundled.go`, `internal/app/core/biblefile.go`, `internal/models/bible_license.go`,
+  `docs/BIBLES.md`.
 
 ## Remaining for Phase 2
 

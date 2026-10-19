@@ -155,6 +155,7 @@ func (a *App) buildUI() {
 	sc.OnAddToSchedule = func() { a.event(func() { a.addScriptureToSchedule(nil) }) }
 	sc.OnGoLive = func() { a.event(a.goLiveVerse) }
 	sc.OnImportCopyrighted = func() { a.event(func() { a.importCopyrightedBibles(nil, false) }) }
+	sc.OnImportFile = func() { a.event(a.importBibleFileDialog) }
 
 	// Splitter positions persist across runs (layout.go).
 	for name, sp := range a.splitters() {

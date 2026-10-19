@@ -47,6 +47,12 @@ type Options struct {
 	BiblesOnly bool
 	// SkipMedia leaves the media library alone (ImportMedia runs it on its own).
 	SkipMedia bool
+
+	// BundledBibles are the abbreviations of the translations FreeWorship
+	// ships (internal/bibles/bundled). Their EasyWorship files are reported
+	// as skipped "(bundled)" (case-insensitive), so an EasyWorship KJV never
+	// duplicates or races the bundled one.
+	BundledBibles []string
 }
 
 // Report summarises an import.
@@ -396,12 +402,19 @@ func importBibles(ctx context.Context, st *store.Store, opt Options, rep *Report
 	for _, b := range installed {
 		have[strings.ToUpper(b.Abbrev)] = true
 	}
+	bundled := map[string]bool{}
+	for _, a := range opt.BundledBibles {
+		bundled[strings.ToUpper(strings.TrimSpace(a))] = true
+	}
 	for _, f := range files {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		abbrev := strings.ToUpper(f.Abbrev)
 		switch {
+		case bundled[abbrev]:
+			rep.BiblesSkipped = append(rep.BiblesSkipped, f.Abbrev+" (bundled)")
+			continue
 		case have[abbrev]:
 			rep.BiblesSkipped = append(rep.BiblesSkipped, f.Abbrev+" (already installed)")
 			continue
