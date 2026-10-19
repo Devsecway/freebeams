@@ -118,6 +118,13 @@ type App struct {
 	layout           core.Layout // splitter positions, persisted (layout.go)
 	layoutSaveQueued bool
 
+	settings     core.Settings // the Options dialog's values, persisted per key (settings.go)
+	settingsVer  int           // bumped on every settings change (re-projects the dialog)
+	settingsOpen bool          // the Options dialog is up
+	settingsPage int           // the section it opens on (ui.SettingsPage…)
+	settingsSnap core.Settings // the settings when the dialog opened (Cancel restores them)
+	recent       []string      // recent schedule files, newest first (File ▸ Open Recent)
+
 	prevLive      *models.Deck // for Go Back
 	prevLiveIndex int
 
@@ -129,6 +136,7 @@ type App struct {
 	previewView *render.SlideView
 	liveView    *render.SlideView
 	resView     *render.SlideView
+	logoView    *render.SlideView // the Options dialog's logo preview
 	out         *render.Output
 
 	dirty    bool
@@ -161,16 +169,7 @@ func (a *App) Ready() {
 	a.startControl()
 	log.Printf("[freeworship] %s", versionBanner())
 
-	logo := core.LogoBackground(core.EWImagesDir)
-	if a.st != nil {
-		var saved models.Background
-		if ok, err := a.st.GetSetting(a.ctx, core.SettingLogo, &saved); err != nil {
-			a.fail("read logo setting", err)
-		} else if ok && saved.Kind != "" {
-			logo = saved
-		}
-	}
-	a.pres.SetLogo(logo)
+	a.loadSettings() // transition, output display, logo, interface color (settings.go)
 
 	// The projector output opens by itself only when a second display exists.
 	screens := render.Screens()

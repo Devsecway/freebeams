@@ -51,6 +51,7 @@ type SlideView struct {
 
 	fade    time.Duration
 	fadeSet bool
+	kind    models.TransitionKind // zero value = blend (transitions.go)
 
 	transitioning bool
 	progress      float64
@@ -152,7 +153,7 @@ func (v *SlideView) Process(delta Float.X) {
 		v.finishTransition()
 		return
 	}
-	v.cur.setAlpha(layout.Ease(v.progress))
+	v.applyTransition(v.progress)
 }
 
 func (v *SlideView) build() {
@@ -191,6 +192,9 @@ func (v *SlideView) relayout() {
 	if v.transitioning && v.prev != nil {
 		v.prev.apply(v.prev.vis, r, s)
 	}
+	if v.transitioning {
+		v.applyTransition(v.progress) // apply put the layers back at rest
+	}
 }
 
 // show projects v.want onto the layers, crossfading when appropriate.
@@ -216,10 +220,10 @@ func (v *SlideView) show() {
 	}
 	v.prev, v.cur = v.cur, v.prev
 	v.cur.apply(v.want, r, s)
-	v.cur.setAlpha(0)
 	v.cur.root.AsCanvasItem().SetVisible(true)
 	v.prev.root.AsCanvasItem().SetVisible(true)
 	v.AsNode().MoveChild(v.cur.root.AsNode(), -1)
+	v.beginTransition() // the kind's starting state (transitions.go)
 	v.transitioning = true
 	v.progress = 0
 	v.skipFrame = true
@@ -233,7 +237,7 @@ func (v *SlideView) finishTransition() {
 	}
 	v.transitioning = false
 	v.progress = 0
-	v.cur.setAlpha(1)
+	v.endTransition()
 	if v.prev != nil {
 		v.prev.root.AsCanvasItem().SetVisible(false)
 	}
@@ -306,7 +310,8 @@ func resolveVisual(f models.Frame) visual {
 // ── Layer: one complete visual state (background + body + footer) ─────
 
 type layer struct {
-	root   Control.Instance
+	root   Control.Instance // at the letterbox rect; clips, and masks during a wipe / iris
+	inner  Control.Instance // holds the content; moved by push / cover / reveal (transitions.go)
 	bg     ColorRect.Instance
 	tex    TextureRect.Instance
 	video  *videoLayer // motion background, between tex and the text (video.go)
@@ -319,6 +324,8 @@ type layer struct {
 	applied bool
 	vis     visual
 	rect    layout.Rect
+	offset  layout.Vec  // inner's offset from rest (transitions.go)
+	mask    layout.Mask // what root clips its children to (transitions.go)
 }
 
 func ignoreMouse(c Control.Instance) { c.SetMouseFilter(Control.MouseFilterIgnore) }
@@ -328,6 +335,10 @@ func newLayer(parent Node.Instance) *layer {
 	l.root = Control.New()
 	l.root.SetClipContents(true)
 	ignoreMouse(l.root)
+	l.root.AsCanvasItem().OnDraw(l.drawMask)
+	l.inner = Control.New()
+	ignoreMouse(l.inner)
+	l.root.AsNode().AddChild(l.inner.AsNode())
 
 	l.bg = ColorRect.New()
 	l.bg.SetColor(black)
@@ -346,13 +357,13 @@ func newLayer(parent Node.Instance) *layer {
 	l.footer.SetTextOverrunBehavior(TextServer.OverrunTrimEllipsis)
 	l.footer.SetVerticalAlignment(GUI.VerticalAlignmentCenter)
 
-	n := l.root.AsNode()
+	n := l.inner.AsNode()
 	n.AddChild(l.bg.AsNode())
 	n.AddChild(l.tex.AsNode())
 	l.video = newVideoLayer(n)
 	n.AddChild(l.body.AsNode())
 	n.AddChild(l.footer.AsNode())
-	parent.AddChild(n)
+	parent.AddChild(l.root.AsNode())
 	return l
 }
 
@@ -469,7 +480,7 @@ func (l *layer) apply(vis visual, r layout.Rect, s float64) {
 		return
 	}
 	l.applied, l.vis, l.rect = true, vis, r
-	place(l.root, r)
+	l.placeAt(r)
 
 	// Background.
 	l.bg.SetColor(opaque(vis.bg.Color))

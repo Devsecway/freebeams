@@ -292,12 +292,15 @@ func (a *App) rememberRecent(path string) {
 		var list []string
 		_, err := st.GetSetting(ctx, core.SettingRecent, &list)
 		if err == nil {
-			err = st.SetSetting(ctx, core.SettingRecent, core.AddRecent(list, path, 10))
+			list = core.AddRecent(list, path, 10)
+			err = st.SetSetting(ctx, core.SettingRecent, list)
 		}
 		return func() error {
 			if err != nil {
 				a.fail("remember recent schedule", err)
+				return nil
 			}
+			a.recent = list // File ▸ Open Recent
 			return nil
 		}
 	})

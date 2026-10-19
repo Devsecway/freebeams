@@ -547,8 +547,8 @@ func (a *App) handleThemeCommand(cmd *control.Command, args actionArgs) bool {
 			return true
 		}
 		row := a.schedSel
-		if args.Item != nil {
-			row = *args.Item
+		if args.Row != nil {
+			row = *args.Row
 		}
 		a.applyThemeToItem(i, row, cmd)
 	default:

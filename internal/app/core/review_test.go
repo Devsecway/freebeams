@@ -255,13 +255,13 @@ func TestIsSaveAs(t *testing.T) {
 func TestBuildStateDialog(t *testing.T) {
 	st := BuildState(StateInput{
 		Presenter: models.NewPresenter().State,
-		Dialog:    DialogState{Editor: true, Confirm: "Quit FreeWorship", Message: &Alert{Title: "Open Schedule", Message: "bad file"}, Alerts: 2},
+		Dialog:    DialogState{Editor: true, Confirm: "Quit FreeWorship", Message: &Alert{Title: "Open Schedule", Message: "bad file"}, Alerts: 2, Host: "editor"},
 	})
 	b, err := json.Marshal(st)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"dialog":{"editor":true,"confirm":"Quit FreeWorship","message":{"title":"Open Schedule","message":"bad file"},"alerts":2}`} {
+	for _, want := range []string{`"dialog":{"editor":true,"settings":false,"confirm":"Quit FreeWorship","message":{"title":"Open Schedule","message":"bad file"},"alerts":2,"host":"editor"}`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("state JSON %s\nlacks %s", b, want)
 		}

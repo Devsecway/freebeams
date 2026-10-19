@@ -81,7 +81,7 @@ trap cleanup EXIT
 
 fail() {
 	printf '\n[splitters] FAIL: %s\n' "$1" >&2
-	if [ -n "${2:-}" ]; then printf '[splitters] last response: %s\n' "$2" | head -c 2000 >&2; echo >&2; fi
+	if [ -n "${2:-}" ]; then printf '[splitters] last response: %s\n' "$2" | head -c 6000 >&2; echo >&2; fi
 	local g
 	g="$(godot_pid)"
 	if [ -n "$g" ] && kill -0 "$g" 2>/dev/null; then

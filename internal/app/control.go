@@ -41,7 +41,8 @@ func (a *App) flushReplies() {
 // state builds the GET /state document.
 func (a *App) state() core.State {
 	_, resTitle, resCaption := a.resourcePreviewFrame()
-	dialog := core.DialogState{Editor: a.win.Editor.Visible(), ThemeEditor: a.win.ThemeEditor.Visible(), Alerts: len(a.alerts)}
+	dialog := core.DialogState{Editor: a.win.Editor.Visible(), ThemeEditor: a.win.ThemeEditor.Visible(),
+		Settings: a.win.Settings.Visible(), Alerts: len(a.alerts), Host: a.win.TopDialogHost()}
 	if a.win.Confirm.Visible() {
 		dialog.Confirm = a.win.Confirm.Title()
 	}
@@ -71,6 +72,7 @@ func (a *App) state() core.State {
 		Presentations: a.presentationsStateDoc(),
 		Themes:        a.themesStateDoc(),
 		Resource:      core.ResourceState{Title: resTitle, Caption: resCaption},
+		Settings:      a.settings,
 		Splitters:     a.splitterPositions(),
 		Import:        a.importState,
 		LastError:     a.lastError,
@@ -101,27 +103,32 @@ func deckTitle(d *models.Deck) string {
 
 // actionArgs is the union of every action's JSON body.
 type actionArgs struct {
-	Q      string   `json:"q"`
-	Index  *int     `json:"index"`
-	Title  string   `json:"title"`
-	Text   string   `json:"text"`
-	Bible  string   `json:"bible"`
-	I      *int     `json:"i"`
-	Slide  *int     `json:"slide"`
-	Kind   string   `json:"kind"`
-	N      int      `json:"n"`
-	On     *bool    `json:"on"`
-	Source string   `json:"source"`
-	From   *int     `json:"from"`
-	To     *int     `json:"to"`
-	Path   string   `json:"path"`
-	Paths  []string `json:"paths"` // add-media: several files / folders
-	Name   string   `json:"name"`
-	Ctrl   bool     `json:"ctrl"`
-	Meta   bool     `json:"meta"`
-	Shift  bool     `json:"shift"`
-	Alt    bool     `json:"alt"`
-	Tab    string   `json:"tab"`
+	Q        string          `json:"q"`
+	Index    *int            `json:"index"`
+	Title    string          `json:"title"`
+	Text     string          `json:"text"`
+	Bible    string          `json:"bible"`
+	I        *int            `json:"i"`
+	Slide    *int            `json:"slide"`
+	Kind     string          `json:"kind"`
+	N        int             `json:"n"`
+	On       *bool           `json:"on"`
+	Source   string          `json:"source"`
+	From     *int            `json:"from"`
+	To       *int            `json:"to"`
+	Path     string          `json:"path"`
+	Paths    []string        `json:"paths"` // add-media: several files / folders
+	Name     string          `json:"name"`
+	Key      string          `json:"key"`      // set-setting: the setting (settings.go)
+	Value    json.RawMessage `json:"value"`    // set-setting: its JSON value
+	Duration *int            `json:"duration"` // transition: milliseconds
+	Item     string          `json:"item"`     // menu: the menu item
+	Page     string          `json:"page"`     // options: the section to show
+	Ctrl     bool            `json:"ctrl"`
+	Meta     bool            `json:"meta"`
+	Shift    bool            `json:"shift"`
+	Alt      bool            `json:"alt"`
+	Tab      string          `json:"tab"`
 
 	// UI-driving hooks (hooks.go).
 	Target    string  `json:"target"`
@@ -140,7 +147,7 @@ type actionArgs struct {
 
 	// Themes (themes.go).
 	Theme *models.Theme `json:"theme"` // save-theme: the theme to save (id 0 inserts)
-	Item  *int          `json:"item"`  // apply-theme: schedule row (default: the selected one)
+	Row   *int          `json:"row"`   // apply-theme: schedule row (default: the selected one)
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -468,7 +475,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleThemeCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}
@@ -487,6 +494,8 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(a.win.Editor.AsWindow())
 	case "theme-editor":
 		png, err = render.WindowScreenshot(a.win.ThemeEditor.AsWindow())
+	case "settings":
+		png, err = render.WindowScreenshot(a.win.Settings.AsWindow())
 	case "dialog":
 		png, err = render.WindowScreenshot(a.win.Confirm.AsWindow())
 	case "message":
@@ -494,7 +503,7 @@ func (a *App) screenshot(cmd *control.Command) {
 	case "output":
 		png, err = a.out.Screenshot()
 	default:
-		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|dialog|message)", cmd.Query["window"])
+		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|settings|dialog|message)", cmd.Query["window"])
 	}
 	if err != nil {
 		cmd.RespondErr(err)

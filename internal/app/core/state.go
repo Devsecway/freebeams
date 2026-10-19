@@ -104,12 +104,17 @@ type Alert struct {
 
 // DialogState describes the open dialogs.
 type DialogState struct {
-	Editor  bool   `json:"editor"`            // the song editor is open
-	Confirm string `json:"confirm,omitempty"` // title of the open question
-	Message *Alert `json:"message,omitempty"` // the error message on screen
-	Alerts  int    `json:"alerts"`            // error messages queued (shown one at a time)
+	Editor   bool   `json:"editor"`            // the song editor is open
+	Settings bool   `json:"settings"`          // the Options dialog is open
+	Confirm  string `json:"confirm,omitempty"` // title of the open question
+	Message  *Alert `json:"message,omitempty"` // the error message on screen
+	Alerts   int    `json:"alerts"`            // error messages queued (shown one at a time)
 	// ThemeEditor reports the theme editor being open.
 	ThemeEditor bool `json:"themeEditor,omitempty"`
+	// Host is the window the topmost dialog is a child of: "main" for the
+	// operator window, else the dialog under it ("editor", …). It is never the
+	// output window. "" when no dialog is open.
+	Host string `json:"host,omitempty"`
 }
 
 // ResourceState is what the resource preview (right of the resource tabs) shows.
@@ -136,6 +141,7 @@ type State struct {
 	Media            MediaState     `json:"media"`
 	Themes           ThemesState    `json:"themes"`
 	Resource         ResourceState  `json:"resource"`
+	Settings         Settings       `json:"settings"` // the Options dialog's values
 	Bibles           []string       `json:"bibles"`
 	Import           ImportState    `json:"import"`
 	LastError        string         `json:"lastError"`
@@ -173,6 +179,7 @@ type StateInput struct {
 	Media            MediaState
 	Themes           ThemesState
 	Resource         ResourceState
+	Settings         Settings
 	Import           ImportState
 	LastError        string
 	Dialog           DialogState
@@ -224,6 +231,7 @@ func BuildState(in StateInput) State {
 		Media:            in.Media,
 		Themes:           in.Themes,
 		Resource:         in.Resource,
+		Settings:         in.Settings,
 		Import:           in.Import,
 		LastError:        in.LastError,
 		Dialog:           in.Dialog,

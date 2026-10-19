@@ -130,6 +130,13 @@ internal/app               Godot: the App node that wires store + presenter + ui
   their own blank-line-separated block to keep diffs additive and merges clean (several agents edit these files).
 - A smoke block that adds a schedule item late must `save-schedule` before `# ---- quit`, or the close question makes
   "the app did not exit after quit" fail.
+- Draw calls from a `draw` signal handler (`CanvasItem.OnDraw`) work, but end the handler with a getter (`ci.Visible()`)
+  so the buffered draw calls flush while Godot is still inside the item's draw pass.
+- `clip_children = ClipChildrenOnly` on a plain Control plus a shape drawn by that Control masks its children (wipe,
+  iris); it coexists with `clip_contents` on the same node. Clipping nodes must not be nested (the CanvasGroup rule).
+- A `MenuBar` with `prefer_global_menu` lives in the macOS system menu bar and has zero minimum size in the window;
+  automation cannot click native menus, so every handler is also a control action (`menu {item}`).
+- `debug.ReadBuildInfo().Main.Version` is the VCS pseudo-version under `gd run`, usable for an About box.
 - `screencapture -D 2` and `DisplayServer.ScreenGetImage` need Screen Recording permission for the terminal. Without
   it, check the TV by eye and the content with `/screenshot?window=output`.
 - A node that only reacts to its own lifecycle needs no extension class: connect `OnVisibilityChanged` /

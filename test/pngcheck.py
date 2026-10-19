@@ -7,6 +7,7 @@
                                               # (+-3 per channel) inside the region given
                                               # as fractions of the width/height
   pngcheck.py FILE lacks RRGGBB X0 Y0 X1 Y1 [N] # < N (default 1) pixels of that color there
+  pngcheck.py FILE same FILE2                 # same size and >= 99.9% identical sampled pixels
 
 Exit status 0 when the assertion holds; a message on stderr otherwise.
 """
@@ -92,6 +93,17 @@ def main():
             sys.exit("%s: %d pixels of #%s in the region, want >= %d" % (path, n, sys.argv[3], limit))
         if what == "lacks" and n >= limit:
             sys.exit("%s: %d pixels of #%s in the region, want < %d" % (path, n, sys.argv[3], limit))
+    elif what == "same":
+        other = sys.argv[3]
+        w2, h2, bpp2, rows2 = read_png(other)
+        if (w, h) != (w2, h2):
+            sys.exit("%s is %dx%d but %s is %dx%d" % (path, w, h, other, w2, h2))
+        total = differ = 0
+        for a, b in zip(pixels(w, h, bpp, rows, step=2), pixels(w2, h2, bpp2, rows2, step=2)):
+            total += 1
+            differ += a != b
+        if differ > total * 0.001:
+            sys.exit("%s and %s differ in %d of %d sampled pixels" % (path, other, differ, total))
     else:
         sys.exit("unknown check " + what)
 
