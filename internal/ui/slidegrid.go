@@ -291,8 +291,9 @@ func (t *slideTile) Draw() {
 	}
 	badgeW := float32(22)
 	if item.Number == 0 && num != "" {
+		// Leave a clear gap between the label and the badge.
 		badgeW = min(f.MoreArgs().GetStringSize(num, GUI.HorizontalAlignmentLeft, -1, fontCaption, 0,
-			TextServer.DirectionAuto, TextServer.OrientationHorizontal).X+6, lr.Size.X/2)
+			TextServer.DirectionAuto, TextServer.OrientationHorizontal).X+12, lr.Size.X/2)
 	}
 	drawText(ci, f, fontCaption, lr, num, GUI.HorizontalAlignmentRight, textColor)
 	lr.Size.X -= badgeW

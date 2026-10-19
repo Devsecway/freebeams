@@ -295,6 +295,8 @@ func (a *App) focusTarget(target string) error {
 		c = a.win.PreviewGrid.AsControl()
 	case "live-grid":
 		c = a.win.LiveGrid.AsControl()
+	case "media-grid":
+		c = a.win.Media.Grid().AsControl()
 	default:
 		return fmt.Errorf("focus: unknown target %q", target)
 	}

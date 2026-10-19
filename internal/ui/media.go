@@ -26,6 +26,10 @@ type MediaRow struct {
 	// Badge is shown at the tile's right ("0:30" for a video, or a short
 	// status such as "Needs ffmpeg" / "Converting 42%").
 	Badge string
+	// Thumb is the tile's thumbnail file. The panel does not load it (the
+	// factory does); it is part of the row's identity, so that SetItems with
+	// a new thumbnail rebuilds the tile.
+	Thumb string
 }
 
 // mediaFilters are the library pane's collections (UI-SPEC §3.6: Media

@@ -28,6 +28,12 @@ type viewCache struct {
 	verseSel    int
 	status      string
 	statusErr   bool
+	mediaVer    int
+	mediaThumbs int
+	mediaRows   []ui.MediaRow
+	mediaSel    int
+	mediaKind   models.MediaKind
+	mediaStatus string
 	schedVer    int
 	schedRows   []ui.ScheduleRow
 	schedSel    int
@@ -42,7 +48,7 @@ type viewCache struct {
 
 func newViewCache() viewCache {
 	return viewCache{previewSel: -2, liveSel: -2, songSel: -2, songsVer: -1, biblesVer: -1, bibleSel: -2,
-		versesVer: -1, verseSel: -2, schedVer: -1, schedSel: -2}
+		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2}
 }
 
 // buildUI creates the main window, the monitors and the output, and connects
@@ -133,9 +139,12 @@ func (a *App) buildUI() {
 	sc.OnActivate = func(i int) { a.event(func() { a.selectVerse(i, true) }) }
 	sc.OnAddToSchedule = func() { a.event(func() { a.addScriptureToSchedule(nil) }) }
 	sc.OnGoLive = func() { a.event(a.goLiveVerse) }
+
+	a.wireMedia()
 }
 
-// thumbnail is a SlideView (cut, no transition) showing slide i of d.
+// thumbnail is a SlideView (cut, no transition) showing slide i of d. A
+// video background is drawn as its poster still: thumbnails never play.
 func thumbnail(d *models.Deck, i int) Control.Instance {
 	if d == nil || i < 0 || i >= len(d.Slides) {
 		return Control.Instance{}
@@ -143,6 +152,7 @@ func thumbnail(d *models.Deck, i int) Control.Instance {
 	v := render.NewSlideView()
 	v.SetTransitionDuration(0)
 	s := d.Slides[i]
+	s.Background = core.StillBackground(s.Background)
 	v.SetFrame(models.Frame{Mode: models.ModeNormal, Slide: &s, Theme: d.Theme})
 	return v.AsControl()
 }
@@ -259,6 +269,29 @@ func (a *App) render() {
 		w.Scriptures.SetStatus(a.scriptStatus, a.scriptErr)
 	}
 
+	// Media tab: the tiles are rebuilt when the list changes or when derived
+	// files / badges arrived (SetItems rebuilds the thumbnails too).
+	if a.md.ver != v.mediaVer || a.md.thumbVer != v.mediaThumbs {
+		rows := a.mediaRows()
+		if a.md.ver != v.mediaVer || !reflect.DeepEqual(rows, v.mediaRows) {
+			w.Media.SetItems(rows)
+			v.mediaSel = -2
+		}
+		v.mediaVer, v.mediaThumbs, v.mediaRows = a.md.ver, a.md.thumbVer, rows
+	}
+	if a.md.sel != v.mediaSel {
+		v.mediaSel = a.md.sel
+		w.Media.SetSelected(a.md.sel)
+	}
+	if a.md.kind != v.mediaKind || !v.init {
+		v.mediaKind = a.md.kind
+		w.Media.SetFilter(a.md.kind)
+	}
+	if a.md.status != v.mediaStatus || !v.init {
+		v.mediaStatus = a.md.status
+		w.Media.SetCountText(a.md.status)
+	}
+
 	// Resource preview for the visible tab.
 	frame, title, caption := a.resourcePreviewFrame()
 	a.resView.SetFrame(frame)
@@ -290,6 +323,8 @@ func (a *App) resourcePreview() resourcePreview {
 		return a.songRes
 	case ui.TabScriptures:
 		return resourcePreview{deck: a.scriptureDeck, index: max(a.verseSelection(), 0)}
+	case ui.TabMedia:
+		return resourcePreview{deck: a.md.deck}
 	}
 	return resourcePreview{}
 }

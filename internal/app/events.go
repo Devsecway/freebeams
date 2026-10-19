@@ -143,12 +143,13 @@ func (a *App) stepSchedule(delta int, live bool) {
 	}
 }
 
-// selectScheduleItem selects row i and loads the item into Preview.
+// selectScheduleItem selects row i and loads the item into Preview. A
+// video background plays from its transcode when the library has one.
 func (a *App) selectScheduleItem(i int) {
 	if i < 0 || i >= len(a.sched.Items) {
 		return
 	}
-	a.setPreview(core.ItemDeck(a.sched.Items[i]))
+	a.setPreview(core.ResolveDeck(core.ItemDeck(a.sched.Items[i]), a.lookupPlayable))
 }
 
 // removeScheduleItem removes item i. When it was the selected item, the item
@@ -184,8 +185,12 @@ func (a *App) addToSchedule(item models.ScheduleItem) int {
 
 // addCurrentToSchedule adds the current resource (by tab) to the schedule.
 func (a *App) addCurrentToSchedule(cmd *control.Command) {
-	if a.win.Resources.Tab() == ui.TabScriptures {
+	switch a.win.Resources.Tab() {
+	case ui.TabScriptures:
 		a.addScriptureToSchedule(cmd)
+		return
+	case ui.TabMedia:
+		a.addMediaToSchedule(cmd)
 		return
 	}
 	if a.songSel < 0 {
@@ -505,6 +510,8 @@ func (a *App) resourceGoLive() {
 		}
 	case ui.TabScriptures:
 		a.goLiveVerse()
+	case ui.TabMedia:
+		a.mediaGoLive()
 	}
 }
 

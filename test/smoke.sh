@@ -341,10 +341,100 @@ act "hotkeys are off while the error is shown" key '{"name":"n"}' 'not d["consum
 act "OK closes the error" dismiss '' 'not s["dialog"].get("message") and s["dialog"]["alerts"] == 0 and s["focus"] != "dialog"'
 act "remove schedule item" remove-schedule '{"index":1}' 's["schedule"]["items"] == ["Amazing Grace"] and s["schedule"]["dirty"]'
 
-# ---- Phase 2 placeholder tab ------------------------------------------------------
+# ---- media -----------------------------------------------------------------------------
+# field RESPONSE a.b.c prints a value of the state in RESPONSE.
+field() {
+	python3 -c 'import json,sys
+v = json.loads(sys.argv[1])["data"]
+for k in sys.argv[2].split("."):
+    v = v[k]
+print(v)' "$1" "$2"
+}
 act "Media tab" tab '{"tab":"media"}' 's["tab"] == 2'
+# Thumbnails, poster frames and transcodes are made in the background; wait for the pass.
+for _ in $(seq 1 240); do
+	LAST="$(state)"
+	python3 -c 'import json,sys; s=json.loads(sys.argv[1])["data"]; sys.exit(0 if not s["media"]["working"] else 1)' "$LAST" 2>/dev/null && break
+	sleep 0.5
+done
+check "media work finished" "$LAST" 'not s["media"]["working"] and s["media"]["tools"] != ""'
+log "media tools: $(field "$LAST" media.tools); $(field "$LAST" media.countText)"
+if [ -f "$EW_SONGS" ]; then
+	check "EasyWorship media imported (8 videos, 15 images)" "$LAST" 's["media"]["count"] >= 23 and s["media"]["videos"] >= 8 and s["media"]["images"] >= 15'
+fi
+FFMPEG="$(field "$LAST" media.ffmpeg)"
+if [ "$FFMPEG" = "True" ]; then
+	check "every listed item has a thumbnail (ffmpeg present)" "$LAST" 's["media"]["pending"] == 0'
+else
+	check "stills have thumbnails without ffmpeg" "$LAST" 's["media"]["pending"] <= s["media"]["videos"]'
+fi
+MEDIA_COUNT="$(field "$LAST" media.count)"
+IMAGES="$(field "$LAST" media.images)"
+VIDEOS="$(field "$LAST" media.videos)"
 wait_idle
 shot media-tab main
+pixel "media tab has content" "$OUT/media-tab.png" notblank
+act "search media" search-media '{"q":"still"}' 's["media"]["query"] == "still" and s["media"]["results"] <= s["media"]["count"]'
+act "filter images" search-media '{"q":"","kind":"image"}' 's["media"]["kind"] == "image" and s["media"]["results"] == s["media"]["images"] and s["media"]["query"] == ""'
+if [ "$IMAGES" -gt 0 ]; then
+	act "select the first image" select-media '{"index":0}' 's["media"]["selected"] == 0 and s["preview"]["count"] == 1 and s["preview"]["title"] == s["media"]["current"] and s["resource"]["title"] == s["media"]["current"]'
+	act "image live" go-live '' 's["live"]["title"] == s["media"]["current"] and s["live"]["count"] == 1 and s["transitioning"]'
+	wait_idle
+	shot media-image-output output
+	pixel "image output has content" "$OUT/media-image-output.png" notblank
+fi
+# A synthetic solid #2a7f62 image gives an exact pixel check on the projector.
+MEDIA_DIR="$OUT/media"
+mkdir -p "$MEDIA_DIR"
+python3 - "$MEDIA_DIR/smoke-green.png" <<'PY'
+import struct, sys, zlib
+w, h = 320, 180
+raw = (b"\x00" + bytes([0x2A, 0x7F, 0x62]) * w) * h
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+open(sys.argv[1], "wb").write(png)
+PY
+printf 'not media' >"$MEDIA_DIR/notes.txt"
+act "add a media folder" add-media "{\"path\":\"$MEDIA_DIR\"}" "s[\"media\"][\"count\"] == $MEDIA_COUNT + 1 and s[\"media\"][\"images\"] == $IMAGES + 1"
+act "adding the folder again adds nothing" add-media "{\"path\":\"$MEDIA_DIR\"}" "s[\"media\"][\"count\"] == $MEDIA_COUNT + 1"
+act "select the synthetic image" select-media '{"title":"smoke-green"}' 's["media"]["current"] == "smoke-green" and s["preview"]["title"] == "smoke-green"'
+act "focus the media grid" focus '{"target":"media-grid"}' 's["focus"] == "grid"'
+SEL="$(field "$LAST" media.selected)"
+if [ "$SEL" -gt 0 ]; then
+	act "Left in the media grid moves the selection" native-key '{"name":"left"}' "s[\"media\"][\"selected\"] == $SEL - 1 and s[\"preview\"][\"title\"] != \"smoke-green\""
+	act "Right moves it back" native-key '{"name":"right"}' "s[\"media\"][\"selected\"] == $SEL and s[\"preview\"][\"title\"] == \"smoke-green\""
+fi
+act "Enter in the media grid sends the item live" native-key '{"name":"enter"}' 's["live"]["title"] == "smoke-green"'
+act "release focus (media)" focus '{"target":"none"}' 's["focus"] == "none"'
+wait_idle
+shot media-green-output output
+shot media-green-main main
+pixel "the output shows the image" "$OUT/media-green-output.png" has 2a7f62 0.25 0.25 0.75 0.75 10000
+pixel "the live monitor shows the image" "$OUT/media-green-main.png" has 2a7f62 0.68 0.42 0.91 0.61 2000
+act "add media to schedule" add-to-schedule '{"source":"media"}' 's["schedule"]["items"][-1] == "smoke-green" and s["schedule"]["dirty"]'
+MEDIA_ROW=$(( $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST") - 1 ))
+act "clear live with black" black '' 's["mode"] == "black"'
+act "black off" black '' 's["mode"] == "normal"'
+act "select the media schedule item" select-schedule "{\"index\":$MEDIA_ROW}" "s[\"preview\"][\"title\"] == \"smoke-green\" and s[\"schedule\"][\"selected\"] == $MEDIA_ROW"
+act "media schedule item live" go-live '' "s[\"schedule\"][\"live\"] == $MEDIA_ROW and s[\"live\"][\"title\"] == \"smoke-green\""
+act "remove asks for confirmation" remove-media '{"title":"smoke-green"}' 's["focus"] == "dialog" and s["dialog"]["confirm"] == "Remove Media"'
+act "cancel the removal" dismiss '' 's["focus"] != "dialog"'
+act "remove the synthetic image" remove-media '{"title":"smoke-green","confirm":true}' "s[\"media\"][\"count\"] == $MEDIA_COUNT and s[\"media\"].get(\"current\", \"\") == \"\""
+check "the schedule still has the media item" "$LAST" "s[\"schedule\"][\"items\"][$MEDIA_ROW] == \"smoke-green\" and s[\"live\"][\"title\"] == \"smoke-green\""
+act "filter videos" search-media '{"q":"","kind":"video"}' 's["media"]["kind"] == "video" and s["media"]["results"] == s["media"]["videos"]'
+if [ "$VIDEOS" -gt 0 ]; then
+	act "select the first video" select-media '{"index":0}' 's["media"]["selected"] == 0 and s["preview"]["count"] == 1 and s["preview"]["title"] == s["media"]["current"]'
+	act "video live (playing, or its poster frame)" go-live '' 's["live"]["title"] == s["media"]["current"]'
+	wait_idle
+	shot media-video-output output
+	shot media-video-main main
+	if [ "$FFMPEG" = "True" ]; then
+		pixel "video output shows the poster frame or the video" "$OUT/media-video-output.png" notblank
+	fi
+	check "video playability matches the Theora encoder" "$LAST" '(s["media"]["theora"] and s["media"]["playable"] == s["media"]["videos"]) or (not s["media"]["theora"] and s["media"]["playable"] == 0)'
+fi
+act "all media" search-media '{"q":""}' 's["media"]["kind"] == "" and s["media"]["results"] == s["media"]["count"]'
 act "Songs tab" tab '{"tab":"songs"}' 's["tab"] == 0'
 
 # ---- song editor / delete -------------------------------------------------------

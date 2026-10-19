@@ -66,6 +66,7 @@ func (a *App) state() core.State {
 			Reference: a.reference, Passage: deckTitle(a.scriptureDeck), Verses: len(a.verseRows),
 			Selected: a.verseSelection(), Status: a.scriptStatus, Error: a.scriptErr,
 		},
+		Media:         a.mediaStateDoc(),
 		Resource:      core.ResourceState{Title: resTitle, Caption: resCaption},
 		Import:        a.importState,
 		LastError:     a.lastError,
@@ -95,26 +96,27 @@ func deckTitle(d *models.Deck) string {
 
 // actionArgs is the union of every action's JSON body.
 type actionArgs struct {
-	Q      string `json:"q"`
-	Index  *int   `json:"index"`
-	Title  string `json:"title"`
-	Text   string `json:"text"`
-	Bible  string `json:"bible"`
-	I      *int   `json:"i"`
-	Slide  *int   `json:"slide"`
-	Kind   string `json:"kind"`
-	N      int    `json:"n"`
-	On     *bool  `json:"on"`
-	Source string `json:"source"`
-	From   *int   `json:"from"`
-	To     *int   `json:"to"`
-	Path   string `json:"path"`
-	Name   string `json:"name"`
-	Ctrl   bool   `json:"ctrl"`
-	Meta   bool   `json:"meta"`
-	Shift  bool   `json:"shift"`
-	Alt    bool   `json:"alt"`
-	Tab    string `json:"tab"`
+	Q      string   `json:"q"`
+	Index  *int     `json:"index"`
+	Title  string   `json:"title"`
+	Text   string   `json:"text"`
+	Bible  string   `json:"bible"`
+	I      *int     `json:"i"`
+	Slide  *int     `json:"slide"`
+	Kind   string   `json:"kind"`
+	N      int      `json:"n"`
+	On     *bool    `json:"on"`
+	Source string   `json:"source"`
+	From   *int     `json:"from"`
+	To     *int     `json:"to"`
+	Path   string   `json:"path"`
+	Paths  []string `json:"paths"` // add-media: several files / folders
+	Name   string   `json:"name"`
+	Ctrl   bool     `json:"ctrl"`
+	Meta   bool     `json:"meta"`
+	Shift  bool     `json:"shift"`
+	Alt    bool     `json:"alt"`
+	Tab    string   `json:"tab"`
 
 	// UI-driving hooks (hooks.go).
 	Target    string  `json:"target"`
@@ -288,9 +290,59 @@ func (a *App) handleCommand(cmd *control.Command) {
 			ok()
 		case "scripture":
 			a.addScriptureToSchedule(cmd)
+		case "media":
+			a.addMediaToSchedule(cmd)
 		default:
-			cmd.RespondErr(fmt.Errorf("add-to-schedule: source must be \"song\" or \"scripture\", got %q", args.Source))
+			cmd.RespondErr(fmt.Errorf("add-to-schedule: source must be \"song\", \"scripture\" or \"media\", got %q", args.Source))
 		}
+
+	// Media.
+	case "search-media":
+		kind := models.MediaKind(strings.ToLower(args.Kind))
+		if kind != "" && kind != models.MediaImage && kind != models.MediaVideo {
+			cmd.RespondErr(fmt.Errorf("search-media: kind must be \"\", \"image\" or \"video\", got %q", args.Kind))
+			return
+		}
+		a.win.Media.SetSearchText(args.Q)
+		a.loadMedia(args.Q, kind, cmd)
+	case "select-media":
+		i := -1
+		switch {
+		case args.Index != nil:
+			i = *args.Index
+		case args.Title != "":
+			i = core.FindMedia(a.md.list, args.Title)
+		}
+		if i < 0 || i >= len(a.md.list) {
+			cmd.RespondErr(fmt.Errorf("select-media: no media item matches %s", string(cmd.Data)))
+			return
+		}
+		a.win.Resources.SetTab(ui.TabMedia)
+		a.selectMedia(i, mediaPreview, cmd)
+	case "add-media":
+		paths := args.Paths
+		if args.Path != "" {
+			paths = append(paths, args.Path)
+		}
+		a.addMediaPaths(paths, cmd)
+	case "remove-media":
+		i := -1
+		switch {
+		case args.Index != nil:
+			i = *args.Index
+		case args.Title != "":
+			i = core.FindMedia(a.md.list, args.Title)
+		}
+		if i < 0 || i >= len(a.md.list) {
+			cmd.RespondErr(fmt.Errorf("remove-media: no media item matches %s", string(cmd.Data)))
+			return
+		}
+		if !args.Confirm {
+			a.removeMedia(i) // asks first, like the UI
+			ok()
+			return
+		}
+		a.doRemoveMedia(a.md.list[i], cmd)
 	case "select-schedule":
 		if args.Index == nil || *args.Index < 0 || *args.Index >= len(a.sched.Items) {
 			cmd.RespondErr(errArgs)
