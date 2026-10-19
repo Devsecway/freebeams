@@ -77,6 +77,24 @@ CREATE TABLE settings (
 	value TEXT NOT NULL
 ) WITHOUT ROWID;
 `,
+	// 2: the media library (images and motion backgrounds).
+	`
+-- duration is in milliseconds (0 for stills). thumb_path and transcoded_path
+-- are derived files in the app's cache; "" until they have been made.
+CREATE TABLE media (
+	id              INTEGER PRIMARY KEY,
+	path            TEXT    NOT NULL UNIQUE,
+	kind            TEXT    NOT NULL,
+	title           TEXT    NOT NULL DEFAULT '',
+	duration        INTEGER NOT NULL DEFAULT 0,
+	width           INTEGER NOT NULL DEFAULT 0,
+	height          INTEGER NOT NULL DEFAULT 0,
+	thumb_path      TEXT    NOT NULL DEFAULT '',
+	transcoded_path TEXT    NOT NULL DEFAULT '',
+	added           TEXT    NOT NULL
+);
+CREATE INDEX media_kind_title ON media (kind, title COLLATE NOCASE);
+`,
 }
 
 // migrate brings the schema up to date. Each migration runs in its own

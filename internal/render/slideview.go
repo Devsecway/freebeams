@@ -260,7 +260,9 @@ func normalizeBackground(b models.Background) models.Background {
 		return models.Background{Kind: b.Kind, Color: b.Color, Color2: b.Color2}
 	case models.BackgroundImage:
 		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path}
-	default: // color, video (Phase 2 falls back to Color), unknown
+	case models.BackgroundVideo:
+		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path, Poster: b.Poster}
+	default: // color, unknown
 		return models.Background{Kind: models.BackgroundColor, Color: b.Color}
 	}
 }
@@ -307,6 +309,7 @@ type layer struct {
 	root   Control.Instance
 	bg     ColorRect.Instance
 	tex    TextureRect.Instance
+	video  *videoLayer // motion background, between tex and the text (video.go)
 	body   Label.Instance
 	footer Label.Instance
 	// LabelSettings are deliberately not kept here: a Go reference reachable
@@ -346,6 +349,7 @@ func newLayer(parent Node.Instance) *layer {
 	n := l.root.AsNode()
 	n.AddChild(l.bg.AsNode())
 	n.AddChild(l.tex.AsNode())
+	l.video = newVideoLayer(n)
 	n.AddChild(l.body.AsNode())
 	n.AddChild(l.footer.AsNode())
 	parent.AddChild(n)
@@ -482,8 +486,13 @@ func (l *layer) apply(vis visual, r layout.Rect, s float64) {
 		} else {
 			l.tex.AsCanvasItem().SetVisible(false)
 		}
+	case models.BackgroundVideo:
+		l.applyVideo(vis.bg)
 	default:
 		l.tex.AsCanvasItem().SetVisible(false)
+	}
+	if vis.bg.Kind != models.BackgroundVideo {
+		l.video.hide()
 	}
 
 	th := vis.theme

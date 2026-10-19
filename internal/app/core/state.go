@@ -56,6 +56,25 @@ type ScriptureState struct {
 	CopyrightedAvailable []string `json:"copyrightedAvailable"`
 }
 
+// MediaState summarises the Media tab.
+type MediaState struct {
+	Count     int    `json:"count"`  // items in the library
+	Videos    int    `json:"videos"` // of which videos
+	Images    int    `json:"images"` // of which images
+	Query     string `json:"query"`
+	Kind      string `json:"kind"`    // collection filter: "", "video", "image"
+	Results   int    `json:"results"` // tiles in the grid
+	Selected  int    `json:"selected"`
+	Current   string `json:"current,omitempty"` // title of the selected item
+	CountText string `json:"countText"`
+	Working   bool   `json:"working"`  // thumbnails / transcodes being made
+	Pending   int    `json:"pending"`  // listed items still without a thumbnail
+	Playable  int    `json:"playable"` // listed videos with a playable file
+	FFmpeg    bool   `json:"ffmpeg"`
+	Theora    bool   `json:"theora"`
+	Tools     string `json:"tools"` // media.Tools.Status()
+}
+
 // Alert is an error message for the operator, shown in the message dialog.
 type Alert struct {
 	Title   string `json:"title"`
@@ -91,6 +110,7 @@ type State struct {
 	Songs            SongsState     `json:"songs"`
 	SongCount        int            `json:"songCount"`
 	Scripture        ScriptureState `json:"scripture"`
+	Media            MediaState     `json:"media"`
 	Resource         ResourceState  `json:"resource"`
 	Bibles           []string       `json:"bibles"`
 	Import           ImportState    `json:"import"`
@@ -122,6 +142,7 @@ type StateInput struct {
 	Bibles           []models.Bible
 	BibleSelected    int
 	Scripture        ScriptureState // Bibles/Bible are filled from Bibles/BibleSelected
+	Media            MediaState
 	Resource         ResourceState
 	Import           ImportState
 	LastError        string
@@ -169,6 +190,7 @@ func BuildState(in StateInput) State {
 		Songs:            in.Songs,
 		SongCount:        in.Songs.Count,
 		Scripture:        in.Scripture,
+		Media:            in.Media,
 		Resource:         in.Resource,
 		Import:           in.Import,
 		LastError:        in.LastError,

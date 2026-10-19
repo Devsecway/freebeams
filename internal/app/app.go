@@ -107,6 +107,8 @@ type App struct {
 
 	songRes resourcePreview // the Scriptures preview derives from verseSelection
 
+	md mediaState // the Media tab (media.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -177,6 +179,7 @@ func (a *App) Ready() {
 	a.scanEWBibles()
 	a.searchSongs("", nil)
 	a.loadBibles(nil)
+	a.initMedia()
 	a.dirty = true
 }
 
@@ -223,6 +226,7 @@ func (a *App) startImport() {
 	}
 	if done {
 		a.importState = core.ImportState{Done: true, Summary: rec.Summary}
+		a.startMediaImport() // libraries imported before the media library existed
 		return
 	}
 	if !easyworship.Installed() {
@@ -239,6 +243,9 @@ func (a *App) startImport() {
 		summary := core.ImportSummary(rep)
 		if err == nil {
 			err = st.SetSetting(ctx, core.SettingImportDone, core.ImportRecord{Done: true, Summary: summary})
+		}
+		if err == nil {
+			err = st.SetSetting(ctx, core.SettingMediaImportDone, true) // ImportInto covered media
 		}
 		return func() error {
 			a.importState.Running = false
@@ -257,6 +264,7 @@ func (a *App) startImport() {
 			a.songsStatus = core.SongsFooter(len(a.songs), a.importState)
 			a.searchSongs(a.songQuery, nil)
 			a.loadBibles(nil)
+			a.loadMedia(a.md.query, a.md.kind, nil)
 			return nil
 		}
 	})

@@ -6,6 +6,7 @@ type ItemKind string
 const (
 	ItemSong      ItemKind = "song"
 	ItemScripture ItemKind = "scripture"
+	ItemMedia     ItemKind = "media"
 )
 
 // ScheduleItem is one entry in a service schedule. It references library
@@ -19,6 +20,7 @@ type ScheduleItem struct {
 	SongID   int64    `json:"songId,omitempty"`
 	Passage  *Passage `json:"passage,omitempty"`
 	BibleID  int64    `json:"bibleId,omitempty"`
+	MediaID  int64    `json:"mediaId,omitempty"`
 	// Theme is the theme to render with (resolved when the item was added).
 	Theme  Theme   `json:"theme"`
 	Slides []Slide `json:"slides"`

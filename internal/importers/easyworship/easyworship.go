@@ -33,14 +33,20 @@ type BibleFile struct {
 
 // Options controls ImportInto.
 type Options struct {
-	// SongsDir is the EasyWorship Databases/Data dir; "" = DefaultSongsDir().
+	// SongsDir is the EasyWorship Databases/Data dir (Songs.db, SongWords.db
+	// and Media.db); "" = DefaultSongsDir().
 	SongsDir string
 	// BiblesDir is the EasyWorship Plugins/Bibles dir; "" = DefaultBiblesDir().
 	BiblesDir string
+	// ResourcesDir is the EasyWorship Resources dir (Images, Videos);
+	// "" = DefaultResourcesDir().
+	ResourcesDir string
 	// IncludeCopyrightedBibles imports non-public-domain Bibles too.
 	IncludeCopyrightedBibles bool
 	// BiblesOnly skips the songs (an on-request Bible import after the first run).
 	BiblesOnly bool
+	// SkipMedia leaves the media library alone (ImportMedia runs it on its own).
+	SkipMedia bool
 }
 
 // Report summarises an import.
@@ -49,6 +55,8 @@ type Report struct {
 	SongsSkipped   int // already present (same title+author) or unreadable
 	BiblesImported []string
 	BiblesSkipped  []string // with reason, e.g. "HCSB (copyrighted)"
+	MediaImported  int
+	MediaSkipped   int // already present (same path)
 	Warnings       []string
 }
 
@@ -280,12 +288,13 @@ func ReadBible(path string) (models.Bible, []models.Verse, error) {
 	return readEWB(path)
 }
 
-// ImportInto imports songs (unless opt.BiblesOnly) and Bibles into st. It is
-// idempotent: running it twice does not duplicate songs or Bibles. Songs
-// already in the library with the same title and author (case-insensitive)
-// are skipped, as are Bibles whose abbreviation exists. Problems reading
-// EasyWorship data become Warnings; only store failures (and cancellation)
-// return an error.
+// ImportInto imports songs, Bibles and media into st (opt.BiblesOnly limits it to
+// the Bibles; opt.SkipMedia leaves the media library alone). It is idempotent:
+// running it twice does not duplicate anything. Songs already in the library
+// with the same title and author (case-insensitive) are skipped, as are
+// Bibles whose abbreviation exists and media files already registered.
+// Problems reading EasyWorship data become Warnings; only store failures
+// (and cancellation) return an error.
 func ImportInto(ctx context.Context, st *store.Store, opt Options) (Report, error) {
 	var rep Report
 	if st == nil {
@@ -298,6 +307,11 @@ func ImportInto(ctx context.Context, st *store.Store, opt Options) (Report, erro
 	}
 	if err := importBibles(ctx, st, opt, &rep); err != nil {
 		return rep, err
+	}
+	if !opt.SkipMedia && !opt.BiblesOnly {
+		if err := importMedia(ctx, st, opt, &rep); err != nil {
+			return rep, err
+		}
 	}
 	return rep, nil
 }

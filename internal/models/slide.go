@@ -32,7 +32,7 @@ const (
 	BackgroundColor    BackgroundKind = "color"
 	BackgroundGradient BackgroundKind = "gradient" // vertical, Color (top) -> Color2 (bottom)
 	BackgroundImage    BackgroundKind = "image"    // Path, scaled to cover
-	BackgroundVideo    BackgroundKind = "video"    // Path; Phase 2 (render falls back to Color)
+	BackgroundVideo    BackgroundKind = "video"    // Path (Ogg Theora plays; else Poster, else Color)
 )
 
 // Background describes a slide or theme background.
@@ -41,6 +41,9 @@ type Background struct {
 	Color  RGBA           `json:"color"`
 	Color2 RGBA           `json:"color2,omitempty"`
 	Path   string         `json:"path,omitempty"`
+	// Poster is a still shown in place of a video that cannot play (no
+	// transcode yet, or the file is missing).
+	Poster string `json:"poster,omitempty"`
 }
 
 // SlideKind tells the renderer and UI what produced a slide.
@@ -50,6 +53,7 @@ const (
 	SlideSong      SlideKind = "song"
 	SlideScripture SlideKind = "scripture"
 	SlideBlank     SlideKind = "blank"
+	SlideMedia     SlideKind = "media" // a full-screen image or video, no text
 )
 
 // Slide is the unit of display. It is plain data: the renderer turns a Slide

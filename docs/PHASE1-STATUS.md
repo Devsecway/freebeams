@@ -11,7 +11,7 @@ Legend: **pass**: verified. **partial**: works, but part of the criterion is not
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 191 checks; screenshots and app.log in test/out/
+test/smoke.sh          # 228 checks (37 of them the Phase 2 media section); screenshots and app.log in test/out/
 test/splitters.sh      # 102 checks: every splitter dragged through Godot's input pipeline
 ```
 In this document, "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`. Screenshots that `test/smoke.sh`
@@ -73,7 +73,7 @@ captured are copied to `docs/screens/app-*.png`.
 | Criterion | Status | Verification |
 |---|---|---|
 | Control server: `GET /state`, `GET /screenshot?window=main\|output`, POST actions | **pass** | Used by every smoke step. Actions: `search-songs`, `select-song`, `reference`, `select-preview-slide`, `go-live`, `next`, `prev`, `first`, `last`, `jump`, `black`, `clear`, `logo`, `output`, `go-back`, `add-to-schedule`, `select-schedule`, `remove-schedule`, `move-schedule`, `save-schedule`, `open-schedule`, `new-schedule`, `key`, `wait-idle`, `quit`. UI-driving hooks: `native-key` (`window: "output"` targets the output window), `focus`, `tab`, `editor`, `save-song`, `delete-song`, `dismiss` (topmost dialog), `accept` (topmost dialog's OK), `click-schedule`, `resource-go-live`, `close`, `split` and `drag-split` (move a named splitter programmatically or with a real mouse drag), `replay-input` (re-inject a `FREEWORSHIP_INPUT_LOG` recording), `import-bibles`. Screenshot windows: `main`, `output`, `editor`, `dialog`, `message`. `/state` also reports the open dialogs (`dialog`), the resource preview (`resource`), every splitter's position (`splitters`), the focused control (`focusOwner`) and the copyrighted Bibles available for import (`scripture.copyrightedAvailable`). |
-| `test/smoke.sh` drives a song and a scripture to live, saves screenshots, asserts `/state` | **pass** | 191 checks. Screenshots go to `test/out/` (git-ignored). The run ends through the real window-close path, and the script fails on any log error or warning. `test/splitters.sh` (102 checks) is the stress test for the layout crash below. |
+| `test/smoke.sh` drives a song and a scripture to live, saves screenshots, asserts `/state` | **pass** | 228 checks (191 for Phase 1, plus the Phase 2 media section). Screenshots go to `test/out/` (git-ignored). The run ends through the real window-close path, and the script fails on any log error or warning. `test/splitters.sh` (102 checks) is the stress test for the layout crash below. |
 
 ## Review fixes
 

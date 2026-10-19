@@ -29,12 +29,13 @@ main.go                    startup only: startup.LoadingScene(), register classe
 internal/models            pure Go domain types + logic (songs, scripture refs, slides, themes, schedule, presenter)
 internal/store             SQLite persistence (songs, bibles, themes, settings), FTS5 search
 internal/importers/...     EasyWorship (RTF lyrics, .ewb bibles), generic formats
+internal/media             pure Go: media folder scan, thumbnails, ffmpeg probe/poster/transcode behind interfaces
 internal/render            Godot: SlideView (draws a models.Slide with a models.Theme), transitions, output window
 internal/ui                Godot: operator UI widgets matching docs/UI-SPEC.md (dumb views)
 internal/control           HTTP control server (bearer key) for tests/automation
 internal/app               Godot: the App node that wires store + presenter + ui + render + control
 ```
-- `models`, `store` and `importers` **must not import graphics.gd**. They are unit-tested with plain `go test`.
+- `models`, `store`, `importers` and `media` **must not import graphics.gd**. They are unit-tested with plain `go test`.
 - `ui` widgets are **dumb views**. They receive data through setters (`SetItems(...)`) and report user intent through
   exported callback fields (`OnSelect func(i int)`). They never touch the store, the presenter or the render package.
   Slide thumbnails come from an injected factory func.
@@ -104,6 +105,15 @@ internal/app               Godot: the App node that wires store + presenter + ui
   vsync on the operator window while it is fullscreen (`Output.syncToOutput`).
 - `screencapture -D 2` and `DisplayServer.ScreenGetImage` need Screen Recording permission for the terminal. Without
   it, check the TV by eye and the content with `/screenshot?window=output`.
+- A node that only reacts to its own lifecycle needs no extension class: connect `OnVisibilityChanged` /
+  `OnTreeExiting` closures on the plain engine instance (`render/video.go`). `visibility_changed` also fires when an
+  ancestor's visibility changes, so a child can pause itself when its layer is hidden after a crossfade.
+- A widget that rebuilds its tiles only when its rows change must carry every input the thumbnail factory reads in
+  the row (e.g. `ui.MediaRow.Thumb`); otherwise a thumbnail that arrives later is never drawn.
+- Keep `Image.LoadFromFile` on the main thread but feed it small derived files: decode/scale off-thread into the cache
+  dir (`~/Library/Caches/FreeWorship/media`) and let the factory load the 640 px JPEG.
+- Godot plays Ogg Theora only. Guard `VideoStreamPlayer.Play()` behind an "is .ogv and exists" check: a missing or
+  unsupported file logs a Godot ERROR, which fails the smoke test's log hygiene.
 
 ## Conventions
 - Errors are wrapped with context (`fmt.Errorf("load song %d: %w", id, err)`). No panics in library code.
