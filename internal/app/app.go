@@ -118,6 +118,7 @@ type App struct {
 	settings     core.Settings // the Options dialog's values, persisted per key (settings.go)
 	settingsVer  int           // bumped on every settings change (re-projects the dialog)
 	settingsOpen bool          // the Options dialog is up
+	settingsPage int           // the section it opens on (ui.SettingsPage…)
 	settingsSnap core.Settings // the settings when the dialog opened (Cancel restores them)
 	recent       []string      // recent schedule files, newest first (File ▸ Open Recent)
 

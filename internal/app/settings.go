@@ -138,10 +138,13 @@ func (a *App) setInterfaceColor(color string) error {
 	return nil
 }
 
-// openSettings shows the Options dialog, remembering the settings so Cancel
-// can restore them.
-func (a *App) openSettings() {
+// openSettings shows the Options dialog on a section (ui.SettingsPage…),
+// remembering the settings so Cancel can restore them. On an open dialog it
+// only switches the section.
+func (a *App) openSettings(page int) {
+	a.settingsPage = page
 	if a.settingsOpen {
+		a.win.Settings.SetPage(page) // view-only state, like the resource tab
 		return
 	}
 	a.settingsSnap = a.settings
@@ -218,7 +221,7 @@ func (a *App) onMenu(act ui.MenuAction) {
 	case ui.MenuQuit:
 		a.requestQuit()
 	case ui.MenuOptions:
-		a.openSettings()
+		a.openSettings(ui.SettingsPageOutput)
 	case ui.MenuInterfaceDark:
 		a.fail("interface color", a.setInterfaceColor(core.ColorDark))
 	case ui.MenuInterfaceLight:
@@ -312,7 +315,7 @@ func (a *App) renderSettings(v *viewCache) {
 	}
 	switch {
 	case a.settingsOpen && !w.Settings.Visible():
-		w.Settings.Open()
+		w.Settings.OpenAt(a.settingsPage)
 	case !a.settingsOpen && w.Settings.Visible():
 		w.Settings.Hide()
 	}
@@ -360,7 +363,7 @@ func (a *App) handleSettingsCommand(cmd *control.Command, args actionArgs) bool 
 	case "options":
 		// Open the Options dialog, optionally on a section ({page}), or with
 		// {on: false} close it as OK does (`dismiss` is its Cancel).
-		page := -1
+		page := ui.SettingsPageOutput
 		if args.Page != "" {
 			p, ok := ui.ParseSettingsPage(args.Page)
 			if !ok {
@@ -370,10 +373,7 @@ func (a *App) handleSettingsCommand(cmd *control.Command, args actionArgs) bool 
 			page = p
 		}
 		if args.On == nil || *args.On {
-			a.openSettings()
-			if page >= 0 {
-				a.win.Settings.SetPage(page) // view-only state, like the resource tab
-			}
+			a.openSettings(page)
 		} else {
 			a.closeSettings(false)
 		}

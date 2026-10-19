@@ -337,8 +337,14 @@ func (d *SettingsDialog) AsWindow() Window.Instance { return d.dlg.win }
 func (d *SettingsDialog) SetTheme(th Theme.Instance) { d.dlg.setTheme(th) }
 
 // Open shows the dialog on its first section.
-func (d *SettingsDialog) Open() {
-	d.page = SettingsPageOutput
+func (d *SettingsDialog) Open() { d.OpenAt(SettingsPageOutput) }
+
+// OpenAt shows the dialog on a section (SettingsPage…; out of range = Output).
+func (d *SettingsDialog) OpenAt(page int) {
+	if page < 0 || page >= len(d.pages) {
+		page = SettingsPageOutput
+	}
+	d.page = page
 	d.render()
 	d.dlg.popup()
 }
