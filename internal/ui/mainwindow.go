@@ -28,6 +28,7 @@ const (
 type MainWindow struct {
 	Control.Extension[MainWindow] `gd:"FwMainWindow"`
 
+	Menus           *Menus            `gd:"-"` // File / Edit / View / Help (menus.go)
 	Toolbar         *MainToolbar      `gd:"-"`
 	Schedule        *ScheduleList     `gd:"-"`
 	PreviewGrid     *SlideGrid        `gd:"-"`
@@ -40,6 +41,7 @@ type MainWindow struct {
 	Media           *MediaPanel       `gd:"-"`
 	ResourcePreview *MonitorHost      `gd:"-"` // host slot for the resource preview
 	Editor          *SongEditor       `gd:"-"`
+	Settings        *SettingsDialog   `gd:"-"` // Edit ▸ Options… (settings.go)
 	Confirm         *ConfirmDialog    `gd:"-"`
 	Message         *MessageDialog    `gd:"-"` // errors for the operator
 
@@ -85,10 +87,11 @@ func NewMainWindow(p Palette) *MainWindow {
 	col := vbox(0)
 	add(bg, col.AsControl())
 
+	w.Menus = NewMenus()
 	w.Toolbar = NewMainToolbar()
 	w.MainSplit = NewSplitter(SplitVertical, MainPercent, 300, 0, 0, 150)
 	expand(w.MainSplit.AsControl())
-	add(col, w.Toolbar.AsControl(), w.MainSplit.AsControl())
+	add(col, w.Menus.AsControl(), w.Toolbar.AsControl(), w.MainSplit.AsControl())
 
 	w.TopSplit = NewSplitter(SplitHorizontal, SchedulePercent, 0, 300, 200, 0)
 	w.TopSplit.SetPanes(w.buildSchedule(), w.buildPreviewLive())
@@ -105,6 +108,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.MainSplit.SetBarControl(w.Resources.AsControl())
 
 	w.Editor = NewSongEditor()
+	w.Settings = NewSettingsDialog()
 	w.Confirm = NewConfirmDialog()
 	w.Message = NewMessageDialog()
 	for _, d := range w.dialogs() {
@@ -118,7 +122,38 @@ func NewMainWindow(p Palette) *MainWindow {
 
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
-	return []*dialogWindow{w.Editor.dlg, w.Confirm.dlg, w.Message.dlg}
+	return []*dialogWindow{w.Editor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg}
+}
+
+// dialogName names a dialog window node for TopDialogHost.
+func (w *MainWindow) dialogName(n Node.Instance) string {
+	switch n.ID() {
+	case w.Editor.dlg.win.AsNode().ID():
+		return "editor"
+	case w.Settings.dlg.win.AsNode().ID():
+		return "settings"
+	case w.Confirm.dlg.win.AsNode().ID():
+		return "confirm"
+	case w.Message.dlg.win.AsNode().ID():
+		return "message"
+	}
+	return "other"
+}
+
+// TopDialogHost names the window the topmost open dialog is a child of:
+// "main" for the operator window, else the dialog under it ("editor", …).
+// Dialogs are always children of the operator window or of each other, never
+// of the projector output. It is "" when no dialog is open.
+func (w *MainWindow) TopDialogHost() string {
+	top := w.dialogHost(0)
+	if top.ID() == w.AsNode().ID() {
+		return ""
+	}
+	parent := top.GetParent()
+	if parent == (Node.Instance{}) || parent.ID() == w.AsNode().ID() {
+		return "main"
+	}
+	return w.dialogName(parent)
 }
 
 // dialogHost is where a dialog that is opening must live: under the topmost

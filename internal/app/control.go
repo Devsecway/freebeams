@@ -41,7 +41,8 @@ func (a *App) flushReplies() {
 // state builds the GET /state document.
 func (a *App) state() core.State {
 	_, resTitle, resCaption := a.resourcePreviewFrame()
-	dialog := core.DialogState{Editor: a.win.Editor.Visible(), Alerts: len(a.alerts)}
+	dialog := core.DialogState{Editor: a.win.Editor.Visible(), Settings: a.win.Settings.Visible(), Alerts: len(a.alerts),
+		Host: a.win.TopDialogHost()}
 	if a.win.Confirm.Visible() {
 		dialog.Confirm = a.win.Confirm.Title()
 	}
@@ -120,6 +121,7 @@ type actionArgs struct {
 	Value    json.RawMessage `json:"value"`    // set-setting: its JSON value
 	Duration *int            `json:"duration"` // transition: milliseconds
 	Item     string          `json:"item"`     // menu: the menu item
+	Page     string          `json:"page"`     // options: the section to show
 	Ctrl     bool            `json:"ctrl"`
 	Meta     bool            `json:"meta"`
 	Shift    bool            `json:"shift"`
@@ -439,6 +441,8 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(SceneTree.Get(a.AsNode()).Root())
 	case "editor":
 		png, err = render.WindowScreenshot(a.win.Editor.AsWindow())
+	case "settings":
+		png, err = render.WindowScreenshot(a.win.Settings.AsWindow())
 	case "dialog":
 		png, err = render.WindowScreenshot(a.win.Confirm.AsWindow())
 	case "message":
@@ -446,7 +450,7 @@ func (a *App) screenshot(cmd *control.Command) {
 	case "output":
 		png, err = a.out.Screenshot()
 	default:
-		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|dialog|message)", cmd.Query["window"])
+		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|settings|dialog|message)", cmd.Query["window"])
 	}
 	if err != nil {
 		cmd.RespondErr(err)

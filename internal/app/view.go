@@ -45,6 +45,7 @@ type viewCache struct {
 	toggles     [4]bool    // logo, black, clear, live
 	settingsVer int        // settings projected onto the Options dialog
 	color       string     // interface color applied to the window
+	recent      []string   // recent files listed in the menu
 	init        bool
 }
 
@@ -151,6 +152,7 @@ func (a *App) buildUI() {
 	}
 
 	a.wireMedia()
+	a.wireSettings() // the Options dialog and the menus (settings.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -315,6 +317,9 @@ func (a *App) render() {
 		v.resTitle, v.resCaption = title, caption
 		w.SetResourcePreviewInfo(title, caption)
 	}
+
+	// Settings: the Options dialog, the menus and the interface theme.
+	a.renderSettings(v)
 
 	// Error messages: the first queued alert is on screen.
 	switch {
