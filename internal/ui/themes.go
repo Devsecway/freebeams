@@ -229,7 +229,7 @@ func (p *ThemePanel) render() {
 			root := p.library.CreateItem()
 			it := root.CreateChild()
 			it.SetText(0, "All Themes")
-			it.SetIcon(0, fwIcon(p.library.AsControl(), "library"))
+			it.SetIcon(0, fwIcon(p.library.AsControl(), "theme"))
 			it.SetIconMaxWidth(0, 16)
 		}
 		selectTreeRow(p.library, 0)

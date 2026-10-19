@@ -83,7 +83,7 @@ func NewResourceTabs() *ResourceTabs {
 	btns.AsControl().AddThemeConstantOverride("separation", 0)
 	btns.AsControl().SetSizeFlagsVertical(Control.SizeShrinkBegin)
 	addSched := newMiniButton(miniPlain, "addschedule", 28, 27, "Add to Schedule")
-	goLive := newMiniButton(miniPlain, "golive", 28, 27, "Go Live")
+	goLive := newMiniButton(miniPlain, "golive16", 28, 27, "Go Live")
 	addSched.AsBaseButton().OnPressed(func() {
 		if r.OnAddToSchedule != nil {
 			r.OnAddToSchedule()
