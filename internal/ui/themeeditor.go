@@ -281,8 +281,13 @@ func sectionLabel(text string) Control.Instance {
 	return l.AsControl()
 }
 
+// inlineLabel is a small caption between the controls of a row. label()
+// clips its text, which gives a non-expanding label a zero minimum width in
+// a box container (it vanishes), so clipping is turned off here.
 func inlineLabel(text string) Label.Instance {
 	l := label(text, vCaption)
+	l.SetClipText(false)
+	l.SetTextOverrunBehavior(TextServer.OverrunNoTrimming)
 	l.AsControl().SetSizeFlagsVertical(Control.SizeShrinkCenter)
 	return l
 }
@@ -433,7 +438,7 @@ func (e *ThemeEditor) render() {
 	if e.name.Text() != t.Name {
 		e.name.SetText(t.Name)
 	}
-	e.bgKind.Select(indexOf(e.bgKinds, t.Background.Kind))
+	e.bgKind.Select(indexOf(e.bgKinds, t.Background.Kind, 0))
 	e.bgColor.SetColor(toGodotColor(t.Background.Color))
 	e.bgColor2.SetColor(toGodotColor(t.Background.Color2))
 	gradient := t.Background.Kind == models.BackgroundGradient
@@ -473,8 +478,8 @@ func (e *ThemeEditor) render() {
 	}
 	e.shadowColor.AsBaseButton().SetDisabled(!t.Shadow.Enabled)
 
-	e.hAlign.Select(indexOf(e.hAligns, t.HAlign))
-	e.vAlign.Select(indexOf(e.vAligns, t.VAlign))
+	e.hAlign.Select(indexOf(e.hAligns, t.HAlign, 1))
+	e.vAlign.Select(indexOf(e.vAligns, t.VAlign, 1))
 	e.mL.AsRange().SetValueNoSignal(Float.X(t.Margins.Left))
 	e.mT.AsRange().SetValueNoSignal(Float.X(t.Margins.Top))
 	e.mR.AsRange().SetValueNoSignal(Float.X(t.Margins.Right))
@@ -503,16 +508,15 @@ func (e *ThemeEditor) fontIndex(family string) int {
 	return len(e.fonts) - 1
 }
 
-func indexOf[T comparable](list []T, v T) int {
+// indexOf is the index of v in list, or fallback (what the renderer does
+// with an unknown value: a solid color, centered text).
+func indexOf[T comparable](list []T, v T, fallback int) int {
 	for i, x := range list {
 		if x == v {
 			return i
 		}
 	}
-	if len(list) > 1 {
-		return 1 // the middle choice (center / middle / gradient) for unknown values
-	}
-	return 0
+	return fallback
 }
 
 // validate reports whether the theme can be saved, setting the error text.

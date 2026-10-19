@@ -98,8 +98,11 @@ func NewScheduleList() *ScheduleList {
 			s.OnSetTheme(s.menuRow, id)
 		}
 	})
+	// The submenu is named and referenced by name: passing the node itself
+	// (add_submenu_node_item) trips graphics.gd's ownership check.
+	s.themeMenu.AsNode().SetName("ThemeMenu")
 	s.menu.AsNode().AddChild(s.themeMenu.AsNode())
-	s.menu.AddSubmenuNodeItem("Theme", s.themeMenu)
+	s.menu.AddSubmenuItem("Theme", "ThemeMenu")
 	s.menu.AddSeparator()
 	s.menu.MoreArgs().AddItem("Remove Item from Schedule", schedMenuRemove, 0)
 	s.menu.OnIdPressed(s.menuPressed)
