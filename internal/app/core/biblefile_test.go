@@ -17,42 +17,48 @@ func TestVerseCountText(t *testing.T) {
 }
 
 func TestBibleFileQuestion(t *testing.T) {
+	longNotice := strings.Repeat("Copyright words ", 10) // 160 characters
 	tests := []struct {
-		name     string
-		bible    models.Bible
-		verses   int
-		path     string
-		contains []string
-		lacks    []string
+		name   string
+		bible  models.Bible
+		verses int
+		path   string
+		want   string
 	}{
 		{
-			"public domain", models.Bible{Abbrev: "ASV", Name: "American Standard Version", Copyright: "Public Domain"}, 31086, "/x/ASV",
-			[]string{"Import American Standard Version (ASV) from ASV: 31,086 verses.", "public domain", "stays in this computer's library"},
-			[]string{"responsible"},
+			"public domain by abbreviation",
+			models.Bible{Abbrev: "ASV", Name: "American Standard Version", Copyright: "Public Domain"}, 31086, "/x/ASV",
+			"Import American Standard Version (ASV) from ASV: 31,086 verses.\n\n" + bibleFilePublic,
 		},
 		{
-			"copyrighted with notice", models.Bible{Abbrev: "NIV", Name: "New International Version", Copyright: "© Biblica"}, 31000, "/x/niv.json",
-			[]string{"Import New International Version (NIV) from niv.json: 31,000 verses.", "Copyright notice: © Biblica", "You are responsible for holding a licence"},
-			[]string{"public domain"},
+			"public domain by notice only",
+			models.Bible{Abbrev: "XPD", Copyright: " public domain "}, 2, "/x/xpd.json",
+			"Import XPD from xpd.json: 2 verses.\n\n" + bibleFilePublic,
 		},
 		{
-			"no notice", models.Bible{Abbrev: "SMK"}, 1, "/x/SMK",
-			[]string{"Import SMK from SMK: 1 verse.", "The file states no copyright", "You are responsible for holding a licence"},
-			nil,
+			"copyrighted with notice",
+			models.Bible{Abbrev: "NIV", Name: "New International Version", Copyright: "© Biblica, Inc.\nAll rights reserved."}, 31000, "/x/niv.json",
+			"Import New International Version (NIV) from niv.json: 31,000 verses (© Biblica, Inc.).\n\n" + bibleFileLicensed,
+		},
+		{
+			"long notice is cut",
+			models.Bible{Abbrev: "LNG", Copyright: "\n\n" + longNotice}, 1, "/x/LNG",
+			"Import LNG from LNG: 1 verse (" + strings.TrimSpace(longNotice[:bibleFileNoticeRune-1]) + "…).\n\n" + bibleFileLicensed,
+		},
+		{
+			"no notice",
+			models.Bible{Abbrev: "SMK"}, 3, "/x/SMK",
+			"Import SMK from SMK: 3 verses; the file states no copyright.\n\n" + bibleFileUnknown,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := BibleFileQuestion(tt.bible, tt.verses, tt.path)
-			for _, s := range tt.contains {
-				if !strings.Contains(got, s) {
-					t.Errorf("question lacks %q:\n%s", s, got)
-				}
+			if got != tt.want {
+				t.Errorf("got\n%s\nwant\n%s", got, tt.want)
 			}
-			for _, s := range tt.lacks {
-				if strings.Contains(got, s) {
-					t.Errorf("question has %q:\n%s", s, got)
-				}
+			if strings.Count(got, "\n") != 2 || len(got) > 260 {
+				t.Errorf("question must stay short for the fixed-size dialog (%d chars, %d newlines)", len(got), strings.Count(got, "\n"))
 			}
 		})
 	}

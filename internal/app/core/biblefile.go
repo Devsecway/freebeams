@@ -8,6 +8,16 @@ import (
 	"freeworship/internal/models"
 )
 
+// Licence sentences of BibleFileQuestion. The confirm dialog is a fixed
+// 420 × 150 window (ui.ConfirmDialog), so the whole question must stay
+// within about four lines.
+const (
+	bibleFileLicensed   = "Import it only if your church holds a licence for it; you are responsible for that. It stays in this computer's library."
+	bibleFileUnknown    = "If it is copyrighted, import it only if your church holds a licence for it; you are responsible for that. It stays in this computer's library."
+	bibleFilePublic     = "This translation is in the public domain. It stays in this computer's library."
+	bibleFileNoticeRune = 60 // the copyright notice is cut to this many characters
+)
+
 // BibleFileQuestion is the confirmation shown before a Bible file is
 // imported: it names the translation, its size and copyright status, and
 // states that the user answers for the licence of a copyrighted text.
@@ -16,19 +26,32 @@ func BibleFileQuestion(b models.Bible, verses int, path string) string {
 	if b.Name != "" {
 		name = b.Name + " (" + b.Abbrev + ")"
 	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Import %s from %s: %s.\n\n", name, filepath.Base(path), VerseCountText(verses))
+	head := fmt.Sprintf("Import %s from %s: %s", name, filepath.Base(path), VerseCountText(verses))
+	notice := firstLine(b.Copyright, bibleFileNoticeRune)
 	switch {
-	case models.IsPublicDomainBible(b.Abbrev, b.Name):
-		sb.WriteString("This translation is in the public domain.")
-	case b.Copyright != "":
-		sb.WriteString("Copyright notice: " + b.Copyright + "\n\n")
-		sb.WriteString("Import it only if your church is licensed to use it. You are responsible for holding a licence for any copyrighted text you import.")
+	case models.IsPublicDomainBible(b.Abbrev, b.Name) || strings.EqualFold(notice, "public domain"):
+		return head + ".\n\n" + bibleFilePublic
+	case notice != "":
+		return head + " (" + notice + ").\n\n" + bibleFileLicensed
 	default:
-		sb.WriteString("The file states no copyright. If this translation is copyrighted, import it only if your church is licensed to use it. You are responsible for holding a licence for any copyrighted text you import.")
+		return head + "; the file states no copyright.\n\n" + bibleFileUnknown
 	}
-	sb.WriteString(" It stays in this computer's library.")
-	return sb.String()
+}
+
+// firstLine is the first non-empty line of s with its whitespace collapsed,
+// cut to max characters with an ellipsis.
+func firstLine(s string, max int) string {
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.Join(strings.Fields(line), " ")
+		if line == "" {
+			continue
+		}
+		if r := []rune(line); len(r) > max {
+			return strings.TrimSpace(string(r[:max-1])) + "…"
+		}
+		return line
+	}
+	return ""
 }
 
 // BibleFileSummary is the Scriptures footer text after a Bible file import.
