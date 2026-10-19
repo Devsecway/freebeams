@@ -43,12 +43,15 @@ type viewCache struct {
 	resCaption  string
 	alert       core.Alert // the alert the message dialog shows
 	toggles     [4]bool    // logo, black, clear, live
+	settingsVer int        // settings projected onto the Options dialog
+	color       string     // interface color applied to the window
 	init        bool
 }
 
 func newViewCache() viewCache {
 	return viewCache{previewSel: -2, liveSel: -2, songSel: -2, songsVer: -1, biblesVer: -1, bibleSel: -2,
-		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2}
+		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2,
+		settingsVer: -1, color: core.ColorDark}
 }
 
 // buildUI creates the main window, the monitors and the output, and connects
@@ -205,13 +208,18 @@ func (a *App) render() {
 	// Monitors and the output (SetFrame is idempotent per Seq / content).
 	a.previewView.SetFrame(a.pres.PreviewFrame())
 	live := a.pres.LiveFrame()
+	a.liveView.SetTransition(a.settings.Transition)
 	a.liveView.SetFrame(live)
+	screen := a.outputScreen() // the configured display, if connected (settings.go)
 	switch {
 	case st.OutputEnabled && !a.out.IsOpen():
-		a.out.Open(render.DefaultOutputScreen())
+		a.out.Open(screen)
 	case !st.OutputEnabled && a.out.IsOpen():
 		a.out.Close()
+	case st.OutputEnabled && a.out.Screen() != screen:
+		a.out.Open(screen) // the output display setting changed: move it
 	}
+	a.renderTransition(a.settings.Transition)
 	a.out.SetFrame(live)
 
 	// Toolbar toggles.

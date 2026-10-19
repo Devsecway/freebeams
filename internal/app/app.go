@@ -115,6 +115,10 @@ type App struct {
 	layout           core.Layout // splitter positions, persisted (layout.go)
 	layoutSaveQueued bool
 
+	settings    core.Settings // the Options dialog's values, persisted per key (settings.go)
+	settingsVer int           // bumped on every settings change (re-projects the dialog)
+	recent      []string      // recent schedule files, newest first (File ▸ Open Recent)
+
 	prevLive      *models.Deck // for Go Back
 	prevLiveIndex int
 
@@ -156,17 +160,7 @@ func (a *App) Ready() {
 	a.openLibrary()
 	a.restoreLayout()
 	a.startControl()
-
-	logo := core.LogoBackground(core.EWImagesDir)
-	if a.st != nil {
-		var saved models.Background
-		if ok, err := a.st.GetSetting(a.ctx, core.SettingLogo, &saved); err != nil {
-			a.fail("read logo setting", err)
-		} else if ok && saved.Kind != "" {
-			logo = saved
-		}
-	}
-	a.pres.SetLogo(logo)
+	a.loadSettings() // transition, output display, logo, interface color (settings.go)
 
 	// The projector output opens by itself only when a second display exists.
 	screens := render.Screens()
