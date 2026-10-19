@@ -226,3 +226,13 @@ func (a *App) dialogDir() string {
 	}
 	return ""
 }
+
+// focusOwnerPath names the control with keyboard focus, as "<class> <node
+// path>" ("" when none). It is reported in /state for debugging.
+func (a *App) focusOwnerPath() string {
+	owner := Viewport.Get(a.AsNode()).GuiGetFocusOwner()
+	if owner == (Control.Instance{}) {
+		return ""
+	}
+	return Object.Instance(owner.AsObject()).ClassName() + " " + string(owner.AsNode().GetPath())
+}

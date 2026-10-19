@@ -129,6 +129,20 @@ func (g *SlideGrid) layout(width float64) uicore.TileGrid {
 		Inset: tileInset, LabelH: tileLabelH, Aspect: 16.0 / 9.0}
 }
 
+// layoutWidth is the width the tiles are laid out in: the scroll area minus the
+// vertical scrollbar, whether or not the scrollbar is showing. Laying the tiles
+// out in the content's own width made the content height depend on the
+// scrollbar's visibility, which depends on the content height: at widths where
+// the tiles fit only without the scrollbar, Godot toggled the scrollbar forever
+// inside one frame (resize, re-sort, minimum size, repeat) until its message
+// queue ran out of memory and the app crashed (seen while dragging the
+// Preview | Live splitter).
+func (g *SlideGrid) layoutWidth() float64 {
+	w := float64(g.scroll.AsControl().Size().X)
+	w -= float64(g.scroll.GetVScrollBar().AsControl().GetCombinedMinimumSize().X)
+	return max(w, 0)
+}
+
 func (g *SlideGrid) render() {
 	if !g.built {
 		g.rebuild()
@@ -193,7 +207,7 @@ func (g *SlideGrid) GuiInput(ev InputEvent.Instance) {
 	if !ok || !k.AsInputEvent().IsPressed() {
 		return
 	}
-	cols := g.layout(float64(g.flow.AsControl().Size().X)).Columns()
+	cols := g.layout(g.layoutWidth()).Columns()
 	nav := map[Input.Key]uicore.NavKey{
 		Input.KeyLeft: uicore.NavLeft, Input.KeyRight: uicore.NavRight,
 		Input.KeyUp: uicore.NavUp, Input.KeyDown: uicore.NavDown,
@@ -222,7 +236,7 @@ func (f *tileFlow) GetMinimumSize() Vector2.XY {
 	if f.grid == nil {
 		return Vector2.Zero
 	}
-	l := f.grid.layout(float64(f.AsControl().Size().X))
+	l := f.grid.layout(f.grid.layoutWidth())
 	return Vector2.New(0, float32(l.ContentHeight(len(f.grid.items))))
 }
 
@@ -230,7 +244,7 @@ func (f *tileFlow) Notification(what Object.Notification) {
 	if what != Container.NotificationSortChildren || f.grid == nil {
 		return
 	}
-	l := f.grid.layout(float64(f.AsControl().Size().X))
+	l := f.grid.layout(f.grid.layoutWidth())
 	for i, t := range f.grid.tiles {
 		r := l.Tile(i)
 		f.AsContainer().FitChildInRect(t.AsControl(), rect(float32(r.X), float32(r.Y), float32(r.W), float32(r.H)))

@@ -490,3 +490,37 @@ func TestRealImportInto(t *testing.T) {
 		t.Errorf("bibles after second run = %+v", bibles)
 	}
 }
+
+func TestRealImportCopyrightedBiblesOnly(t *testing.T) {
+	requireLocalEW(t)
+	ctx := context.Background()
+	st := openStore(t)
+	opt := Options{SongsDir: localSongsDir(), BiblesDir: localBiblesDir()}
+	if _, err := ImportInto(ctx, st, opt); err != nil {
+		t.Fatal(err)
+	}
+	opt.BiblesOnly, opt.IncludeCopyrightedBibles = true, true
+	rep, err := ImportInto(ctx, st, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.SongsImported != 0 || rep.SongsSkipped != 0 {
+		t.Errorf("a Bibles-only import touched songs: %+v", rep)
+	}
+	if !slices.Equal(rep.BiblesImported, []string{"HCSB"}) {
+		t.Errorf("imported %q, want HCSB", rep.BiblesImported)
+	}
+	slices.Sort(rep.BiblesSkipped)
+	if !slices.Equal(rep.BiblesSkipped, []string{"KJV (already installed)", "RVA (already installed)"}) {
+		t.Errorf("skipped %q", rep.BiblesSkipped)
+	}
+	bibles, _ := st.ListBibles(ctx)
+	if !slices.ContainsFunc(bibles, func(b models.Bible) bool { return b.Abbrev == "HCSB" }) {
+		t.Errorf("HCSB missing from %+v", bibles)
+	}
+	// Idempotent.
+	rep, err = ImportInto(ctx, st, opt)
+	if err != nil || len(rep.BiblesImported) != 0 {
+		t.Errorf("second import: %+v, %v", rep, err)
+	}
+}

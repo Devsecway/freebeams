@@ -133,6 +133,13 @@ func (a *App) buildUI() {
 	sc.OnActivate = func(i int) { a.event(func() { a.selectVerse(i, true) }) }
 	sc.OnAddToSchedule = func() { a.event(func() { a.addScriptureToSchedule(nil) }) }
 	sc.OnGoLive = func() { a.event(a.goLiveVerse) }
+	sc.OnImportCopyrighted = func() { a.event(func() { a.importCopyrightedBibles(nil, false) }) }
+
+	// Splitter positions persist across runs (layout.go).
+	for name, sp := range a.splitters() {
+		sp.OnChanged = func(float64) { a.event(func() { a.layoutChanged(name, sp) }) }
+		sp.OnCollapsedChanged = func(int) { a.event(func() { a.layoutChanged(name, sp) }) }
+	}
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d.
@@ -245,6 +252,7 @@ func (a *App) render() {
 	if a.biblesVer != v.biblesVer || a.bibleSel != v.bibleSel {
 		v.biblesVer, v.bibleSel = a.biblesVer, a.bibleSel
 		w.Scriptures.SetBibles(a.bibles, a.bibleSel)
+		w.Scriptures.SetImportCopyrightedAvailable(len(core.CopyrightedBiblesToImport(a.ewBibles, a.bibles)) > 0)
 	}
 	verseSel := a.verseSelection()
 	if a.versesVer != v.versesVer {

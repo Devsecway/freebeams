@@ -39,6 +39,8 @@ type Options struct {
 	BiblesDir string
 	// IncludeCopyrightedBibles imports non-public-domain Bibles too.
 	IncludeCopyrightedBibles bool
+	// BiblesOnly skips the songs (an on-request Bible import after the first run).
+	BiblesOnly bool
 }
 
 // Report summarises an import.
@@ -278,18 +280,21 @@ func ReadBible(path string) (models.Bible, []models.Verse, error) {
 	return readEWB(path)
 }
 
-// ImportInto imports songs and Bibles into st. It is idempotent: running it
-// twice does not duplicate songs or Bibles. Songs already in the library with
-// the same title and author (case-insensitive) are skipped, as are Bibles
-// whose abbreviation exists. Problems reading EasyWorship data become
-// Warnings; only store failures (and cancellation) return an error.
+// ImportInto imports songs (unless opt.BiblesOnly) and Bibles into st. It is
+// idempotent: running it twice does not duplicate songs or Bibles. Songs
+// already in the library with the same title and author (case-insensitive)
+// are skipped, as are Bibles whose abbreviation exists. Problems reading
+// EasyWorship data become Warnings; only store failures (and cancellation)
+// return an error.
 func ImportInto(ctx context.Context, st *store.Store, opt Options) (Report, error) {
 	var rep Report
 	if st == nil {
 		return rep, errors.New("import EasyWorship: nil store")
 	}
-	if err := importSongs(ctx, st, opt, &rep); err != nil {
-		return rep, err
+	if !opt.BiblesOnly {
+		if err := importSongs(ctx, st, opt, &rep); err != nil {
+			return rep, err
+		}
 	}
 	if err := importBibles(ctx, st, opt, &rep); err != nil {
 		return rep, err

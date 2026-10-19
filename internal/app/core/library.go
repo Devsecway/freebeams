@@ -16,6 +16,7 @@ const (
 	SettingImportDone = "import.easyworship.done" // ImportRecord
 	SettingLogo       = "output.logo"             // models.Background
 	SettingRecent     = "schedule.recent"         // []string, newest first
+	SettingLayout     = "ui.layout"               // Layout
 )
 
 // LibraryEnv overrides the library database path (tests use a temp DB).

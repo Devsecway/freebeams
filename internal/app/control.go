@@ -65,14 +65,17 @@ func (a *App) state() core.State {
 		Scripture: core.ScriptureState{
 			Reference: a.reference, Passage: deckTitle(a.scriptureDeck), Verses: len(a.verseRows),
 			Selected: a.verseSelection(), Status: a.scriptStatus, Error: a.scriptErr,
+			CopyrightedAvailable: core.CopyrightedBiblesToImport(a.ewBibles, a.bibles),
 		},
 		Resource:      core.ResourceState{Title: resTitle, Caption: resCaption},
+		Splitters:     a.splitterPositions(),
 		Import:        a.importState,
 		LastError:     a.lastError,
 		Dialog:        dialog,
 		WindowTitle:   a.win.WindowTitle(),
 		Tab:           a.win.Resources.Tab(),
 		Focus:         a.focus(),
+		FocusOwner:    a.focusOwnerPath(),
 		Pending:       a.pending,
 		Transitioning: a.transitioning(),
 		Idle:          !a.busy(),
@@ -331,6 +334,9 @@ func (a *App) handleCommand(cmd *control.Command) {
 		ok()
 
 	// Keys and UI.
+	case "import-bibles":
+		// EasyWorship's copyrighted Bibles; asks first unless confirm is set.
+		a.importCopyrightedBibles(cmd, args.Confirm)
 	case "key":
 		name := core.NormalizeKeyName(args.Name)
 		if name == "" {

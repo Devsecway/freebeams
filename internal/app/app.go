@@ -108,6 +108,10 @@ type App struct {
 	songRes resourcePreview // the Scriptures preview derives from verseSelection
 
 	importState core.ImportState
+	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
+
+	layout           core.Layout // splitter positions, persisted (layout.go)
+	layoutSaveQueued bool
 
 	prevLive      *models.Deck // for Go Back
 	prevLiveIndex int
@@ -148,6 +152,7 @@ func (a *App) Ready() {
 	SceneTree.Get(a.AsNode()).SetAutoAcceptQuit(false)
 	a.buildUI()
 	a.openLibrary()
+	a.restoreLayout()
 	a.startControl()
 
 	logo := core.LogoBackground(core.EWImagesDir)
@@ -169,6 +174,7 @@ func (a *App) Ready() {
 	log.Printf("[freeworship] %d screen(s); output %s", len(screens), map[bool]string{true: "on", false: "off until Live is pressed"}[len(screens) > 1])
 
 	a.startImport()
+	a.scanEWBibles()
 	a.searchSongs("", nil)
 	a.loadBibles(nil)
 	a.dirty = true

@@ -15,6 +15,7 @@ import (
 const (
 	scriptMenuAddToSchedule = iota
 	scriptMenuGoLive
+	scriptMenuImportCopyrighted
 )
 
 // ScripturePanel is the Scriptures resource tab: translations and the
@@ -26,13 +27,17 @@ type ScripturePanel struct {
 	OnActivate      func(i int)
 	OnAddToSchedule func()
 	OnGoLive        func()
+	// OnImportCopyrighted is the gear menu's "Import Copyrighted Bibles from
+	// EasyWorship…" (enabled by SetImportCopyrightedAvailable).
+	OnImportCopyrighted func()
 
-	split   *Splitter
-	locator *searchLocator
-	bibles  Tree.Instance
-	verses  Tree.Instance
-	status  Label.Instance
-	menu    PopupMenu.Instance
+	split    *Splitter
+	locator  *searchLocator
+	bibles   Tree.Instance
+	verses   Tree.Instance
+	status   Label.Instance
+	menu     PopupMenu.Instance // verse context menu
+	gearMenu PopupMenu.Instance // footer gear: the context menu plus the import
 
 	bibleList   []models.Bible
 	bible       int
@@ -40,6 +45,7 @@ type ScripturePanel struct {
 	verse       int
 	statusText  string
 	statusError bool
+	importAvail bool
 	builtBibles bool
 	builtVerses bool
 }
@@ -89,15 +95,14 @@ func NewScripturePanel() *ScripturePanel {
 	s.menu = PopupMenu.New()
 	s.menu.MoreArgs().AddItem("Add to Schedule", scriptMenuAddToSchedule, 0)
 	s.menu.MoreArgs().AddItem("Go Live", scriptMenuGoLive, 0)
-	s.menu.OnIdPressed(func(id int) {
-		switch {
-		case id == scriptMenuAddToSchedule && s.OnAddToSchedule != nil:
-			s.OnAddToSchedule()
-		case id == scriptMenuGoLive && s.OnGoLive != nil:
-			s.OnGoLive()
-		}
-	})
+	s.menu.OnIdPressed(s.menuPressed)
 	s.verses.AsNode().AddChild(s.menu.AsNode())
+	s.gearMenu = PopupMenu.New()
+	s.gearMenu.MoreArgs().AddItem("Add to Schedule", scriptMenuAddToSchedule, 0)
+	s.gearMenu.MoreArgs().AddItem("Go Live", scriptMenuGoLive, 0)
+	s.gearMenu.AddSeparator()
+	s.gearMenu.MoreArgs().AddItem("Import Copyrighted Bibles from EasyWorship…", scriptMenuImportCopyrighted, 0)
+	s.gearMenu.OnIdPressed(s.menuPressed)
 	s.verses.OnItemMouseSelected(func(_ Vector2.XY, button int) {
 		if Input.MouseButton(button) == Input.MouseButtonRight {
 			popupAtMouse(s.menu)
@@ -109,7 +114,8 @@ func NewScripturePanel() *ScripturePanel {
 	s.status.SetHorizontalAlignment(GUI.HorizontalAlignmentCenter)
 	s.status.AsControl().SetSizeFlagsHorizontal(Control.SizeExpandFill)
 	gear := newMiniButton(miniDropdown, "gear", 40, 24, "Scripture Actions")
-	gear.AsBaseButton().OnPressed(func() { popupBelow(s.menu, gear.AsControl()) })
+	gear.AsNode().AddChild(s.gearMenu.AsNode())
+	gear.AsBaseButton().OnPressed(func() { popupBelow(s.gearMenu, gear.AsControl()) })
 	footer := panel(vMiniBarTL)
 	footer.AsControl().SetCustomMinimumSize(Vector2.New(0, 28))
 	row := hbox(0)
@@ -160,6 +166,24 @@ func (s *ScripturePanel) SetStatus(msg string, isError bool) {
 	s.render()
 }
 
+// SetImportCopyrightedAvailable enables the gear menu's import of
+// EasyWorship's copyrighted Bibles (there are some that are not installed).
+func (s *ScripturePanel) SetImportCopyrightedAvailable(ok bool) {
+	s.importAvail = ok
+	s.render()
+}
+
+func (s *ScripturePanel) menuPressed(id int) {
+	switch {
+	case id == scriptMenuAddToSchedule && s.OnAddToSchedule != nil:
+		s.OnAddToSchedule()
+	case id == scriptMenuGoLive && s.OnGoLive != nil:
+		s.OnGoLive()
+	case id == scriptMenuImportCopyrighted && s.OnImportCopyrighted != nil:
+		s.OnImportCopyrighted()
+	}
+}
+
 // render projects the panel state. Its programmatic Tree changes run quietly
 // (signals blocked), so they never come back as OnBibleChanged / OnSelect.
 func (s *ScripturePanel) render() {
@@ -193,6 +217,7 @@ func (s *ScripturePanel) render() {
 		}
 		selectTreeRow(s.verses, s.verse)
 	})
+	s.gearMenu.SetItemDisabled(s.gearMenu.GetItemIndex(scriptMenuImportCopyrighted), !s.importAvail)
 	s.status.SetText(s.statusText)
 	if s.statusError {
 		s.status.AsControl().SetThemeTypeVariation(vError)

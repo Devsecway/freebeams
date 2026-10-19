@@ -51,6 +51,9 @@ type ScriptureState struct {
 	Selected  int      `json:"selected"`
 	Status    string   `json:"status"`
 	Error     bool     `json:"error"`
+	// CopyrightedAvailable lists EasyWorship's copyrighted Bibles that an
+	// on-request import would add (CopyrightedBiblesToImport).
+	CopyrightedAvailable []string `json:"copyrightedAvailable"`
 }
 
 // Alert is an error message for the operator, shown in the message dialog.
@@ -96,14 +99,18 @@ type State struct {
 	WindowTitle      string         `json:"windowTitle"`
 	Tab              int            `json:"tab"`
 	Focus            string         `json:"focus"`
+	FocusOwner       string         `json:"focusOwner"` // node path of the focused control (debugging)
 	Pending          int            `json:"pending"`
 	Transitioning    bool           `json:"transitioning"`
 	Idle             bool           `json:"idle"`
+	// Splitters is where every splitter is, by name (see the split hooks).
+	Splitters map[string]SplitPos `json:"splitters"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
 // thread; BuildState itself is pure.
 type StateInput struct {
+	Splitters        map[string]SplitPos
 	Presenter        models.PresenterState
 	Schedule         *models.Schedule
 	ScheduleSelected int
@@ -122,6 +129,7 @@ type StateInput struct {
 	WindowTitle      string
 	Tab              int
 	Focus            Focus
+	FocusOwner       string
 	Pending          int
 	Transitioning    bool
 	Idle             bool
@@ -168,9 +176,17 @@ func BuildState(in StateInput) State {
 		WindowTitle:      in.WindowTitle,
 		Tab:              in.Tab,
 		Focus:            in.Focus.String(),
+		FocusOwner:       in.FocusOwner,
 		Pending:          in.Pending,
 		Transitioning:    in.Transitioning,
 		Idle:             in.Idle,
+		Splitters:        in.Splitters,
+	}
+	if st.Splitters == nil {
+		st.Splitters = map[string]SplitPos{}
+	}
+	if st.Scripture.CopyrightedAvailable == nil {
+		st.Scripture.CopyrightedAvailable = []string{}
 	}
 	st.Bibles = make([]string, 0, len(in.Bibles))
 	for _, b := range in.Bibles {

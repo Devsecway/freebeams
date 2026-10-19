@@ -113,12 +113,12 @@ shot() { # NAME WINDOW
 }
 
 # ---- launch -------------------------------------------------------------------
-command -v gd >/dev/null || fail "gd not found (go install graphics.gd/cmd/gd@latest)"
-log "launching: FREEWORSHIP_LIBRARY=$LIB gd run"
+[ -x "$ROOT/bin/gd" ] || fail "bin/gd missing"
+log "launching: FREEWORSHIP_LIBRARY=$LIB bin/gd run"
 (
 	cd "$ROOT" || exit 1
 	export FREEWORSHIP_LIBRARY="$LIB" FREEWORSHIP_CONTROL_KEY="$KEY"
-	exec gd run
+	exec "$ROOT/bin/gd" run
 ) >"$LOG" 2>&1 &
 APP_PID=$!
 
@@ -164,6 +164,9 @@ check "song row selected" "$LAST" 's["songs"]["current"] == "Amazing Grace" and 
 pixel "selected song row is highlighted" "$OUT/song-live-main.png" has 395792 0.22 0.76 0.58 0.95 30000
 pixel "song output has content" "$OUT/song-live-output.png" notblank
 
+# Hotkeys with no control focused (a stray click on the window would otherwise
+# hand Home/End to a list).
+act "no control has focus" focus '{"target":"none"}' 's["focus"] == "none"'
 act "next slide" next '' 's["live"]["index"] == 1'
 act "key v (first verse)" key '{"name":"v"}' 'd["consumed"] and s["live"]["label"].startswith("Verse")'
 act "key 2 (Verse 2)" key '{"name":"2"}' 's["live"]["label"] == "Verse 2"'
@@ -243,6 +246,27 @@ act "reference 1 cor 13" reference '{"text":"1 cor 13"}' 's["preview"]["title"] 
 act "reference ps 23:1-3" reference '{"text":"ps 23:1-3"}' 's["preview"]["title"] == "Psalms 23:1-3" and s["preview"]["count"] == 3 and s["preview"]["footer"] == "Psalms 23:1 (KJV)"'
 act "reference in another Bible" reference '{"text":"jn 3:16","bible":"RVA"}' 's["scripture"]["bible"] == "RVA" and "(RVA)" in s["preview"]["footer"]'
 act "back to KJV" reference '{"text":"John 3:16-18","bible":"KJV"}' 's["scripture"]["bible"] == "KJV" and s["preview"]["count"] == 3'
+if [ -f "$EW_SONGS" ]; then
+	# The first-run import leaves copyrighted Bibles (HCSB here) out; the
+	# Scriptures gear menu imports them on request, after a question.
+	check "HCSB is offered for import" "$LAST" '"HCSB" in s["scripture"]["copyrightedAvailable"] and "HCSB" not in s["bibles"]'
+	act "import-bibles asks first" import-bibles '{}' 's["dialog"]["confirm"] == "Import Copyrighted Bibles"'
+	shot import-bibles-confirm dialog
+	act "cancel the import" dismiss '' 's["focus"] != "dialog" and "HCSB" not in s["bibles"]'
+	act "import the copyrighted Bibles" import-bibles '{"confirm":true}' '"HCSB" in s["bibles"] and s["scripture"]["copyrightedAvailable"] == [] and "HCSB" in s["scripture"]["status"]'
+	act "the imported Bible works" reference '{"text":"jn 3:16","bible":"HCSB"}' 's["scripture"]["bible"] == "HCSB" and "(HCSB)" in s["preview"]["footer"]'
+	act "back to KJV after the import" reference '{"text":"John 3:16-18","bible":"KJV"}' 's["scripture"]["bible"] == "KJV" and s["preview"]["count"] == 3'
+fi
+# Splitter drags with content in every grid: a width-dependent minimum size
+# inside a ScrollContainer used to make Godot toggle the scrollbar forever
+# (message queue out of memory) at some widths. Preview | Live and the
+# resource splitter, there and back, with bursts of motions per frame.
+act "drag Preview | Live left" drag-split '{"name":"preview-live","delta":-6,"steps":40,"burst":3}' 'r["ok"]'
+act "drag Preview | Live back" drag-split '{"name":"preview-live","delta":6,"steps":40,"burst":3}' 'r["ok"]'
+check "Preview | Live is back at 50%" "$LAST" 'abs(s["splitters"]["preview-live"]["percent"] - 0.5) < 0.001 and s["splitters"]["preview-live"]["collapsed"] == 0'
+act "drag the resource splitter left" drag-split '{"name":"resource","delta":-6,"steps":40,"burst":3}' 'r["ok"]'
+act "drag the resource splitter back" drag-split '{"name":"resource","delta":6,"steps":40,"burst":3}' 'r["ok"]'
+wait_idle
 # Review #13: after the deck changes above (13, 3, 1, then 3 slides) the
 # first Preview tile (selected, #3a6dce) must sit at the grid padding, not
 # at the grid's top-left corner.

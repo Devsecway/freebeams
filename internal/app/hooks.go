@@ -97,12 +97,14 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 		}
 		a.clickScheduleRow(cmd, *args.Index)
 	case "split":
-		// Move a splitter, as a drag does (layout runs on the next frame).
+		// Move a splitter, as a drag does (layout runs on the next frame). A
+		// snapped-closed pane is reopened first, as a click on its grip does.
 		sp := a.splitter(args.Name)
 		if sp == nil {
 			cmd.RespondErr(fmt.Errorf("split: unknown splitter %q", args.Name))
 			return true
 		}
+		sp.SetCollapsed(ui.CollapseNone)
 		sp.SetPercent(args.Percent)
 		a.answer(cmd, nil)
 	case "replay-input":
@@ -180,25 +182,6 @@ func (a *App) dragSplit(cmd *control.Command, sp *ui.Splitter, delta float64, st
 	}
 	a.after(steps+1, func() { button(false, pos(float64(steps))) })
 	a.after(steps+1+nativeKeyFrames, func() { a.answer(cmd, nil) })
-}
-
-// splitter returns the main window splitter called name, or nil.
-func (a *App) splitter(name string) *ui.Splitter {
-	switch name {
-	case "main":
-		return a.win.MainSplit
-	case "top":
-		return a.win.TopSplit
-	case "preview-live":
-		return a.win.PreviewLiveSplit
-	case "preview":
-		return a.win.PreviewSplit
-	case "live":
-		return a.win.LiveSplit
-	case "resource":
-		return a.win.ResourceSplit
-	}
-	return nil
 }
 
 // nativeKeyFrames is how many frames native-key waits before replying: the
