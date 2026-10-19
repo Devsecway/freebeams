@@ -1,0 +1,10 @@
+#!/bin/sh
+# FreeWorship's gd: the graphics.gd build tool pinned in go.mod (`tool`),
+# with its own Godot install so other graphics.gd projects on this machine
+# (which may need a different Godot) are unaffected.
+#   ./bin/gd run            run the app
+#   GOOS=macos ./bin/gd build
+set -e
+export GDPATH="${GDPATH:-$HOME/gd/freeworship}"
+cd "$(dirname "$0")/.."
+exec go tool gd "$@"
