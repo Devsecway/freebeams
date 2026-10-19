@@ -10,3 +10,4 @@ library_documentation.xml
 musl_amd64.editor
 musl_arm64.editor
 library.gdextension
+*.uid
