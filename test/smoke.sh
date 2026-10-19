@@ -338,6 +338,12 @@ act "logo on" logo '' 's["mode"] == "logo"'
 wait_idle
 shot logo-output output
 pixel "logo output has content" "$OUT/logo-output.png" notblank
+# The default logo is the built-in FreeBeams screen (core.WriteDefaultLogo): the screen gradient is
+# #221E69 along its anti-diagonal, and the wordmark's slide is pure white in the middle.
+LAST="$(state)"
+check "the default logo is the FreeBeams screen" "$LAST" 's["settings"]["logo"]["kind"] == "image" and s["settings"]["logo"]["path"].endswith("FreeBeams.png")'
+pixel "logo output shows the FreeBeams screen gradient" "$OUT/logo-output.png" has 221e69 0.0 0.0 1.0 1.0 2000
+pixel "logo output shows the FreeBeams wordmark" "$OUT/logo-output.png" has ffffff 0.3 0.35 0.7 0.65 300
 act "ctrl+l hotkey (logo off)" key '{"name":"l","ctrl":true}' 's["mode"] == "normal"'
 act "ctrl+c hotkey (clear on)" key '{"name":"c","ctrl":true}' 's["mode"] == "clear"'
 act "clear off" clear '' 's["mode"] == "normal"'
@@ -1220,7 +1226,7 @@ check "the presentation refresh question is up" "$LAST" 's["dialog"]["confirm"] 
 act "cancel the presentation refresh" dismiss '' "s[\"focus\"] != \"dialog\" and s[\"presentations\"][\"count\"] == $MENU_PRES + 1"
 act "Refresh (confirmed) drops the missing deck" presentation-menu '{"item":"refresh","confirm":true}' "s[\"presentations\"][\"count\"] == $MENU_PRES"
 act "a presentation menu item needs a tile" presentation-menu '{"item":"reveal"}' 'not r["ok"]'
-act "default logo again" set-setting '{"key":"logo","value":""}' 'not s["settings"]["logo"].get("path", "").endswith("smoke-square.png") and not s["settings"]["logo"].get("path", "").endswith(".png")'
+act "default logo again" set-setting '{"key":"logo","value":""}' 'not s["settings"]["logo"].get("path", "").endswith("smoke-square.png") and s["settings"]["logo"].get("path", "").endswith("FreeBeams.png")'
 act "Songs tab (menus)" tab '{"tab":"songs"}' 's["tab"] == 0'
 act "save the schedule (menus)" save-schedule '{}' 'not s["schedule"]["dirty"]'
 # Open File Location last: the Finder window it opens takes the focus.

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- a6 -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1A1750"/>
+      <stop offset="1" stop-color="#4740D8"/>
+    </linearGradient>
+    <linearGradient id="beam" gradientUnits="userSpaceOnUse" x1="300" y1="760" x2="512" y2="506">
+      <stop offset="0" stop-color="#FFC94D" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FFF1C2" stop-opacity="0.75"/>
+    </linearGradient>
+    <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="300" cy="760" r="230">
+      <stop offset="0" stop-color="#FFC94D" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFC94D" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="tileClip"><rect x="100" y="100" width="824" height="824" rx="232"/></clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="232" fill="url(#tile)"/>
+  <circle cx="300" cy="760" r="230" fill="url(#glow)" clip-path="url(#tileClip)"/>
+  <polygon points="300.0,760.0 236.0,498.0 409.0,498.0" fill="url(#beam)"/>
+  <polygon points="300.0,760.0 431.0,498.0 593.0,498.0" fill="url(#beam)"/>
+  <polygon points="300.0,760.0 615.0,498.0 788.0,498.0" fill="url(#beam)"/>
+  <rect x="236" y="196" width="552" height="310" rx="36" fill="#FFFFFF"/>
+  <circle cx="300" cy="760" r="56" fill="#FFC94D"/>
+  <circle cx="300" cy="760" r="30" fill="#FFFFFF"/>
+</svg>

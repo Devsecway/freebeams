@@ -29,7 +29,7 @@ const ScreenAuto = -1
 type SettingsValues struct {
 	Transition   models.Transition
 	OutputScreen int    // ScreenAuto or a display index
-	Logo         string // description of the logo image ("logo.png", "Default gradient")
+	Logo         string // description of the logo image ("logo.png", "Default (FreeBeams logo)", "Default gradient")
 	LibraryPath  string
 }
 

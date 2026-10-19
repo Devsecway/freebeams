@@ -131,6 +131,10 @@ type App struct {
 	settingsSnap core.Settings // the settings when the dialog opened (Cancel restores them)
 	recent       []string      // recent schedule files, newest first (File ▸ Open Recent)
 
+	// logoDir holds the built-in Logo screen image (defaultLogoDir, logo.go);
+	// "" keeps the gradient as the default logo.
+	logoDir string
+
 	prevLive      *models.Deck // for Go Back
 	prevLiveIndex int
 
