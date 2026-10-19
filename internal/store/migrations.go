@@ -95,6 +95,22 @@ CREATE TABLE media (
 );
 CREATE INDEX media_kind_title ON media (kind, title COLLATE NOCASE);
 `,
+	// 3: the presentation library (PDF / PowerPoint decks rendered to page images).
+	`
+-- pages, cache_key, renderer and partial describe the rendered pages in the
+-- app's cache (internal/presentations); pages is 0 until they are made.
+CREATE TABLE presentations (
+	id        INTEGER PRIMARY KEY,
+	path      TEXT    NOT NULL UNIQUE,
+	title     TEXT    NOT NULL DEFAULT '',
+	pages     INTEGER NOT NULL DEFAULT 0,
+	cache_key TEXT    NOT NULL DEFAULT '',
+	renderer  TEXT    NOT NULL DEFAULT '',
+	partial   INTEGER NOT NULL DEFAULT 0,
+	added     TEXT    NOT NULL
+);
+CREATE INDEX presentations_title ON presentations (title COLLATE NOCASE);
+`,
 }
 
 // migrate brings the schema up to date. Each migration runs in its own
