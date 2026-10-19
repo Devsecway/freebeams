@@ -15,45 +15,139 @@ import (
 
 const timeLayout = time.RFC3339Nano
 
-// SearchSongs returns songs matching query (FTS over title, author, lyrics;
-// prefix matching per word), ordered by title. Empty query lists all songs.
-// A query with no searchable words (only punctuation) also lists all songs.
+// SearchSongs returns the songs matching query. Every whitespace-separated
+// term (a double-quoted run is one phrase) must match as a word prefix in
+// the title, author or lyrics; matching is case- and diacritic-insensitive
+// (FTS5 unicode61). The result is ranked: songs whose title holds every term
+// first, then those matched by title and author, then those that needed
+// their lyrics; each group is in title order. SongSummary.Matched says where
+// a song matched and Snippet is the lyric excerpt for lyrics matches. An
+// empty query, or one without searchable words, lists all songs by title.
 // limit <= 0 means no limit.
 func (s *Store) SearchSongs(ctx context.Context, query string, limit int) ([]models.SongSummary, error) {
 	if limit <= 0 {
 		limit = -1 // SQLite: no limit
 	}
-	var (
-		rows *sql.Rows
-		err  error
-	)
-	if match := ftsQuery(query); match == "" {
-		rows, err = s.db.QueryContext(ctx, `
-			SELECT id, title, author, copyright, ccli FROM songs
-			ORDER BY title COLLATE NOCASE, id
-			LIMIT ?`, limit)
-	} else {
-		rows, err = s.db.QueryContext(ctx, `
-			SELECT s.id, s.title, s.author, s.copyright, s.ccli
-			FROM songs_fts f JOIN songs s ON s.id = f.rowid
-			WHERE songs_fts MATCH ?
-			ORDER BY s.title COLLATE NOCASE, s.id
-			LIMIT ?`, match, limit)
+	terms := searchTerms(query)
+	if len(terms) == 0 {
+		out, err := s.listSongs(ctx, limit)
+		if err != nil {
+			return nil, fmt.Errorf("search songs %q: %w", query, err)
+		}
+		return out, nil
 	}
+	out, err := s.searchSongsFTS(ctx, terms, limit)
 	if err != nil {
-		return nil, fmt.Errorf("search songs %q: %w", query, err)
+		// The query builder keeps FTS5 syntax out of the expression, so an
+		// error here is unexpected. A plain search of title and author keeps
+		// the operator going; its own failure is reported with the cause.
+		fallback, ferr := s.searchSongsPlain(ctx, query, limit)
+		if ferr != nil {
+			return nil, fmt.Errorf("search songs %q: %w (fallback: %v)", query, err, ferr)
+		}
+		return fallback, nil
+	}
+	return out, nil
+}
+
+// listSongs lists all songs by title.
+func (s *Store) listSongs(ctx context.Context, limit int) ([]models.SongSummary, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, title, author, copyright, ccli FROM songs
+		ORDER BY title COLLATE NOCASE, id
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 	out := []models.SongSummary{}
 	for rows.Next() {
 		var r models.SongSummary
 		if err := rows.Scan(&r.ID, &r.Title, &r.Author, &r.Copyright, &r.CCLI); err != nil {
-			return nil, fmt.Errorf("search songs %q: %w", query, err)
+			return nil, err
 		}
 		out = append(out, r)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("search songs %q: %w", query, err)
+	return out, rows.Err()
+}
+
+// searchSongsFTS is the ranked FTS5 search. The rank flags are uncorrelated
+// IN subqueries (SQLite evaluates each once), restricted to columns with
+// FTS5 column filters: every term in the title; every term in the title or
+// author; any term in the title or author (a mixed match, ranked above
+// lyrics-only). snippet() excerpts the lyrics column around the matches.
+func (s *Store) searchSongsFTS(ctx context.Context, terms [][]string, limit int) ([]models.SongSummary, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.id, s.title, s.author, s.copyright, s.ccli,
+			s.id IN (SELECT rowid FROM songs_fts WHERE songs_fts MATCH ?2) AS in_title,
+			s.id IN (SELECT rowid FROM songs_fts WHERE songs_fts MATCH ?3) AS in_meta,
+			s.id IN (SELECT rowid FROM songs_fts WHERE songs_fts MATCH ?4) AS in_meta_any,
+			snippet(songs_fts, 2, '', '', '…', 10)
+		FROM songs_fts f JOIN songs s ON s.id = f.rowid
+		WHERE songs_fts MATCH ?1
+		ORDER BY in_title DESC, in_meta DESC, in_meta_any DESC, s.title COLLATE NOCASE, s.id
+		LIMIT ?5`,
+		ftsAll(terms),
+		ftsColumns([]string{"title"}, terms, true),
+		ftsColumns([]string{"title", "author"}, terms, true),
+		ftsColumns([]string{"title", "author"}, terms, false),
+		limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []models.SongSummary{}
+	for rows.Next() {
+		var (
+			r                          models.SongSummary
+			inTitle, inMeta, inMetaAny bool
+			snippet                    string
+		)
+		if err := rows.Scan(&r.ID, &r.Title, &r.Author, &r.Copyright, &r.CCLI, &inTitle, &inMeta, &inMetaAny, &snippet); err != nil {
+			return nil, err
+		}
+		switch {
+		case inTitle:
+			r.Matched = models.MatchedTitle
+		case inMeta:
+			r.Matched = models.MatchedAuthor
+		default:
+			r.Matched = models.MatchedLyrics
+			r.Snippet = cleanSnippet(snippet)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// cleanSnippet makes a lyrics snippet a single line.
+func cleanSnippet(s string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(s, "\n", " / ")), " ")
+}
+
+// searchSongsPlain is the fallback when the FTS query fails: every word of
+// query must occur in the title or author (folded), ranked title first.
+func (s *Store) searchSongsPlain(ctx context.Context, query string, limit int) ([]models.SongSummary, error) {
+	all, err := s.listSongs(ctx, -1)
+	if err != nil {
+		return nil, err
+	}
+	terms := textTerms(query)
+	out := []models.SongSummary{}
+	var authored []models.SongSummary
+	for _, r := range all {
+		switch {
+		case matchesAll(terms, r.Title):
+			r.Matched = models.MatchedTitle
+			out = append(out, r)
+		case matchesAll(terms, r.Title, r.Author):
+			r.Matched = models.MatchedAuthor
+			authored = append(authored, r)
+		}
+	}
+	out = append(out, authored...)
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }

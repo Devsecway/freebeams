@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -242,6 +243,14 @@ func TestSearchSongs(t *testing.T) {
 		sampleSong("How Great Thou Art", "Carl Boberg", verse(1, "O Lord my God, when I in awesome wonder"), chorus("Then sings my soul")),
 		sampleSong("A Mighty Fortress Is Our God", "Martin Luther", verse(1, "His craft and pow'r are great")),
 		sampleSong("Santo, Santo, Santo", "Reginald Heber", verse(1, "¡Santo! ¡Santo! ¡Santo! Señor omnipotente")),
+		// Ranking fixtures: "amazing" and "grace" in lyrics only, "great" in
+		// two titles and one lyric, a contraction and an author (Lloyd) that
+		// the old `"i"* "ll"*` query matched for I'll.
+		sampleSong("Alas And Did My Savior Bleed", "Isaac Watts", verse(1, "Amazing pity! grace unknown!")),
+		sampleSong("Grace Alone", "Scott Wesley Brown", verse(1, "Every promise we can make")),
+		sampleSong("Great Is Thy Faithfulness", "Thomas Chisholm", verse(1, "Morning by morning new mercies I see")),
+		sampleSong("I'll Fly Away", "Albert Brumley", verse(1, "Some glad morning when this life is o'er", "I'll fly away")),
+		sampleSong("Great Day", "Lloyd Larson", verse(1, "I will rise")),
 	}
 	for _, s := range songs {
 		if err := st.SaveSong(ctx, s); err != nil {
@@ -255,17 +264,27 @@ func TestSearchSongs(t *testing.T) {
 		}
 		return out
 	}
+	all := []string{"A Mighty Fortress Is Our God", "abide With Me", "Alas And Did My Savior Bleed", "Amazing Grace", "Grace Alone",
+		"Great Day", "Great Is Thy Faithfulness", "How Great Thou Art", "I'll Fly Away", "Santo, Santo, Santo"}
 	tests := []struct {
 		name  string
 		query string
 		limit int
 		want  []string
 	}{
-		{"empty lists all by title nocase", "", 0, []string{"A Mighty Fortress Is Our God", "abide With Me", "Amazing Grace", "How Great Thou Art", "Santo, Santo, Santo"}},
-		{"whitespace lists all", "   ", 2, []string{"A Mighty Fortress Is Our God", "abide With Me"}},
-		{"limit", "", 1, []string{"A Mighty Fortress Is Our God"}},
-		{"title prefix", "amaz", 0, []string{"Amazing Grace"}},
-		{"case insensitive", "GRACE", 0, []string{"Amazing Grace"}},
+		{"empty lists all by title nocase", "", 0, all},
+		{"whitespace lists all", "   ", 2, all[:2]},
+		{"limit", "", 1, all[:1]},
+		{"title prefix ranks before lyrics", "amaz", 0, []string{"Amazing Grace", "Alas And Did My Savior Bleed"}},
+		{"case insensitive, titles first", "GRACE", 0, []string{"Amazing Grace", "Grace Alone", "Alas And Did My Savior Bleed"}},
+		{"title tier then lyrics tier, each by title", "great", 0, []string{"Great Day", "Great Is Thy Faithfulness", "How Great Thou Art", "A Mighty Fortress Is Our God"}},
+		{"limit applies after ranking", "great", 2, []string{"Great Day", "Great Is Thy Faithfulness"}},
+		{"title and lyrics mixed", "grace sweet", 0, []string{"Amazing Grace"}},
+		{"quoted phrase", `"sweet the sound"`, 0, []string{"Amazing Grace"}},
+		{"quoted phrase keeps word order", `"sound sweet"`, 0, nil},
+		{"quoted phrase plus a word", `"the sound" newton`, 0, []string{"Amazing Grace"}},
+		{"contraction is one phrase", "I'll", 0, []string{"I'll Fly Away"}},
+		{"contraction with a curly apostrophe", "I’ll fly", 0, []string{"I'll Fly Away"}},
 		{"multi word all must match", "how great", 0, []string{"How Great Thou Art"}},
 		{"multi word across fields", "newton wretch", 0, []string{"Amazing Grace"}},
 		{"multi word no match", "great wretch", 0, nil},
@@ -281,7 +300,9 @@ func TestSearchSongs(t *testing.T) {
 		{"column filter syntax", "title:grace", 0, nil},
 		{"star and caret", "^gra* -x +", 0, nil},
 		{"only punctuation lists all", `"*()-:^`, 1, []string{"A Mighty Fortress Is Our God"}},
-		{"unbalanced quote", `"amazing`, 0, []string{"Amazing Grace"}},
+		{"unbalanced quote", `"amazing`, 0, []string{"Amazing Grace", "Alas And Did My Savior Bleed"}},
+		{"quote after a word", `amazing"`, 0, []string{"Amazing Grace", "Alas And Did My Savior Bleed"}},
+		{"empty quotes are ignored", `"" amazing ""`, 0, []string{"Amazing Grace", "Alas And Did My Savior Bleed"}},
 		{"no match", "zzzz", 0, nil},
 	}
 	for _, tc := range tests {
@@ -302,8 +323,66 @@ func TestSearchSongs(t *testing.T) {
 	}
 	// Summary fields are populated.
 	res, _ := st.SearchSongs(ctx, "amazing", 0)
-	if len(res) != 1 || res[0].Author != "John Newton" || res[0].Copyright != "Public Domain" || res[0].ID != songs[0].ID {
+	if len(res) != 2 || res[0].Author != "John Newton" || res[0].Copyright != "Public Domain" || res[0].ID != songs[0].ID {
 		t.Fatalf("summary = %+v", res)
+	}
+}
+
+func TestSearchSongsMatched(t *testing.T) {
+	ctx := context.Background()
+	st := openTemp(t)
+	songs := []*models.Song{
+		sampleSong("Morning Song", "Ann Lee", verse(1, "Sunrise over the hills")),
+		sampleSong("Evening Hymn", "Morning Star Singers", verse(1, "Night falls softly")),
+		sampleSong("Day Is Done", "Bob Ray", verse(1, "Gone the sun", "The morning will come again", "Rest in peace")),
+	}
+	for _, s := range songs {
+		if err := st.SaveSong(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type row struct{ title, matched string }
+	rows := func(res []models.SongSummary) []row {
+		out := []row{}
+		for _, r := range res {
+			out = append(out, row{r.Title, r.Matched})
+		}
+		return out
+	}
+	tests := []struct {
+		name  string
+		query string
+		want  []row
+	}{
+		{"three tiers", "morning", []row{{"Morning Song", "title"}, {"Evening Hymn", "author"}, {"Day Is Done", "lyrics"}}},
+		{"title plus lyrics needs the lyrics", "morning sunrise", []row{{"Morning Song", "lyrics"}}},
+		{"author plus lyrics", "singers night", []row{{"Evening Hymn", "lyrics"}}},
+		{"title and author together", "morning lee", []row{{"Morning Song", "author"}}},
+		{"listing is not a match", "", []row{{"Day Is Done", ""}, {"Evening Hymn", ""}, {"Morning Song", ""}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := st.SearchSongs(ctx, tc.query, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := rows(res); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("SearchSongs(%q) = %v, want %v", tc.query, got, tc.want)
+			}
+		})
+	}
+	// The lyrics excerpt is a single line around the match; title and author
+	// matches carry none.
+	res, _ := st.SearchSongs(ctx, "morning", 0)
+	if !strings.Contains(res[2].Snippet, "The morning will come") || strings.Contains(res[2].Snippet, "\n") {
+		t.Errorf("lyrics snippet = %q", res[2].Snippet)
+	}
+	if res[0].Snippet != "" || res[1].Snippet != "" {
+		t.Errorf("title/author snippets = %q, %q", res[0].Snippet, res[1].Snippet)
+	}
+	res, _ = st.SearchSongs(ctx, "come again", 0)
+	if len(res) != 1 || res[0].Snippet != "Gone the sun / The morning will come again / Rest in…" {
+		t.Errorf("snippet lines = %+v", res)
 	}
 }
 
@@ -313,7 +392,8 @@ func TestFTSQueryNeverErrors(t *testing.T) {
 	if err := st.SaveSong(ctx, sampleSong("Grace", "x", verse(1, "grace"))); err != nil {
 		t.Fatal(err)
 	}
-	inputs := []string{`"`, `""`, `*`, `(`, `)`, `-`, `:`, `^`, `NEAR(`, `a"b`, `'`, `\`, "\x00", "\xff\xfe", `{x}`, `[x]`, `a OR`, `NOT a`, `a AND`, `💒 ✝`, `日本語`, `1:2`, `x*y`, `col:`, `+`}
+	inputs := []string{`"`, `""`, `*`, `(`, `)`, `-`, `:`, `^`, `NEAR(`, `a"b`, `'`, `\`, "\x00", "\xff\xfe", `{x}`, `[x]`, `a OR`, `NOT a`, `a AND`, `💒 ✝`, `日本語`, `1:2`, `x*y`, `col:`, `+`,
+		`"grace`, `grace"`, `"" ""`, `*"*`, `a"b"c"d`, `"grace" -sweet`, `NEAR("a" "b", 3)`, `{title} : grace`, `grace*`, `"a\x00b"`, "́", `"\xff"`}
 	for _, in := range inputs {
 		if _, err := st.SearchSongs(ctx, in, 0); err != nil {
 			t.Errorf("SearchSongs(%q): %v", in, err)
@@ -325,22 +405,69 @@ func TestFTSQueryNeverErrors(t *testing.T) {
 }
 
 func TestFTSQuery(t *testing.T) {
+	// Whitespace separates terms, a quoted run is one term, and the words of
+	// a term form one prefix phrase (FTS5 folds case and diacritics itself).
 	tests := map[string]string{
-		"":              "",
-		"  ":            "",
-		"Grace":         `"grace"*`,
-		`how  "great`:   `"how"* "great"*`,
-		"pow'r":         `"pow"* "r"*`,
-		"señor":         `"señor"*`,
-		"--- ** ()":     "",
-		"title:grace":   `"title"* "grace"*`,
-		"John 3:16":     `"john"* "3"* "16"*`,
-		"NEAR(a b, 10)": `"near"* "a"* "b"* "10"*`,
+		"":                  "",
+		"  ":                "",
+		"Grace":             `"Grace"*`,
+		`how  "great`:       `"how"* "great"*`,
+		"pow'r":             `"pow r"*`,
+		"señor":             `"señor"*`,
+		"--- ** ()":         "",
+		"title:grace":       `"title grace"*`,
+		"John 3:16":         `"John"* "3 16"*`,
+		"NEAR(a b, 10)":     `"NEAR a"* "b"* "10"*`,
+		`"amazing grace"`:   `"amazing grace"*`,
+		`"sweet the" sound`: `"sweet the"* "sound"*`,
+		`grace"how`:         `"grace"* "how"*`,
+		`"" x ""`:           `"x"*`,
+		`a-b_c.d`:           `"a b c d"*`,
 	}
 	for in, want := range tests {
 		if got := ftsQuery(in); got != want {
 			t.Errorf("ftsQuery(%q) = %s, want %s", in, got, want)
 		}
+	}
+	terms := searchTerms(`"amazing grace" how`)
+	if got := ftsColumns([]string{"title"}, terms, true); got != `{title} : ("amazing grace"* "how"*)` {
+		t.Errorf("ftsColumns all = %s", got)
+	}
+	if got := ftsColumns([]string{"title", "author"}, terms, false); got != `{title author} : ("amazing grace"* OR "how"*)` {
+		t.Errorf("ftsColumns any = %s", got)
+	}
+	// Pathological input is capped.
+	long := strings.Repeat("w ", 100)
+	if got := len(searchTerms(long)); got != maxTerms {
+		t.Errorf("terms for 100 words = %d, want %d", got, maxTerms)
+	}
+	if got := len(searchTerms(`"` + long + `"`)[0]); got != maxTerms {
+		t.Errorf("words of a 100-word phrase = %d, want %d", got, maxTerms)
+	}
+}
+
+func TestFold(t *testing.T) {
+	tests := map[string]string{
+		"Café":             "cafe",
+		"SEÑOR":            "senor",
+		"naïve Lumière":    "naive lumiere",
+		"Straße Øre Łódź":  "strasse ore lodz",
+		"100%_Done":        "100%_done",
+		"plain":            "plain",
+		"":                 "",
+		"café":            "cafe", // decomposed input
+		"Ærø Œuvre Đakovo": "aero oeuvre dakovo",
+	}
+	for in, want := range tests {
+		if got := fold(in); got != want {
+			t.Errorf("fold(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if !matchesAll(textTerms("CAFÉ lum"), "x", "Café Lumière") || matchesAll(textTerms("cafe zebra"), "Café Lumière") {
+		t.Error("matchesAll")
+	}
+	if !matchesAll(nil, "anything") || !matchesAll(textTerms("  "), "anything") {
+		t.Error("no terms match everything")
 	}
 }
 

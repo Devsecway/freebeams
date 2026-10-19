@@ -49,7 +49,20 @@ type SongSummary struct {
 	Author    string `json:"author"`
 	Copyright string `json:"copyright"`
 	CCLI      string `json:"ccli"`
+
+	// Matched says where a search found the song (MatchedTitle, MatchedAuthor
+	// or MatchedLyrics); "" when the list is not a search result. Snippet is
+	// the lyric excerpt around the match when Matched is MatchedLyrics.
+	Matched string `json:"matched,omitempty"`
+	Snippet string `json:"snippet,omitempty"`
 }
+
+// Where a song search matched (SongSummary.Matched).
+const (
+	MatchedTitle  = "title"  // every term is in the title
+	MatchedAuthor = "author" // every term is in the title or the author, not the title alone
+	MatchedLyrics = "lyrics" // the lyrics were needed for at least one term
+)
 
 // SlideOptions controls how sections are split into slides.
 type SlideOptions struct {
