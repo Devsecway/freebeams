@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end smoke test: launches FreeWorship with `gd run` on a fresh temp
+# End-to-end smoke test: launches FreeBeams with `gd run` on a fresh temp
 # library, drives a song and a scripture to live through the control API,
 # saves screenshots to test/out/ and asserts /state along the way.
 #
@@ -12,12 +12,12 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/test/out"
 mkdir -p "$OUT"
-rm -f "$OUT"/*.png "$OUT"/*.fws
+rm -f "$OUT"/*.png "$OUT"/*.fbs
 LOG="$OUT/app.log"
 : >"$LOG"
 
-LIB="$(mktemp -t freeworship-smoke)"
-SCHED="$OUT/smoke-schedule.fws"
+LIB="$(mktemp -t freebeams-smoke)"
+SCHED="$OUT/smoke-schedule.fbs"
 KEY="testkey"
 EW_SONGS="/Users/Shared/Softouch/Easyworship/Default/v6.1/Databases/Data/Songs.db"
 APP_PID=""
@@ -125,10 +125,10 @@ shot() { # NAME WINDOW
 
 # ---- launch -------------------------------------------------------------------
 [ -x "$ROOT/bin/gd" ] || fail "bin/gd missing"
-log "launching: FREEWORSHIP_LIBRARY=$LIB bin/gd run"
+log "launching: FREEBEAMS_LIBRARY=$LIB bin/gd run"
 (
 	cd "$ROOT" || exit 1
-	export FREEWORSHIP_LIBRARY="$LIB" FREEWORSHIP_CONTROL_KEY="$KEY"
+	export FREEBEAMS_LIBRARY="$LIB" FREEBEAMS_CONTROL_KEY="$KEY"
 	exec "$ROOT/bin/gd" run
 ) >"$LOG" 2>&1 &
 APP_PID=$!
@@ -158,14 +158,14 @@ else
 	log "EasyWorship is not installed: skipping the import assertions"
 fi
 SONGS="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["songCount"])' "$LAST")"
-check "window title shows the schedule" "$LAST" 's["windowTitle"].startswith("FreeWorship") and "Untitled" in s["windowTitle"]'
+check "window title shows the schedule" "$LAST" 's["windowTitle"].startswith("FreeBeams") and "Untitled" in s["windowTitle"]'
 shot app-main-start main
 
 act "output on" output '{"on":true}' 's["outputOpen"] and s["outputEnabled"]'
 
 # A projector must stay up while the operator works in another app (browser,
 # planning tools). Godot marks a borderless window that covers its screen
-# hidesOnDeactivate, which emptied the TV until FreeWorship was active again;
+# hidesOnDeactivate, which emptied the TV until FreeBeams was active again;
 # the cover-screen code turns that off. Checked through the window server (what
 # a screenshot of the TV would show), only when a second display is present.
 if python3 -c 'import json,sys; sys.exit(0 if json.loads(sys.argv[1])["data"]["screens"] > 1 else 1)' "$LAST" 2>/dev/null; then
@@ -369,21 +369,21 @@ act "look up jn 3:16 again" reference '{"text":"jn 3:16"}' 's["scripture"]["pass
 act "add it back" add-to-schedule '{"source":"scripture"}' 's["schedule"]["items"] == ["Amazing Grace", "John 3:16"] and s["schedule"]["live"] == 0'
 act "move item" move-schedule '{"from":1,"to":0}' 's["schedule"]["items"] == ["John 3:16", "Amazing Grace"] and s["schedule"]["live"] == 1'
 act "move back" move-schedule '{"from":0,"to":1}' 's["schedule"]["items"] == ["Amazing Grace", "John 3:16"]'
-act "save schedule" save-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["path"].endswith("smoke-schedule.fws") and s["schedule"]["title"] == "smoke-schedule"'
+act "save schedule" save-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["path"].endswith("smoke-schedule.fbs") and s["schedule"]["title"] == "smoke-schedule"'
 [ -s "$SCHED" ] || fail "schedule file $SCHED was not written"
-check "title without dirty marker" "$LAST" 's["windowTitle"] == "FreeWorship — smoke-schedule"'
+check "title without dirty marker" "$LAST" 's["windowTitle"] == "FreeBeams — smoke-schedule"'
 # Review #7: saving to another file is a Save As: the schedule takes its name.
-act "Save As renames the schedule" save-schedule "{\"path\":\"$OUT/smoke-renamed.fws\"}" 's["schedule"]["title"] == "smoke-renamed" and s["schedule"]["path"].endswith("smoke-renamed.fws") and not s["schedule"]["dirty"]'
-check "window title follows Save As" "$LAST" 's["windowTitle"] == "FreeWorship — smoke-renamed"'
+act "Save As renames the schedule" save-schedule "{\"path\":\"$OUT/smoke-renamed.fbs\"}" 's["schedule"]["title"] == "smoke-renamed" and s["schedule"]["path"].endswith("smoke-renamed.fbs") and not s["schedule"]["dirty"]'
+check "window title follows Save As" "$LAST" 's["windowTitle"] == "FreeBeams — smoke-renamed"'
 act "Save to the same file keeps the name" save-schedule '{}' 's["schedule"]["title"] == "smoke-renamed"'
 act "new schedule" new-schedule '' 's["schedule"]["items"] == [] and s["schedule"]["title"] == "Untitled"'
 act "open schedule" open-schedule "{\"path\":\"$SCHED\"}" 'len(s["schedule"]["items"]) == 2 and s["schedule"]["items"] == ["Amazing Grace", "John 3:16"] and not s["schedule"]["dirty"] and s["schedule"]["title"] == "smoke-schedule"'
 # Review #4: a failed open is shown to the operator (an error dialog), and
 # the current schedule stays.
-printf 'not a schedule {' >"$OUT/corrupt.fws"
-act "opening a corrupt schedule fails" open-schedule "{\"path\":\"$OUT/corrupt.fws\"}" 'not r["ok"]'
+printf 'not a schedule {' >"$OUT/corrupt.fbs"
+act "opening a corrupt schedule fails" open-schedule "{\"path\":\"$OUT/corrupt.fbs\"}" 'not r["ok"]'
 wait_idle
-check "the error is shown in a dialog" "$LAST" 's["focus"] == "dialog" and s["dialog"]["message"]["title"] == "Open Schedule" and "corrupt.fws" in s["dialog"]["message"]["message"] and s["schedule"]["title"] == "smoke-schedule" and len(s["schedule"]["items"]) == 2'
+check "the error is shown in a dialog" "$LAST" 's["focus"] == "dialog" and s["dialog"]["message"]["title"] == "Open Schedule" and "corrupt.fbs" in s["dialog"]["message"]["message"] and s["schedule"]["title"] == "smoke-schedule" and len(s["schedule"]["items"]) == 2'
 shot error-dialog message
 pixel "error dialog has content" "$OUT/error-dialog.png" notblank
 act "hotkeys are off while the error is shown" key '{"name":"n"}' 'not d["consumed"]'
@@ -494,7 +494,7 @@ shot song-editor editor
 pixel "song editor has content" "$OUT/song-editor.png" notblank
 act "hotkeys are off while a dialog is open" key '{"name":"n"}' 'not d["consumed"]'
 act "close the editor" editor '{"mode":"close"}' 's["focus"] != "dialog"'
-act "save a new song (editor OK path)" save-song '{"title":"Smoke Test Song","author":"FreeWorship","lyrics":"[Verse 1]\nline one\nline two\n\n[Chorus]\nchorus line"}' 's["songs"]["current"] == "Smoke Test Song" and s["preview"]["title"] == "Smoke Test Song" and s["preview"]["count"] == 2'
+act "save a new song (editor OK path)" save-song '{"title":"Smoke Test Song","author":"FreeBeams","lyrics":"[Verse 1]\nline one\nline two\n\n[Chorus]\nchorus line"}' 's["songs"]["current"] == "Smoke Test Song" and s["preview"]["title"] == "Smoke Test Song" and s["preview"]["count"] == 2'
 wait_idle
 act "the new song is searchable" search-songs '{"q":"smoke test"}' "s[\"songs\"][\"results\"] == 1 and s[\"songCount\"] == $SONGS + 1"
 act "delete asks for confirmation" delete-song '{"index":0}' 's["focus"] == "dialog"'
@@ -517,7 +517,7 @@ check "song deleted" "$LAST" "s[\"songs\"][\"results\"] == 0 and s[\"songCount\"
 act "open the song editor again" editor '{"mode":"new"}' 's["dialog"]["editor"]'
 act "close the window with the editor open" close '' 'r["ok"]'
 wait_idle
-check "closing with the editor open asks first" "$LAST" 's["dialog"]["confirm"] == "Quit FreeWorship" and s["dialog"]["editor"]'
+check "closing with the editor open asks first" "$LAST" 's["dialog"]["confirm"] == "Quit FreeBeams" and s["dialog"]["editor"]'
 app_running || fail "the app quit with the song editor open"
 shot quit-editor-confirm dialog
 act "Cancel keeps the editor open" dismiss '' 's["dialog"]["editor"] and not s["dialog"].get("confirm")'
@@ -525,10 +525,10 @@ act "Cancel keeps the editor open" dismiss '' 's["dialog"]["editor"] and not s["
 # moves from over the editor to over the main window).
 act "close the window again" close '' 'r["ok"]'
 wait_idle
-check "asks about the editor again" "$LAST" 's["dialog"]["confirm"] == "Quit FreeWorship" and s["dialog"]["editor"]'
+check "asks about the editor again" "$LAST" 's["dialog"]["confirm"] == "Quit FreeBeams" and s["dialog"]["editor"]'
 act "OK discards the editor" accept '' 'r["ok"]'
 wait_idle
-check "then asks about the unsaved schedule" "$LAST" 's["dialog"]["confirm"] == "Quit FreeWorship" and not s["dialog"]["editor"] and s["schedule"]["dirty"]'
+check "then asks about the unsaved schedule" "$LAST" 's["dialog"]["confirm"] == "Quit FreeBeams" and not s["dialog"]["editor"] and s["schedule"]["dirty"]'
 app_running || fail "the app quit without asking about the unsaved schedule"
 act "cancel quitting (editor discarded)" dismiss '' 's["focus"] != "dialog" and not s["dialog"]["editor"]'
 LAST="$(state)"
@@ -861,7 +861,7 @@ act "blend again" transition '{"kind":"blend","duration":500}' 's["settings"]["t
 act "blue live for the crash-safety check" go-live '' 's["live"]["title"] == "smoke-blue"'
 wait_idle
 shot output-before-error output
-act "opening a corrupt schedule fails again" open-schedule "{\"path\":\"$OUT/corrupt.fws\"}" 'not r["ok"]'
+act "opening a corrupt schedule fails again" open-schedule "{\"path\":\"$OUT/corrupt.fbs\"}" 'not r["ok"]'
 wait_idle
 check "the error dialog is on the main window" "$LAST" 's["dialog"]["message"]["title"] == "Open Schedule" and s["dialog"]["host"] == "main" and s["outputOpen"]'
 shot output-during-error output
@@ -869,7 +869,7 @@ pixel "the output is unchanged by the error dialog" "$OUT/output-before-error.pn
 pixel "the output still shows the slide" "$OUT/output-during-error.png" has 1f3f9f 0.25 0.25 0.75 0.75 10000
 act "dismiss the error" dismiss '' 'not s["dialog"].get("message") and s["dialog"].get("host", "") == ""'
 # Menus through the control API.
-act "Help ▸ About" menu '{"item":"about"}' 's["dialog"]["message"]["title"] == "About FreeWorship" and s["dialog"]["host"] == "main"'
+act "Help ▸ About" menu '{"item":"about"}' 's["dialog"]["message"]["title"] == "About FreeBeams" and s["dialog"]["host"] == "main"'
 act "close About" dismiss '' 'not s["dialog"].get("message")'
 act "unknown menu item is rejected" menu '{"item":"bogus"}' 'not r["ok"]'
 act "File ▸ New Schedule (clean schedule, no question)" menu '{"item":"new-schedule"}' 's["schedule"]["title"] == "Untitled" and not s["schedule"]["dirty"] and s["focus"] != "dialog"'

@@ -4,12 +4,12 @@
 config_version=5
 
 [application]
-config/name="FreeWorship"
+config/name="FreeBeams"
 ; The single source of truth for the release version (bin/version reads it;
 ; the exports fall back to it; internal/app/version.go shows it).
 config/version="0.1.0"
 config/icon="res://icon.svg"
-config/macos_native_icon="res://FreeWorship.icns"
+config/macos_native_icon="res://FreeBeams.icns"
 config/windows_native_icon="res://icon.ico"
 run/main_scene="res://main.tscn"
 run/main_loop_type="GoMainLoop"

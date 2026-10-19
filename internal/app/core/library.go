@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"freeworship/internal/importers/easyworship"
-	"freeworship/internal/models"
+	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/models"
 )
 
 // Setting keys used by the app.
@@ -20,7 +20,7 @@ const (
 )
 
 // LibraryEnv overrides the library database path (tests use a temp DB).
-const LibraryEnv = "FREEWORSHIP_LIBRARY"
+const LibraryEnv = "FREEBEAMS_LIBRARY"
 
 // ImportRecord is stored under SettingImportDone after the first-run import.
 type ImportRecord struct {
@@ -112,9 +112,10 @@ func IsSaveAs(cur, target string) bool {
 	return a != b
 }
 
-// WithScheduleExt appends ".fws" unless path already ends with it.
+// WithScheduleExt appends ".fbs" unless path already has a schedule
+// extension (".fbs", or the former ".fws", which a schedule keeps).
 func WithScheduleExt(path string) string {
-	if path == "" || strings.EqualFold(filepath.Ext(path), models.ScheduleFileExt) {
+	if path == "" || models.IsScheduleFile(path) {
 		return path
 	}
 	return path + models.ScheduleFileExt

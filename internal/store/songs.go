@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 const timeLayout = time.RFC3339Nano

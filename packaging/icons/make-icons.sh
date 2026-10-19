@@ -5,7 +5,7 @@
 #   graphics/icon.png           512 px PNG: the Linux icon (.desktop, AppImage)
 #   graphics/icon.ico           Windows icon, 16..256 px (export_presets.cfg,
 #                               project.godot windows_native_icon)
-#   graphics/FreeWorship.icns   macOS icon, 16..1024 px at @1x and @2x
+#   graphics/FreeBeams.icns   macOS icon, 16..1024 px at @1x and @2x
 #                               (export_presets.cfg, project.godot macos_native_icon)
 #
 # Runs on macOS: QuickLook (qlmanage) rasterises the SVG and iconutil writes the
@@ -34,7 +34,7 @@ python3 -I -c 'import PIL' 2>/dev/null || {
 	exit 1
 }
 
-TMP="$(mktemp -d -t freeworship-icons)"
+TMP="$(mktemp -d -t freebeams-icons)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "==> rasterising $SVG at 1024 px"
@@ -46,7 +46,7 @@ MASTER="$TMP/icon.svg.png"
 }
 
 echo "==> writing icon.png, icon.ico and the iconset"
-python3 -I - "$MASTER" "$TMP/FreeWorship.iconset" "$OUT" <<'PY'
+python3 -I - "$MASTER" "$TMP/FreeBeams.iconset" "$OUT" <<'PY'
 import os
 import sys
 
@@ -77,7 +77,7 @@ for base in (16, 32, 128, 256, 512):
 print("    icon.png, icon.ico, iconset ok")
 PY
 
-echo "==> writing FreeWorship.icns"
-iconutil -c icns "$TMP/FreeWorship.iconset" -o "$OUT/FreeWorship.icns"
+echo "==> writing FreeBeams.icns"
+iconutil -c icns "$TMP/FreeBeams.iconset" -o "$OUT/FreeBeams.icns"
 
-ls -l "$OUT/icon.png" "$OUT/icon.ico" "$OUT/FreeWorship.icns"
+ls -l "$OUT/icon.png" "$OUT/icon.ico" "$OUT/FreeBeams.icns"

@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=FreeWorship
+Name=FreeBeams
 Comment=Worship presentation software
-Exec=freeworship
-Icon=freeworship
+Exec=freebeams
+Icon=freebeams
 Categories=Office;Presentation;
 Terminal=false

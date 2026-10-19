@@ -231,7 +231,7 @@ func TestDefaultCacheDir(t *testing.T) {
 		t.Fatal("the cache dir was not created")
 	}
 	def, err := DefaultCacheDir("")
-	if err != nil || !strings.HasSuffix(def, filepath.Join("FreeWorship", "presentations")) {
+	if err != nil || !strings.HasSuffix(def, filepath.Join("FreeBeams", "presentations")) {
 		t.Fatalf("DefaultCacheDir() = %q, %v", def, err)
 	}
 }

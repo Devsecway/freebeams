@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"freeworship/internal/ui/uicore"
+	"freebeams/internal/ui/uicore"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/GUI"

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 type fakeVerse struct {

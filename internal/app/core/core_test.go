@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"freeworship/internal/importers/easyworship"
-	"freeworship/internal/models"
+	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/models"
 )
 
 func amazingGrace() models.Song {
@@ -339,7 +339,7 @@ func TestRecentAndExt(t *testing.T) {
 	if !reflect.DeepEqual(got, []string{"d", "a", "b"}) {
 		t.Errorf("recent = %v", got)
 	}
-	for in, want := range map[string]string{"x": "x.fws", "x.fws": "x.fws", "x.FWS": "x.FWS", "": ""} {
+	for in, want := range map[string]string{"x": "x.fbs", "x.fbs": "x.fbs", "x.FBS": "x.FBS", "x.fws": "x.fws", "x.txt": "x.txt.fbs", "": ""} {
 		if got := WithScheduleExt(in); got != want {
 			t.Errorf("WithScheduleExt(%q) = %q", in, got)
 		}

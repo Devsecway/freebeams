@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"freeworship/internal/ui/uicore"
+	"freebeams/internal/ui/uicore"
 
 	"graphics.gd/classdb/Font"
 	"graphics.gd/classdb/Image"
@@ -26,7 +26,7 @@ func DarkPalette() Palette { return uicore.DarkPalette() }
 func LightPalette() Palette { return uicore.LightPalette() }
 
 // Theme type names. Standard controls are styled under their class names;
-// custom-drawn FreeWorship widgets read palette colors, fonts and icons from
+// custom-drawn FreeBeams widgets read palette colors, fonts and icons from
 // these pseudo types so that swapping the Theme (Light/Dark) restyles them too.
 const (
 	tFw    = "Fw"          // palette colors, fonts, shared styleboxes

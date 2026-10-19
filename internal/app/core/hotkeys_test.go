@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // step is one key press at a time offset (ms since the start).

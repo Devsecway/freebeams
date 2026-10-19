@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/models"
-	"freeworship/internal/render"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/models"
+	"freebeams/internal/render"
+	"freebeams/internal/ui"
 )
 
 // Video and audio playback: the transport bars under the Preview Output and

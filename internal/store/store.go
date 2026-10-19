@@ -1,4 +1,4 @@
-// Package store persists the FreeWorship library in SQLite (modernc.org/sqlite,
+// Package store persists the FreeBeams library in SQLite (modernc.org/sqlite,
 // pure Go). It must not import graphics.gd.
 //
 // The database runs in WAL mode with foreign keys on. The schema is versioned
@@ -11,8 +11,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"freebeams/internal/appdirs"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -82,14 +82,11 @@ func fileURI(abs string, q url.Values) string {
 }
 
 // DefaultPath returns the library path in the user's config dir:
-// <os.UserConfigDir()>/FreeWorship/library.db (directory created).
+// <os.UserConfigDir()>/FreeBeams/library.db (directory created; a library
+// from the app's FreeWorship days is moved there, see appdirs).
 func DefaultPath() (string, error) {
-	base, err := os.UserConfigDir()
+	dir, err := appdirs.Config()
 	if err != nil {
-		return "", fmt.Errorf("default library path: %w", err)
-	}
-	dir := filepath.Join(base, "FreeWorship")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("default library path: %w", err)
 	}
 	return filepath.Join(dir, "library.db"), nil

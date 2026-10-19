@@ -3,7 +3,7 @@ package core
 import (
 	"testing"
 
-	"freeworship/internal/bibles/bundled"
+	"freebeams/internal/bibles/bundled"
 )
 
 func TestBundledSummary(t *testing.T) {

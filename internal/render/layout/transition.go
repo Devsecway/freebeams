@@ -3,7 +3,7 @@ package layout
 import (
 	"math"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Transition geometry. A SlideView animates a slide change with two layers:

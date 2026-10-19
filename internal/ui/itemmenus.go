@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/PopupMenu"

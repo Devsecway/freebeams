@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"freeworship/internal/models"
-	"freeworship/internal/presentations"
+	"freebeams/internal/models"
+	"freebeams/internal/presentations"
 )
 
 // Setting key for the one-off registration of EasyWorship's presentation

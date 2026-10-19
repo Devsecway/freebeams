@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 
 	"graphics.gd/classdb"
 	"graphics.gd/classdb/ColorRect"

@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"freebeams/internal/appdirs"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // ErrUnavailable is returned when a step needs ffmpeg/ffprobe and none is available.
@@ -118,16 +119,16 @@ type Transcoder interface {
 	Transcode(ctx context.Context, src, dst string, progress func(float64)) error
 }
 
-// DefaultCacheDir is where derived files go: <os.UserCacheDir()>/FreeWorship/media
+// DefaultCacheDir is where derived files go: <os.UserCacheDir()>/FreeBeams/media
 // (directory created). override, when not empty, is used instead.
 func DefaultCacheDir(override string) (string, error) {
 	dir := override
 	if dir == "" {
-		base, err := os.UserCacheDir()
+		base, err := appdirs.Cache()
 		if err != nil {
 			return "", fmt.Errorf("media cache dir: %w", err)
 		}
-		dir = filepath.Join(base, "FreeWorship", "media")
+		dir = filepath.Join(base, "media")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("media cache dir: %w", err)

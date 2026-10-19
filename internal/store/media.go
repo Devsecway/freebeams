@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 const mediaColumns = `id, path, kind, title, duration, width, height, thumb_path, transcoded_path, added, aspect, repeat`

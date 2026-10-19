@@ -3,7 +3,7 @@ package ui
 import (
 	"math"
 
-	"freeworship/internal/ui/uicore"
+	"freebeams/internal/ui/uicore"
 
 	"graphics.gd/classdb/BaseButton"
 	"graphics.gd/classdb/BoxContainer"

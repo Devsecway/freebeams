@@ -1,4 +1,4 @@
-# FreeWorship UI Spec (matches EasyWorship 8)
+# FreeBeams UI Spec (matches EasyWorship 8)
 
 **Source:** extracted directly from the installed EasyWorship 8.0.49 binary. It is a Delphi
 FireMonkey app, and its forms are embedded as TPF0 streams. They were decoded with
@@ -9,7 +9,7 @@ All numbers below are EasyWorship's design-time values in logical points (1pt = 
 Splitter percentages are the defaults; at runtime the user can drag them and the values persist.
 
 **Branding:** we copy layout, geometry, palette and behavior. We draw our **own** icons
-(EasyWorship's `buttons_large` image collection is their artwork), and the name/logo is FreeWorship.
+(EasyWorship's `buttons_large` image collection is their artwork), and the name/logo is FreeBeams.
 
 ---
 
@@ -74,7 +74,7 @@ The default interface is **Dark** (`InterfaceColorSelector.ActiveColor = icDark`
 The tokens above come from the Windows binary's style resources. The user's screenshots of
 EasyWorship **for Mac** (dark interface, Retina; measured with PIL at the pixel) are darker and more
 neutral on several surfaces, and the Mac build gives some surfaces a colour of their own where the
-Windows style shares a token. FreeWorship's dark interface follows the Mac screenshots. These tokens
+Windows style shares a token. FreeBeams's dark interface follows the Mac screenshots. These tokens
 live in `uicore.Palette` next to the spec tokens (`TestPaletteMatchesSpec` checks both tables); the
 light values are the Windows style's token for the same surface, so the light interface is unchanged
 (there is no light Mac reference).
@@ -154,7 +154,7 @@ Logo, Black and Clear are toggles (StaysSelected, AllowAllUnSelected): they show
 
 Splitter bars are 1px `splitterbar`. A snapped-closed splitter shows a gradient grip (`hsplitterbar.closed` / `vsplitterbar.closed`) that reopens it on click.
 
-FreeWorship defaults Preview | Live to **50%**, as in the mockup (`docs/mockup/main-window.html`); EasyWorship's 71.19% is
+FreeBeams defaults Preview | Live to **50%**, as in the mockup (`docs/mockup/main-window.html`); EasyWorship's 71.19% is
 its design-time value. Positions the user drags to are saved in the `ui.layout` setting and restored at startup.
 
 ### 3.3 Panel header mini-toolbars (Schedule / Preview / Live)

@@ -69,7 +69,7 @@ last record ends exactly at the end of the stream.
 
 A search index (`word`, `verse_info INT32A`). Ignored.
 
-## Decoding rules (FreeWorship)
+## Decoding rules (FreeBeams)
 
 - Book number comes from the record (`b` bits 18..24). If that is out of range, it falls back to the row position.
 - Records must be in increasing (chapter, verse) order. HCSB 2 Samuel stores 24:9 as **2:9**.

@@ -7,15 +7,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"freeworship/internal/models"
-	"freeworship/internal/presentations"
-	"freeworship/internal/store"
+	"freebeams/internal/models"
+	"freebeams/internal/presentations"
+	"freebeams/internal/store"
 )
 
 // EasyWorship keeps presentation files (PowerPoint decks the user added)
 // under Resources/Presentations; its Presentations.db lists them along with
 // the built-in, non-file-based ones (a stock install has only
-// "Introduction", with no file). The files are what FreeWorship can show,
+// "Introduction", with no file). The files are what FreeBeams can show,
 // so they are found by scanning the folder.
 
 // FindPresentations lists the presentation files under EasyWorship's

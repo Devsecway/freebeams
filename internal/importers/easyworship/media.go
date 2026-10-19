@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"freeworship/internal/models"
-	"freeworship/internal/store"
+	"freebeams/internal/models"
+	"freebeams/internal/store"
 )
 
 // EasyWorship's media library (Media.db, next to Songs.db) lists the stock

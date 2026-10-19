@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Video and audio playback (the transport bars under the Preview Output and

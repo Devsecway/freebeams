@@ -1,13 +1,13 @@
 ; Inno Setup script: packages the Windows bundle (releases\windows\amd64\:
-; FreeWorship.exe + windows_amd64.dll + any runtime DLLs) into one Setup.exe
+; FreeBeams.exe + windows_amd64.dll + any runtime DLLs) into one Setup.exe
 ; with Start Menu / desktop shortcuts and an uninstaller.
 ;
-; A graphics.gd app is multi-file: FreeWorship.exe loads windows_amd64.dll (the
+; A graphics.gd app is multi-file: FreeBeams.exe loads windows_amd64.dll (the
 ; Go side of the app) from its own folder. The installer keeps them together so
 ; the exe is never moved away from its library.
 ;
 ; Built by bin/build-windows:
-;   iscc /DAppVersion=<x.y.z> /O<outdir> packaging\windows\freeworship.iss
+;   iscc /DAppVersion=<x.y.z> /O<outdir> packaging\windows\freebeams.iss
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -19,21 +19,21 @@
 [Setup]
 ; Stable AppId so a newer version upgrades the existing install in place.
 AppId={{73EBEA48-4AC6-45E6-93A8-A184C83D15F5}
-AppName=FreeWorship
+AppName=FreeBeams
 AppVersion={#AppVersion}
-AppVerName=FreeWorship {#AppVersion}
-AppPublisher=FreeWorship contributors
+AppVerName=FreeBeams {#AppVersion}
+AppPublisher=FreeBeams contributors
 AppPublisherURL=https://github.com/Devsecway/freeworship
-DefaultDirName={autopf}\FreeWorship
-DefaultGroupName=FreeWorship
+DefaultDirName={autopf}\FreeBeams
+DefaultGroupName=FreeBeams
 DisableProgramGroupPage=yes
 ; Per-user install by default (church laptops often have no admin rights): with
 ; PrivilegesRequired=lowest the {auto*} constants resolve to per-user locations.
 ; Someone with admin rights can still choose an all-users install.
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-UninstallDisplayIcon={app}\FreeWorship.exe
-OutputBaseFilename=FreeWorship-{#AppVersion}-Setup
+UninstallDisplayIcon={app}\FreeBeams.exe
+OutputBaseFilename=FreeBeams-{#AppVersion}-Setup
 #ifdef IconFile
 SetupIconFile={#IconFile}
 #endif
@@ -50,9 +50,9 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
-Name: "{group}\FreeWorship"; Filename: "{app}\FreeWorship.exe"
-Name: "{group}\Uninstall FreeWorship"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\FreeWorship"; Filename: "{app}\FreeWorship.exe"; Tasks: desktopicon
+Name: "{group}\FreeBeams"; Filename: "{app}\FreeBeams.exe"
+Name: "{group}\Uninstall FreeBeams"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\FreeBeams"; Filename: "{app}\FreeBeams.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\FreeWorship.exe"; Description: "Launch FreeWorship"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\FreeBeams.exe"; Description: "Launch FreeBeams"; Flags: nowait postinstall skipifsilent

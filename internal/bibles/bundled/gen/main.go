@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"freeworship/internal/bibles/bundled"
-	"freeworship/internal/importers/bibletext"
+	"freebeams/internal/bibles/bundled"
+	"freebeams/internal/importers/bibletext"
 )
 
 func main() {

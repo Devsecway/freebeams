@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // TestSearchSongsLocalEW runs the song search over the real EasyWorship

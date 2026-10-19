@@ -7,7 +7,7 @@ import (
 	"math"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Rect is an axis-aligned rectangle.

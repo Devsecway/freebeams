@@ -98,7 +98,7 @@ func NewMenus() *Menus {
 	file.MoreArgs().AddItem("Save Schedule", int(MenuSaveSchedule), cmd(Input.KeyS))
 	file.MoreArgs().AddItem("Save Schedule As…", int(MenuSaveScheduleAs), Input.Key(Input.KeyMaskShift)|cmd(Input.KeyS))
 	file.AddSeparator()
-	file.MoreArgs().AddItem("Quit FreeWorship", int(MenuQuit), cmd(Input.KeyQ))
+	file.MoreArgs().AddItem("Quit FreeBeams", int(MenuQuit), cmd(Input.KeyQ))
 	file.OnIdPressed(fire)
 
 	edit := PopupMenu.New()
@@ -118,7 +118,7 @@ func NewMenus() *Menus {
 
 	help := PopupMenu.New()
 	help.AsNode().SetName("Help")
-	help.MoreArgs().AddItem("About FreeWorship", int(MenuAbout), 0)
+	help.MoreArgs().AddItem("About FreeBeams", int(MenuAbout), 0)
 	help.OnIdPressed(fire)
 
 	for _, p := range []PopupMenu.Instance{file, edit, view, help} {

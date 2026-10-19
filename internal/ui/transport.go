@@ -3,8 +3,8 @@ package ui
 import (
 	"math"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/ui/uicore"
+	"freebeams/internal/app/core"
+	"freebeams/internal/ui/uicore"
 
 	"graphics.gd/classdb/BaseButton"
 	"graphics.gd/classdb/Control"

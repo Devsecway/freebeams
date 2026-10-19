@@ -1,10 +1,10 @@
 # Bibles
 
-How translations get into a FreeWorship library, what ships inside the app, and the licensing policy.
+How translations get into a FreeBeams library, what ships inside the app, and the licensing policy.
 
 ## Policy
 
-- **Bundled: public domain only.** FreeWorship ships the **King James Version (KJV)** and the **American Standard
+- **Bundled: public domain only.** FreeBeams ships the **King James Version (KJV)** and the **American Standard
   Version (ASV)**. Both are in the public domain. Nothing else is bundled.
 - **Copyrighted translations are never bundled** (NIV, NLT, ESV, NKJV, MSG, HCSB, CSB, NASB, …). They can only enter a
   library through the user's own import: *Import Bible File…* or *Import Copyrighted Bibles from EasyWorship…* in the
@@ -69,7 +69,7 @@ go test ./internal/bibles/... ./internal/importers/bibletext/
 
 The generator refuses to write when the source has warnings, a patch does not apply, or the counts differ from the
 manifest. `TestRealTranslations` in `bibletext` decodes the raw repository folders when
-`FREEWORSHIP_BIBLE_TRANSLATIONS=/tmp/bible-translations` is set (it skips otherwise).
+`FREEBEAMS_BIBLE_TRANSLATIONS=/tmp/bible-translations` is set (it skips otherwise).
 
 ## Import Bible File…
 

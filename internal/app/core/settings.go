@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Setting keys of the Options dialog (one key per value, so each can be

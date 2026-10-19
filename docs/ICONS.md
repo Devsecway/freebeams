@@ -1,6 +1,6 @@
 # Icons
 
-FreeWorship draws its own icons (no EasyWorship artwork, no third-party icon packs). They are
+FreeBeams draws its own icons (no EasyWorship artwork, no third-party icon packs). They are
 hand-written SVG bodies in `internal/ui/uicore/icons.go`, rasterised by `internal/ui/icons.go` as
 Godot `DPITexture`s and stored in the Theme (`internal/ui/theme.go`, `setIcons`). Screenshots:
 

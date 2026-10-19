@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"freeworship/internal/control"
+	"freebeams/internal/control"
 
 	"graphics.gd/classdb/Engine"
 	"graphics.gd/classdb/Input"
@@ -24,7 +24,7 @@ import (
 // gets, one line per event. It is a debugging aid: a crash a person can
 // trigger by hand is recorded, then replayed exactly with the replay-input
 // control action.
-const InputLogEnv = "FREEWORSHIP_INPUT_LOG"
+const InputLogEnv = "FREEBEAMS_INPUT_LOG"
 
 // inputRecorder writes mouse events as
 // "<frame> <kind> <x> <y> <buttonMask> <button> <pressed> <double>" in logical
@@ -42,10 +42,10 @@ func openInputRecorder() *inputRecorder {
 	}
 	f, err := os.Create(path)
 	if err != nil {
-		log.Printf("[freeworship] input log: %v", err)
+		log.Printf("[freebeams] input log: %v", err)
 		return nil
 	}
-	log.Printf("[freeworship] recording mouse input to %s", path)
+	log.Printf("[freebeams] recording mouse input to %s", path)
 	return &inputRecorder{f: f, w: bufio.NewWriter(f), start: uint64(Engine.GetProcessFrames())}
 }
 
@@ -125,6 +125,6 @@ func (a *App) replayInput(cmd *control.Command, path string) {
 		last = max(last, frame)
 		n++
 	}
-	log.Printf("[freeworship] replaying %d input events over %d frames", n, last)
+	log.Printf("[freebeams] replaying %d input events over %d frames", n, last)
 	a.after(last+1+nativeKeyFrames, func() { a.answer(cmd, nil) })
 }

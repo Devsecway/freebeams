@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func themeNames(ts []models.Theme) []string {

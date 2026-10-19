@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // verseKey encodes a verse as the verses_fts rowid:

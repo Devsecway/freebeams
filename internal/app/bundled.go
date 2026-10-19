@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/bibles/bundled"
-	"freeworship/internal/importers/easyworship"
+	"freebeams/internal/app/core"
+	"freebeams/internal/bibles/bundled"
+	"freebeams/internal/importers/easyworship"
 )
 
 // bundledStatus is the Scriptures footer text while the bundled
@@ -35,7 +35,7 @@ func (a *App) startBundledInstall() {
 	a.bundled = core.BundledState{Running: true}
 	a.setScriptStatus(bundledStatus, false)
 	st := a.st
-	log.Printf("[freeworship] installing bundled Bibles %v (%d bytes embedded)", bundled.Abbrevs(), bundled.Size())
+	log.Printf("[freebeams] installing bundled Bibles %v (%d bytes embedded)", bundled.Abbrevs(), bundled.Size())
 	a.async(nil, func(ctx context.Context) func() error {
 		rep, err := bundled.Install(ctx, st)
 		return func() error {
@@ -48,7 +48,7 @@ func (a *App) startBundledInstall() {
 			}
 			a.bundled.Done, a.bundled.Version = true, rep.Version
 			a.bundled.Installed, a.bundled.Skipped = rep.Installed, rep.Skipped
-			log.Printf("[freeworship] bundled Bibles: installed %v, skipped %v (bundle version %d)", rep.Installed, rep.Skipped, rep.Version)
+			log.Printf("[freebeams] bundled Bibles: installed %v, skipped %v (bundle version %d)", rep.Installed, rep.Skipped, rep.Version)
 			if s := core.BundledSummary(rep); s != "" {
 				a.setScriptStatus(s, false)
 			} else if a.scriptStatus == bundledStatus {

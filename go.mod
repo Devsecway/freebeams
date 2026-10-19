@@ -1,4 +1,4 @@
-module freeworship
+module freebeams
 
 go 1.27
 

@@ -200,7 +200,7 @@ func TestScheduleSaveLoadRoundTrip(t *testing.T) {
 	// A named schedule keeps its title when saved elsewhere.
 	loaded.Title = "Easter"
 	loaded.Add(ScheduleItem{Kind: ItemSong, Title: "x"})
-	other := filepath.Join(dir, "copy.fws")
+	other := filepath.Join(dir, "copy.fbs")
 	if err := loaded.Save(other); err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestScheduleSaveLoadRoundTrip(t *testing.T) {
 func TestScheduleSaveDefaults(t *testing.T) {
 	dir := t.TempDir()
 	s := &Schedule{Title: ""} // zero version, nil items
-	path := filepath.Join(dir, "evening.service.fws")
+	path := filepath.Join(dir, "evening.service.fbs")
 	if err := s.Save(path); err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestScheduleSaveDefaults(t *testing.T) {
 func TestScheduleSaveError(t *testing.T) {
 	dir := t.TempDir()
 	s := sampleSchedule()
-	bad := filepath.Join(dir, "missing", "dir", "x.fws")
+	bad := filepath.Join(dir, "missing", "dir", "x.fbs")
 	if err := s.Save(bad); err == nil {
 		t.Fatal("Save into missing dir should fail")
 	}
@@ -240,7 +240,7 @@ func TestScheduleSaveError(t *testing.T) {
 		t.Errorf("failed save changed schedule: %+v", s)
 	}
 	// Rename onto a directory fails after the temp file was written; temp file is removed.
-	target := filepath.Join(dir, "adir.fws")
+	target := filepath.Join(dir, "adir.fbs")
 	if err := os.Mkdir(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestScheduleSaveError(t *testing.T) {
 	}
 	// Unmarshalable content (NaN) fails cleanly.
 	s.Items[0].Theme.Font.Size = float32NaN()
-	if err := s.Save(filepath.Join(dir, "nan.fws")); err == nil {
+	if err := s.Save(filepath.Join(dir, "nan.fbs")); err == nil {
 		t.Error("Save with NaN should fail")
 	}
 }
@@ -277,16 +277,16 @@ func TestLoadSchedule(t *testing.T) {
 		wantErr       string
 		check         func(*Schedule) bool
 	}{
-		{"v1.fws", `{"version":1,"title":"Morning","items":[{"id":"a","kind":"song","title":"x","theme":{},"slides":[]}]}`, "",
+		{"v1.fbs", `{"version":1,"title":"Morning","items":[{"id":"a","kind":"song","title":"x","theme":{},"slides":[]}]}`, "",
 			func(s *Schedule) bool {
 				return s.Version == 1 && s.Title == "Morning" && len(s.Items) == 1 && s.Items[0].ID == "a"
 			}},
-		{"noversion.fws", `{"title":"Old"}`, "", func(s *Schedule) bool { return s.Version == 1 && s.Title == "Old" }},
-		{"notitle.fws", `{"version":1}`, "", func(s *Schedule) bool { return s.Title == "notitle" }},
-		{"future.fws", `{"version":2,"title":"x"}`, "unsupported file version 2", nil},
-		{"negative.fws", `{"version":-1}`, "unsupported file version -1", nil},
-		{"garbage.fws", `not json`, "load schedule", nil},
-		{"wrongtype.fws", `{"version":"one"}`, "load schedule", nil},
+		{"noversion.fbs", `{"title":"Old"}`, "", func(s *Schedule) bool { return s.Version == 1 && s.Title == "Old" }},
+		{"notitle.fbs", `{"version":1}`, "", func(s *Schedule) bool { return s.Title == "notitle" }},
+		{"future.fbs", `{"version":2,"title":"x"}`, "unsupported file version 2", nil},
+		{"negative.fbs", `{"version":-1}`, "unsupported file version -1", nil},
+		{"garbage.fbs", `not json`, "load schedule", nil},
+		{"wrongtype.fbs", `{"version":"one"}`, "load schedule", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -306,7 +306,7 @@ func TestLoadSchedule(t *testing.T) {
 			}
 		})
 	}
-	if _, err := LoadSchedule(filepath.Join(dir, "absent.fws")); err == nil {
+	if _, err := LoadSchedule(filepath.Join(dir, "absent.fbs")); err == nil {
 		t.Error("missing file should fail")
 	}
 }
@@ -333,7 +333,7 @@ func TestLoadScheduleRepairsIDs(t *testing.T) {
 	dir := t.TempDir()
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path := filepath.Join(dir, "s"+string(rune('a'+i))+".fws")
+			path := filepath.Join(dir, "s"+string(rune('a'+i))+".fbs")
 			content := `{"version":1,"title":"x","items":[` + strings.Join(tt.items, ",") + `]}`
 			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 				t.Fatal(err)
@@ -376,10 +376,10 @@ func TestScheduleSaveAs(t *testing.T) {
 		file      string
 		wantTitle string
 	}{
-		{"save keeps a real title", "Sunday", false, "other.fws", "Sunday"},
-		{"save names an untitled schedule", "Untitled", false, "first.fws", "first"},
-		{"save as renames", "Sunday", true, "Evening Service.fws", "Evening Service"},
-		{"save as an untitled schedule", "Untitled", true, "named.fws", "named"},
+		{"save keeps a real title", "Sunday", false, "other.fbs", "Sunday"},
+		{"save names an untitled schedule", "Untitled", false, "first.fbs", "first"},
+		{"save as renames", "Sunday", true, "Evening Service.fbs", "Evening Service"},
+		{"save as an untitled schedule", "Untitled", true, "named.fbs", "named"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -407,7 +407,7 @@ func TestScheduleSaveAs(t *testing.T) {
 	// A failed Save As leaves the schedule as it was.
 	s := sampleSchedule()
 	s.Title = "Sunday"
-	if err := s.SaveAs(filepath.Join(dir, "missing", "x.fws")); err == nil {
+	if err := s.SaveAs(filepath.Join(dir, "missing", "x.fbs")); err == nil {
 		t.Fatal("Save As into a missing folder should fail")
 	}
 	if s.Title != "Sunday" || s.Path != "" || !s.Dirty {

@@ -1,5 +1,10 @@
 package models
 
+import (
+	"path/filepath"
+	"strings"
+)
+
 // ItemKind is the type of a schedule item.
 type ItemKind string
 
@@ -35,7 +40,7 @@ type ScheduleItem struct {
 	Slides []Slide `json:"slides"`
 }
 
-// Schedule is an ordered list of items, saved as a .fws file (JSON).
+// Schedule is an ordered list of items, saved as a .fbs file (JSON).
 type Schedule struct {
 	// Version of the file format; currently 1.
 	Version int            `json:"version"`
@@ -48,5 +53,16 @@ type Schedule struct {
 	Dirty bool `json:"-"`
 }
 
-// ScheduleFileExt is the extension of saved schedules.
-const ScheduleFileExt = ".fws"
+// ScheduleFileExt is the extension of saved schedules. LegacyScheduleFileExt
+// is the extension the app wrote under its former name (FreeWorship); such
+// files still open and keep their name when saved.
+const (
+	ScheduleFileExt       = ".fbs"
+	LegacyScheduleFileExt = ".fws"
+)
+
+// IsScheduleFile reports whether path has a schedule extension (either one).
+func IsScheduleFile(path string) bool {
+	ext := filepath.Ext(path)
+	return strings.EqualFold(ext, ScheduleFileExt) || strings.EqualFold(ext, LegacyScheduleFileExt)
+}

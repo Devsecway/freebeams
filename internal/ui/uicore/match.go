@@ -1,6 +1,6 @@
 package uicore
 
-import "freeworship/internal/models"
+import "freebeams/internal/models"
 
 // SongMatchHint is the song list's Match column text and row tooltip for a
 // search result: where the song matched when that was not its title

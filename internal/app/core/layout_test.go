@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func TestLayoutRoundTrip(t *testing.T) {

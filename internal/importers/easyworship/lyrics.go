@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // EasyWorship lyrics (after RTF -> text) are plain lines. A line that is just

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func TestPresentationDeckAndItem(t *testing.T) {
@@ -236,7 +236,7 @@ func TestPresentationScheduleItemRoundTrip(t *testing.T) {
 	p := models.Presentation{ID: 7, Path: "/d/Talk.pptx", Title: "Talk", Pages: 2, CacheKey: "k7", Partial: true}
 	s := models.NewSchedule()
 	s.Add(PresentationItem(p, []string{"/c/k7/page-001.png", "/c/k7/page-002.png"}))
-	path := filepath.Join(t.TempDir(), "s.fws")
+	path := filepath.Join(t.TempDir(), "s.fbs")
 	if err := s.Save(path); err != nil {
 		t.Fatal(err)
 	}

@@ -4,8 +4,8 @@ import (
 	"context"
 	"maps"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/ui"
 )
 
 // layoutSaveFrames is how long after the last splitter change the layout is

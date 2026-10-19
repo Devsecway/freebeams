@@ -3,10 +3,10 @@ package app
 import (
 	"reflect"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/models"
-	"freeworship/internal/render"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/models"
+	"freebeams/internal/render"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb/Control"
 )

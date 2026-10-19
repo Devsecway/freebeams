@@ -9,14 +9,14 @@ import (
 	"runtime/debug"
 	"time"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/importers/easyworship"
-	"freeworship/internal/media"
-	"freeworship/internal/models"
-	"freeworship/internal/render"
-	"freeworship/internal/store"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/media"
+	"freebeams/internal/models"
+	"freebeams/internal/render"
+	"freebeams/internal/store"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/DisplayServer"
@@ -96,7 +96,7 @@ func (a *App) initMedia() {
 		tools := media.Detect(ctx)
 		return func() error {
 			a.md.tools, a.md.toolsKnown = tools, true
-			log.Printf("[freeworship] media tools: %s", tools.Status())
+			log.Printf("[freebeams] media tools: %s", tools.Status())
 			a.md.status = a.mediaFooter()
 			a.startMediaWork()
 			return nil
@@ -311,7 +311,7 @@ func (a *App) doRemoveMedia(m models.Media, cmd *control.Command) {
 				a.answer(cmd, err)
 				return err
 			}
-			log.Printf("[freeworship] removed media %d %q", m.ID, m.Title)
+			log.Printf("[freebeams] removed media %d %q", m.ID, m.Title)
 			if a.md.item != nil && a.md.item.ID == m.ID {
 				a.md.item, a.md.deck = nil, nil
 			}
@@ -359,7 +359,7 @@ func (a *App) addMediaPaths(paths []string, cmd *control.Command) {
 		}
 		return func() error {
 			for _, w := range warnings {
-				log.Printf("[freeworship] add media: %s", w)
+				log.Printf("[freebeams] add media: %s", w)
 			}
 			if err != nil {
 				a.alert("Add Media", fmt.Errorf("Could not add the media files.\n\n%w", err))
@@ -372,7 +372,7 @@ func (a *App) addMediaPaths(paths []string, cmd *control.Command) {
 				a.answer(cmd, err)
 				return err
 			}
-			log.Printf("[freeworship] add media: %d found, %d new", len(items), len(added))
+			log.Printf("[freebeams] add media: %d found, %d new", len(items), len(added))
 			a.loadMedia(a.md.query, a.md.kind, cmd)
 			return nil
 		}
@@ -430,9 +430,9 @@ func (a *App) startMediaImport() {
 				a.fail("EasyWorship media import", err)
 				return err
 			}
-			log.Printf("[freeworship] EasyWorship media: %d registered, %d already present", rep.MediaImported, rep.MediaSkipped)
+			log.Printf("[freebeams] EasyWorship media: %d registered, %d already present", rep.MediaImported, rep.MediaSkipped)
 			for _, w := range rep.Warnings {
-				log.Printf("[freeworship] media import note: %s", w)
+				log.Printf("[freebeams] media import note: %s", w)
 			}
 			a.loadMedia(a.md.query, a.md.kind, nil)
 			return nil
@@ -484,7 +484,7 @@ func (a *App) startMediaWork() {
 		defer a.jobs.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[freeworship] panic in media work: %v\n%s", r, debug.Stack())
+				log.Printf("[freebeams] panic in media work: %v\n%s", r, debug.Stack())
 			}
 			a.post(func() {
 				a.md.working = false
@@ -586,7 +586,7 @@ func (a *App) mediaFail(m models.Media, step string, err error) {
 		if !a.md.failed[m.ID] {
 			a.md.failed[m.ID] = true
 			a.md.thumbVer++
-			log.Printf("[freeworship] media %s %q: %v", step, m.Title, err)
+			log.Printf("[freebeams] media %s %q: %v", step, m.Title, err)
 		}
 	})
 }

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"freeworship/internal/models"
-	"freeworship/internal/ui/uicore"
+	"freebeams/internal/models"
+	"freebeams/internal/ui/uicore"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/DisplayServer"
@@ -120,7 +120,7 @@ func demoItems(slides [][2]string) []SlideGridItem {
 
 // fillDemo puts the sample service into a main window.
 func fillDemo(w *MainWindow) {
-	w.SetScheduleTitle("Sunday Service.fws", true)
+	w.SetScheduleTitle("Sunday Service.fbs", true)
 	w.Schedule.SetRows([]ScheduleRow{
 		{Title: "Welcome loop", Subtitle: "Video · 0:30"},
 		{Title: "Abide With Me", Subtitle: "Henry F. Lyte", Live: true},

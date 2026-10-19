@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 const presentationColumns = `id, path, title, pages, cache_key, renderer, partial, added`

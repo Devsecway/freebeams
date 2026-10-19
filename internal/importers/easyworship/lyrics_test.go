@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func sec(kind models.SectionKind, n int, label string, lines ...string) models.Section {

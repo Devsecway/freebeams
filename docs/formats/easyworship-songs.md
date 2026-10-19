@@ -54,7 +54,7 @@ Findings (all 223 blobs surveyed):
   codepages, `\uN`+`\ucN`, `\~ \- \_`, `\bin` and ignorable destinations, for libraries in other languages.
 - Lines often end with a trailing space before `\par`. The last line has no `\par`.
 
-## Section mapping (FreeWorship)
+## Section mapping (FreeBeams)
 
 `parseLyrics` in `internal/importers/easyworship/lyrics.go` works like this:
 

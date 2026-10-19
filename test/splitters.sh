@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Splitter stress test: launches FreeWorship, builds a small schedule and puts
+# Splitter stress test: launches FreeBeams, builds a small schedule and puts
 # a song live (so the monitors, slide grids and schedule rows hold real
 # render.SlideViews), then drags every splitter back and forth through Godot's
 # input pipeline (the drag-split control hook), with several mouse motions per
@@ -19,9 +19,9 @@ OUT="$ROOT/test/out"
 mkdir -p "$OUT"
 LOG="$OUT/splitters.log"
 : >"$LOG"
-rm -f "$OUT/splitters.sample.txt" "$OUT/splitters.fws"
+rm -f "$OUT/splitters.sample.txt" "$OUT/splitters.fbs"
 
-LIB="$(mktemp -t freeworship-split)"
+LIB="$(mktemp -t freebeams-split)"
 KEY="testkey"
 STEPS="${STEPS:-40}"
 BURST="${BURST:-3}"
@@ -140,10 +140,10 @@ default_percent() {
 GD="gd"
 [ -x "$ROOT/bin/gd" ] && GD="$ROOT/bin/gd"
 command -v "$GD" >/dev/null || fail "$GD not found"
-log "launching: FREEWORSHIP_LIBRARY=$LIB $GD run"
+log "launching: FREEBEAMS_LIBRARY=$LIB $GD run"
 (
 	cd "$ROOT" || exit 1
-	export FREEWORSHIP_LIBRARY="$LIB" FREEWORSHIP_CONTROL_KEY="$KEY"
+	export FREEBEAMS_LIBRARY="$LIB" FREEBEAMS_CONTROL_KEY="$KEY"
 	exec "$GD" run
 ) >"$LOG" 2>&1 &
 APP_PID=$!
@@ -195,7 +195,7 @@ LAST="$(state)"
 check "still live after the drags" "$LAST" '"Amazing Grace" in s["live"]["title"]'
 
 # ---- quit ------------------------------------------------------------------------------------
-act "save the schedule (so closing does not ask)" save-schedule "{\"path\":\"$OUT/splitters.fws\"}" 'not s["schedule"]["dirty"]'
+act "save the schedule (so closing does not ask)" save-schedule "{\"path\":\"$OUT/splitters.fbs\"}" 'not s["schedule"]["dirty"]'
 LAST="$(post close)"
 log "closing the window"
 for _ in $(seq 1 60); do

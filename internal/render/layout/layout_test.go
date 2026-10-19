@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }

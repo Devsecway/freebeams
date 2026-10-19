@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Linux bundle (freeworship + linux_<arch>.so) and package it as a
+# Build the Linux bundle (freebeams + linux_<arch>.so) and package it as a
 # tar.gz and an AppImage.
 #
 # Runs on Linux only, natively (the glibc build and the AppImage tooling are
@@ -8,11 +8,11 @@
 # runs on newer distros too.
 #
 # Outputs (<v> = bin/version, <arch> = GOARCH):
-#   releases/linux/<arch>/                             freeworship, linux_<arch>.so, freeworship.sh
-#   releases/FreeWorship-<v>-linux-<arch>.tar.gz       the portable bundle
-#   releases/FreeWorship-<v>-<x86_64|aarch64>.AppImage (NO_APPIMAGE=1 skips it)
+#   releases/linux/<arch>/                             freebeams, linux_<arch>.so, freebeams.sh
+#   releases/FreeBeams-<v>-linux-<arch>.tar.gz       the portable bundle
+#   releases/FreeBeams-<v>-<x86_64|aarch64>.AppImage (NO_APPIMAGE=1 skips it)
 #
-# appimagetool is downloaded into ~/.cache/freeworship when missing
+# appimagetool is downloaded into ~/.cache/freebeams when missing
 # (APPIMAGETOOL=/path overrides).
 set -euo pipefail
 
@@ -43,7 +43,7 @@ host_arch="$(go env GOHOSTARCH)"
 [ "$GOARCH" = "$host_arch" ] || fail "GOARCH=$GOARCH on a $host_arch host: build natively on a $GOARCH machine"
 
 OUT="releases/linux/$GOARCH"
-BIN="$OUT/freeworship"
+BIN="$OUT/freebeams"
 SO="graphics/linux_$GOARCH.so"
 V="$("$ROOT/bin/version")"
 
@@ -68,19 +68,19 @@ step "version $V"
 # linux_<arch>.so, which Godot loads from the binary's own directory.
 step "bundle the .so and launcher next to the binary"
 cp -f "$SO" "$OUT/"
-cp -f packaging/linux/AppRun "$OUT/freeworship.sh"
-chmod +x "$BIN" "$OUT/freeworship.sh"
+cp -f packaging/linux/AppRun "$OUT/freebeams.sh"
+chmod +x "$BIN" "$OUT/freebeams.sh"
 
 step "tar.gz"
-TGZ="releases/FreeWorship-$V-linux-$GOARCH.tar.gz"
-STAGE="$(mktemp -d -t freeworship-linux.XXXXXX)"
+TGZ="releases/FreeBeams-$V-linux-$GOARCH.tar.gz"
+STAGE="$(mktemp -d -t freebeams-linux.XXXXXX)"
 trap 'rm -rf "$STAGE"' EXIT
-mkdir -p "$STAGE/FreeWorship-$V"
-cp -R "$OUT"/. "$STAGE/FreeWorship-$V/"
-cp -f graphics/icon.png "$STAGE/FreeWorship-$V/freeworship.png"
-cp -f packaging/linux/freeworship.desktop "$STAGE/FreeWorship-$V/"
+mkdir -p "$STAGE/FreeBeams-$V"
+cp -R "$OUT"/. "$STAGE/FreeBeams-$V/"
+cp -f graphics/icon.png "$STAGE/FreeBeams-$V/freebeams.png"
+cp -f packaging/linux/freebeams.desktop "$STAGE/FreeBeams-$V/"
 rm -f "$TGZ"
-tar -C "$STAGE" -czf "$TGZ" "FreeWorship-$V"
+tar -C "$STAGE" -czf "$TGZ" "FreeBeams-$V"
 ls -lh "$TGZ"
 
 # --- AppImage ----------------------------------------------------------------
@@ -88,17 +88,17 @@ step "AppImage"
 if [ "${NO_APPIMAGE:-0}" = "1" ]; then
 	echo "    skipped (NO_APPIMAGE=1)"
 else
-	APPDIR="releases/linux/FreeWorship-$GOARCH.AppDir"
+	APPDIR="releases/linux/FreeBeams-$GOARCH.AppDir"
 	rm -rf "$APPDIR"
 	mkdir -p "$APPDIR/usr/bin"
 	cp -f "$BIN" "$SO" "$APPDIR/usr/bin/"
 	cp -f packaging/linux/AppRun "$APPDIR/AppRun"
-	cp -f packaging/linux/freeworship.desktop "$APPDIR/"
-	cp -f graphics/icon.png "$APPDIR/freeworship.png"
+	cp -f packaging/linux/freebeams.desktop "$APPDIR/"
+	cp -f graphics/icon.png "$APPDIR/freebeams.png"
 	cp -f graphics/icon.png "$APPDIR/.DirIcon"
-	chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/freeworship"
+	chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/freebeams"
 
-	TOOL="${APPIMAGETOOL:-$HOME/.cache/freeworship/appimagetool-$APPIMAGE_ARCH.AppImage}"
+	TOOL="${APPIMAGETOOL:-$HOME/.cache/freebeams/appimagetool-$APPIMAGE_ARCH.AppImage}"
 	if [ ! -x "$TOOL" ]; then
 		need curl "to download appimagetool (or set APPIMAGETOOL, or NO_APPIMAGE=1)"
 		mkdir -p "$(dirname "$TOOL")"
@@ -107,7 +107,7 @@ else
 			fail "could not download appimagetool; set APPIMAGETOOL to a local copy or NO_APPIMAGE=1"
 		chmod +x "$TOOL"
 	fi
-	APPIMAGE="releases/FreeWorship-$V-$APPIMAGE_ARCH.AppImage"
+	APPIMAGE="releases/FreeBeams-$V-$APPIMAGE_ARCH.AppImage"
 	rm -f "$APPIMAGE"
 	# APPIMAGE_EXTRACT_AND_RUN lets appimagetool (itself an AppImage) run on
 	# machines without FUSE, such as CI runners. ARCH is required by the tool.

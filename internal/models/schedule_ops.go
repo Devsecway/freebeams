@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// ScheduleVersion is the .fws file format version written by Save and the
+// ScheduleVersion is the .fbs file format version written by Save and the
 // newest version LoadSchedule accepts.
 const ScheduleVersion = 1
 
@@ -179,7 +179,7 @@ func writeFileAtomic(path string, data []byte) (err error) {
 	return os.Rename(tmp, path)
 }
 
-// LoadSchedule reads a .fws file. Unknown future versions return an error.
+// LoadSchedule reads a .fbs file. Unknown future versions return an error.
 //
 // A missing or zero version is read as version 1. The returned schedule has
 // Path set and Dirty cleared; an empty Title is taken from the file name.
@@ -198,7 +198,7 @@ func LoadSchedule(path string) (*Schedule, error) {
 	case s.Version == 0:
 		s.Version = ScheduleVersion
 	case s.Version < 0 || s.Version > ScheduleVersion:
-		return nil, fmt.Errorf("load schedule %s: unsupported file version %d (this version of FreeWorship reads up to %d)",
+		return nil, fmt.Errorf("load schedule %s: unsupported file version %d (this version of FreeBeams reads up to %d)",
 			path, s.Version, ScheduleVersion)
 	}
 	if strings.TrimSpace(s.Title) == "" {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // TestSequencer: song loads finish in any order (the store has a pool of
@@ -252,18 +252,18 @@ func TestSongsFooter(t *testing.T) {
 
 func TestIsSaveAs(t *testing.T) {
 	dir := t.TempDir()
-	cur := filepath.Join(dir, "Sunday.fws")
+	cur := filepath.Join(dir, "Sunday.fbs")
 	tests := []struct {
 		name        string
 		cur, target string
 		want        bool
 	}{
-		{"never saved", "", filepath.Join(dir, "Sunday.fws"), true},
+		{"never saved", "", filepath.Join(dir, "Sunday.fbs"), true},
 		{"same file", cur, cur, false},
 		{"same file without the extension", cur, filepath.Join(dir, "Sunday"), false},
-		{"same file, unclean path", cur, filepath.Join(dir, "x", "..", "Sunday.fws"), false},
-		{"another name", cur, filepath.Join(dir, "Evening.fws"), true},
-		{"another folder", cur, filepath.Join(dir, "sub", "Sunday.fws"), true},
+		{"same file, unclean path", cur, filepath.Join(dir, "x", "..", "Sunday.fbs"), false},
+		{"another name", cur, filepath.Join(dir, "Evening.fbs"), true},
+		{"another folder", cur, filepath.Join(dir, "sub", "Sunday.fbs"), true},
 		{"no target", cur, "", false},
 	}
 	for _, tt := range tests {
@@ -276,13 +276,13 @@ func TestIsSaveAs(t *testing.T) {
 func TestBuildStateDialog(t *testing.T) {
 	st := BuildState(StateInput{
 		Presenter: models.NewPresenter().State,
-		Dialog:    DialogState{Editor: true, Confirm: "Quit FreeWorship", Message: &Alert{Title: "Open Schedule", Message: "bad file"}, Alerts: 2, Host: "editor"},
+		Dialog:    DialogState{Editor: true, Confirm: "Quit FreeBeams", Message: &Alert{Title: "Open Schedule", Message: "bad file"}, Alerts: 2, Host: "editor"},
 	})
 	b, err := json.Marshal(st)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"dialog":{"editor":true,"settings":false,"confirm":"Quit FreeWorship","message":{"title":"Open Schedule","message":"bad file"},"alerts":2,"host":"editor"}`} {
+	for _, want := range []string{`"dialog":{"editor":true,"settings":false,"confirm":"Quit FreeBeams","message":{"title":"Open Schedule","message":"bad file"},"alerts":2,"host":"editor"}`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("state JSON %s\nlacks %s", b, want)
 		}

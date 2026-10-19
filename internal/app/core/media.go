@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Setting key for the one-off media registration on libraries that finished
@@ -13,7 +13,7 @@ import (
 const SettingMediaImportDone = "import.easyworship.media.done"
 
 // CacheEnv overrides the media cache directory (thumbnails, transcodes).
-const CacheEnv = "FREEWORSHIP_CACHE"
+const CacheEnv = "FREEBEAMS_CACHE"
 
 // MediaCaps is what the machine can do with videos and audio.
 type MediaCaps struct {

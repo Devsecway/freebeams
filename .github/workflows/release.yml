@@ -40,7 +40,7 @@ jobs:
             *) v="$(bin/version)" ;;
           esac
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          echo "FreeWorship $v"
+          echo "FreeBeams $v"
 
   macos:
     name: macOS DMG
@@ -86,7 +86,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: FreeWorship-macOS
+          name: FreeBeams-macOS
           path: releases/*.dmg
           if-no-files-found: error
 
@@ -131,7 +131,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: FreeWorship-windows
+          name: FreeBeams-windows
           path: |
             releases/*.zip
             releases/*-Setup.exe
@@ -173,7 +173,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: FreeWorship-linux
+          name: FreeBeams-linux
           path: |
             releases/*.tar.gz
             releases/*.AppImage
@@ -187,7 +187,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v7
         with:
-          pattern: FreeWorship-*
+          pattern: FreeBeams-*
           merge-multiple: true
           path: dist
 
@@ -204,4 +204,4 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" --draft --generate-notes \
-            --title "FreeWorship ${{ needs.version.outputs.version }}"
+            --title "FreeBeams ${{ needs.version.outputs.version }}"

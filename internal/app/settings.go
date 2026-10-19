@@ -8,11 +8,11 @@ import (
 	"log"
 	"runtime/debug"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/models"
-	"freeworship/internal/render"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/models"
+	"freebeams/internal/render"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb/DisplayServer"
 )
@@ -47,7 +47,7 @@ func (a *App) loadSettings() {
 	}
 	a.settings = a.settings.Normalized(core.EWImagesDir)
 	a.pres.SetLogo(a.settings.Logo)
-	log.Printf("[freeworship] settings: transition %s; output screen %d; logo %s; %s interface",
+	log.Printf("[freebeams] settings: transition %s; output screen %d; logo %s; %s interface",
 		a.settings.Transition, a.settings.OutputScreen, core.LogoDescription(a.settings.Logo), a.settings.InterfaceColor)
 }
 
@@ -201,7 +201,7 @@ func aboutText() string {
 	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
 		version = info.Main.Version
 	}
-	return "FreeWorship — " + version + "\n\nA free worship presentation app: songs, scriptures, media and a projector output, " +
+	return "FreeBeams — " + version + "\n\nA free worship presentation app: songs, scriptures, media and a projector output, " +
 		"built with Go and Godot (graphics.gd). Hotkeys and layout follow EasyWorship."
 }
 
@@ -227,7 +227,7 @@ func (a *App) onMenu(act ui.MenuAction) {
 	case ui.MenuInterfaceLight:
 		a.fail("interface color", a.setInterfaceColor(core.ColorLight))
 	case ui.MenuAbout:
-		a.notify("About FreeWorship", aboutText())
+		a.notify("About FreeBeams", aboutText())
 	}
 }
 
