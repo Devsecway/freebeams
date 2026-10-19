@@ -28,7 +28,8 @@ import (
 // the layout: they decide what the first frame looks like) and applies the
 // logo to the presenter.
 func (a *App) loadSettings() {
-	a.settings = core.DefaultSettings(core.EWImagesDir)
+	a.logoDir = a.defaultLogoDir()
+	a.settings = core.DefaultSettings(a.logoDir)
 	if a.st != nil {
 		get := func(key string, dst any) {
 			if _, err := a.st.GetSetting(a.ctx, key, dst); err != nil {
@@ -45,7 +46,7 @@ func (a *App) loadSettings() {
 		get(core.SettingInterfaceColor, &a.settings.InterfaceColor)
 		get(core.SettingRecent, &a.recent)
 	}
-	a.settings = a.settings.Normalized(core.EWImagesDir)
+	a.settings = a.settings.Normalized(a.logoDir)
 	a.pres.SetLogo(a.settings.Logo)
 	log.Printf("[freebeams] settings: transition %s; output screen %d; logo %s; %s interface",
 		a.settings.Transition, a.settings.OutputScreen, core.LogoDescription(a.settings.Logo), a.settings.InterfaceColor)
@@ -112,7 +113,7 @@ func (a *App) setOutputScreen(i int) error {
 // setLogo changes the logo screen's background.
 func (a *App) setLogo(bg models.Background) {
 	if bg.Kind == "" {
-		bg = core.LogoBackground(core.EWImagesDir)
+		bg = core.LogoBackground(a.logoDir)
 	}
 	if a.settings.Logo == bg {
 		return
@@ -180,7 +181,7 @@ func (a *App) chooseLogoDialog() {
 			if !ok || len(paths) == 0 {
 				return
 			}
-			a.event(func() { a.setLogo(core.LogoFromPath(paths[0], core.EWImagesDir)) })
+			a.event(func() { a.setLogo(core.LogoFromPath(paths[0], a.logoDir)) })
 		}, 0)
 	if err != nil {
 		a.alert("Logo Image", fmt.Errorf("Could not show the Open dialog.\n\n%w", err))
@@ -248,7 +249,7 @@ func (a *App) wireSettings() {
 	d.OnTransition = func(t models.Transition) { a.event(func() { a.setTransition(t) }) }
 	d.OnOutputScreen = func(i int) { a.event(func() { a.fail("output screen", a.setOutputScreen(i)) }) }
 	d.OnChooseLogo = func() { a.event(a.chooseLogoDialog) }
-	d.OnDefaultLogo = func() { a.event(func() { a.setLogo(core.LogoBackground(core.EWImagesDir)) }) }
+	d.OnDefaultLogo = func() { a.event(func() { a.setLogo(core.LogoBackground(a.logoDir)) }) }
 	d.OnImportCopyrighted = func() { a.event(func() { a.importCopyrightedBibles(nil, false) }) }
 	d.OnOK = func() { a.event(func() { a.closeSettings(false) }) }
 	d.OnCancel = func() { a.event(func() { a.closeSettings(true) }) }
@@ -417,7 +418,7 @@ func (a *App) applySetting(key string, raw json.RawMessage) error {
 	case core.SettingLogo, "logo":
 		var path string
 		if err := json.Unmarshal(raw, &path); err == nil {
-			a.setLogo(core.LogoFromPath(path, core.EWImagesDir))
+			a.setLogo(core.LogoFromPath(path, a.logoDir))
 			return nil
 		}
 		var bg models.Background

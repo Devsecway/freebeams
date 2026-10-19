@@ -104,10 +104,14 @@ func ScreenLabel(index, w, h int, primary bool) string {
 }
 
 // LogoDescription names the logo setting for the dialog: the image file's
-// name, or "Default" for the built-in gradient.
+// name, "Default (FreeBeams logo)" for the built-in Logo screen, or "Default
+// gradient" for the gradient.
 func LogoDescription(bg models.Background) string {
 	switch bg.Kind {
 	case models.BackgroundImage, models.BackgroundVideo:
+		if IsDefaultLogo(bg) {
+			return "Default (FreeBeams logo)"
+		}
 		if bg.Path != "" {
 			return filepath.Base(bg.Path)
 		}
