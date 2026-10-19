@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Build the Linux bundle (freeworship + linux_<arch>.so) and package it as a
+# tar.gz and an AppImage.
+#
+# Runs on Linux only, natively (the glibc build and the AppImage tooling are
+# Linux-only; GOARCH must be the host's). Build on an old-enough distro
+# (release.yml uses ubuntu-22.04) so the glibc floor stays low and the result
+# runs on newer distros too.
+#
+# Outputs (<v> = bin/version, <arch> = GOARCH):
+#   releases/linux/<arch>/                             freeworship, linux_<arch>.so, freeworship.sh
+#   releases/FreeWorship-<v>-linux-<arch>.tar.gz       the portable bundle
+#   releases/FreeWorship-<v>-<x86_64|aarch64>.AppImage (NO_APPIMAGE=1 skips it)
+#
+# appimagetool is downloaded into ~/.cache/freeworship when missing
+# (APPIMAGETOOL=/path overrides).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+fail() {
+	echo "build-linux: $*" >&2
+	exit 1
+}
+need() { # need COMMAND "where it comes from"
+	command -v "$1" >/dev/null 2>&1 || fail "'$1' not found ($2)"
+}
+step() { printf '\n==> %s\n' "$*"; }
+
+[ "$(uname -s)" = "Linux" ] || fail "runs on Linux only"
+need go "https://go.dev/dl/"
+need tar "coreutils"
+
+GOARCH="${GOARCH:-$(go env GOARCH)}"
+export GOARCH
+case "$GOARCH" in
+amd64) APPIMAGE_ARCH=x86_64 ;;
+arm64) APPIMAGE_ARCH=aarch64 ;;
+*) fail "unsupported GOARCH '$GOARCH' (want amd64 or arm64)" ;;
+esac
+host_arch="$(go env GOHOSTARCH)"
+[ "$GOARCH" = "$host_arch" ] || fail "GOARCH=$GOARCH on a $host_arch host: build natively on a $GOARCH machine"
+
+OUT="releases/linux/$GOARCH"
+BIN="$OUT/freeworship"
+SO="graphics/linux_$GOARCH.so"
+V="$("$ROOT/bin/version")"
+
+# --- build -------------------------------------------------------------------
+# gd compiles with the system gcc (or zig when it is on PATH), then exports
+# the "Linux x86_64" / "Linux arm64" preset headlessly.
+step "GOOS=linux GOARCH=$GOARCH bin/gd build"
+rc=0
+GOOS=linux "$ROOT/bin/gd" build || rc=$?
+# Godot's headless export can crash on teardown on GPU-less machines after
+# writing the binary, so trust the artifacts, not only the exit status.
+[ -f "$BIN" ] && [ -f "$SO" ] || fail "gd build failed (exit $rc): $BIN or $SO was not produced"
+[ "$rc" -eq 0 ] || echo "    note: gd exited $rc but the artifacts exist (Godot teardown crash)"
+if command -v file >/dev/null 2>&1; then
+	file "$SO" | grep -q 'ELF 64-bit.*shared object' || fail "$SO is not an ELF shared object"
+fi
+
+step "version $V"
+
+# --- bundle ------------------------------------------------------------------
+# The exported binary embeds the .pck; its library.gdextension points at
+# linux_<arch>.so, which Godot loads from the binary's own directory.
+step "bundle the .so and launcher next to the binary"
+cp -f "$SO" "$OUT/"
+cp -f packaging/linux/AppRun "$OUT/freeworship.sh"
+chmod +x "$BIN" "$OUT/freeworship.sh"
+
+step "tar.gz"
+TGZ="releases/FreeWorship-$V-linux-$GOARCH.tar.gz"
+STAGE="$(mktemp -d -t freeworship-linux.XXXXXX)"
+trap 'rm -rf "$STAGE"' EXIT
+mkdir -p "$STAGE/FreeWorship-$V"
+cp -R "$OUT"/. "$STAGE/FreeWorship-$V/"
+cp -f graphics/icon.png "$STAGE/FreeWorship-$V/freeworship.png"
+cp -f packaging/linux/freeworship.desktop "$STAGE/FreeWorship-$V/"
+rm -f "$TGZ"
+tar -C "$STAGE" -czf "$TGZ" "FreeWorship-$V"
+ls -lh "$TGZ"
+
+# --- AppImage ----------------------------------------------------------------
+step "AppImage"
+if [ "${NO_APPIMAGE:-0}" = "1" ]; then
+	echo "    skipped (NO_APPIMAGE=1)"
+else
+	APPDIR="releases/linux/FreeWorship-$GOARCH.AppDir"
+	rm -rf "$APPDIR"
+	mkdir -p "$APPDIR/usr/bin"
+	cp -f "$BIN" "$SO" "$APPDIR/usr/bin/"
+	cp -f packaging/linux/AppRun "$APPDIR/AppRun"
+	cp -f packaging/linux/freeworship.desktop "$APPDIR/"
+	cp -f graphics/icon.png "$APPDIR/freeworship.png"
+	cp -f graphics/icon.png "$APPDIR/.DirIcon"
+	chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/freeworship"
+
+	TOOL="${APPIMAGETOOL:-$HOME/.cache/freeworship/appimagetool-$APPIMAGE_ARCH.AppImage}"
+	if [ ! -x "$TOOL" ]; then
+		need curl "to download appimagetool (or set APPIMAGETOOL, or NO_APPIMAGE=1)"
+		mkdir -p "$(dirname "$TOOL")"
+		curl -fsSL -o "$TOOL" \
+			"https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$APPIMAGE_ARCH.AppImage" ||
+			fail "could not download appimagetool; set APPIMAGETOOL to a local copy or NO_APPIMAGE=1"
+		chmod +x "$TOOL"
+	fi
+	APPIMAGE="releases/FreeWorship-$V-$APPIMAGE_ARCH.AppImage"
+	rm -f "$APPIMAGE"
+	# APPIMAGE_EXTRACT_AND_RUN lets appimagetool (itself an AppImage) run on
+	# machines without FUSE, such as CI runners. ARCH is required by the tool.
+	ARCH="$APPIMAGE_ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" "$APPDIR" "$APPIMAGE"
+	[ -f "$APPIMAGE" ] || fail "$APPIMAGE was not produced"
+	ls -lh "$APPIMAGE"
+fi
+
+step "done"
+echo "bundle: $OUT/"
+echo "tar.gz: $TGZ"

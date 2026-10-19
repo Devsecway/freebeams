@@ -1,0 +1,19 @@
+#!/bin/sh
+# AppImage entry point (also the launcher in the tar.gz bundle, as freeworship.sh).
+#
+# Runs the exported binary from its own directory, where Godot finds
+# linux_<arch>.so beside it, and preloads that .so: it is a Go c-shared library
+# with initial-exec TLS that Godot dlopen()s at runtime, and on aarch64 glibc the
+# static-TLS surplus left for dlopen can be too small ("cannot allocate memory in
+# static TLS block"). Preloading puts its TLS in the initial block. Harmless on
+# x86_64.
+HERE="$(dirname "$(readlink -f "$0")")"
+BIN="$HERE/usr/bin"
+[ -d "$BIN" ] || BIN="$HERE"
+for so in "$BIN"/linux_*.so; do
+	[ -e "$so" ] || continue
+	LD_PRELOAD="$so${LD_PRELOAD:+:$LD_PRELOAD}"
+	export LD_PRELOAD
+	break
+done
+exec "$BIN/freeworship" "$@"
