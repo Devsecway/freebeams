@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-FreeWorship is a native worship presentation app (an EasyWorship 8 clone) built with **Go + graphics.gd (Godot 4.7)
+FreeBeams is a native worship presentation app (an EasyWorship 8 clone) built with **Go + graphics.gd (Godot 4.7)
 + pure-Go SQLite (`modernc.org/sqlite`)**. The stack and conventions come from Bufflehead
 (`~/Documents/Work/Apex/bufflehead`). Read its `CLAUDE.md` and `internal/ui`, `internal/control` for working
 graphics.gd idioms.
@@ -12,8 +12,8 @@ graphics.gd idioms.
 ```bash
 go build ./... && go vet ./... && go test ./...
 bin/gd run              # builds graphics/darwin_*.dylib and launches Godot 4.7 (~/gd/freeworship/bin/Godot.app)
-GOOS=macos bin/gd build # release build: releases/darwin/universal/FreeWorship.app (also GOOS=windows, linux)
-bin/release-dmg         # the app + an Applications link as releases/FreeWorship-<version>-macOS.dmg
+GOOS=macos bin/gd build # release build: releases/darwin/universal/FreeBeams.app (also GOOS=windows, linux)
+bin/release-dmg         # the app + an Applications link as releases/FreeBeams-<version>-macOS.dmg
 bin/version             # the release version (config/version in graphics/project.godot)
 test/smoke.sh           # end to end through the control API; screenshots and app.log in test/out/
 test/splitters.sh       # drags every splitter through Godot's input pipeline (the layout-crash regression test)
@@ -167,9 +167,10 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - `hooks.go isSongTable` identifies the song list by its column count; a new column in `ui/songs.go` must keep it in sync.
 - Inspect a WAL-mode `library.db` copy with `sqlite3 "file:x.db?immutable=1"`; `-readonly` fails when it cannot create
   the `-shm` file.
-- A Godot window occluded by a fullscreen or frontmost app on the only display (VLC, a browser) stops redrawing:
-  `/screenshot?window=output` returns the frozen previous frame and every output pixel check fails. Check
-  `osascript … frontmost` before blaming the code; smoke runs need the Godot windows unobstructed.
+- Godot's main loop skips rendering while every window is occluded (`can_any_window_draw`: a fullscreen or frontmost
+  app on the only display, such as a browser), so a capture would be the frozen last frame. `render.viewportPNG` calls
+  `RenderingServer.ForceDraw` when no window can draw (`ensureDrawn`), so `/screenshot` stays truthful; the operator
+  state and transitions keep advancing regardless. Check `osascript … frontmost` if captures still look stale.
 - `screencapture -D 2` and `DisplayServer.ScreenGetImage` need Screen Recording permission for the terminal. Without
   it, check the TV by eye and the content with `/screenshot?window=output`.
 - A node that only reacts to its own lifecycle needs no extension class: connect `OnVisibilityChanged` /
@@ -178,7 +179,7 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - A widget that rebuilds its tiles only when its rows change must carry every input the thumbnail factory reads in
   the row (e.g. `ui.MediaRow.Thumb`); otherwise a thumbnail that arrives later is never drawn.
 - Keep `Image.LoadFromFile` on the main thread but feed it small derived files: decode/scale off-thread into the cache
-  dir (`~/Library/Caches/FreeWorship/media`) and let the factory load the 640 px JPEG.
+  dir (`~/Library/Caches/FreeBeams/media`) and let the factory load the 640 px JPEG.
 - Godot plays Ogg Theora only. Guard `VideoStreamPlayer.Play()` behind an "is .ogv and exists" check: a missing or
   unsupported file logs a Godot ERROR, which fails the smoke test's log hygiene.
 - Icon SVGs (`uicore/icons.go`): cut details out of a filled shape as evenodd subpaths of the same `<path>`, never
@@ -233,6 +234,11 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - `en_kjv.json`-style Bibles (the thiagobodruk/bible array layout) carry Portuguese book abbreviations that collide with
   English ones (`jn` is Jonah, `jo` John): resolve a 66-book array by position, never by abbreviation. The file name is
   the only place the translation's abbreviation lives (`bibletext.TranslationFromFilename`).
+- Under `gd run` the process is Godot's own bundle, so macOS labels the application menu, the Dock tile and Cmd-Tab
+  "Godot". `internal/app/appname_darwin.go` retitles the application menu and its About/Hide/Quit items at startup
+  (set `processName`, retitle the submenu, re-install the main menu before `buildUI` adds ours); the Dock and Cmd-Tab
+  names only change in the exported bundle. The app was FreeWorship until 2026-10-20: `internal/appdirs` moves a
+  `FreeWorship` config/cache directory to `FreeBeams` once, and `.fws` schedules still open (`models.IsScheduleFile`).
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

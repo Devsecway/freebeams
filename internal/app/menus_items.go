@@ -10,10 +10,10 @@ import (
 	"runtime"
 	"strings"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/models"
-	"freeworship/internal/store"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/models"
+	"freebeams/internal/store"
 )
 
 // The library tile menus (the Media and Presentations tabs' right-click and
@@ -110,7 +110,7 @@ func (a *App) setMediaOptions(i int, aspect models.MediaAspect, repeat models.Me
 			a.setPreview(&deck)
 		}
 	}
-	log.Printf("[freeworship] media %d %q: aspect %s, repeat %s", m.ID, m.Title, aspect, repeat)
+	log.Printf("[freebeams] media %d %q: aspect %s, repeat %s", m.ID, m.Title, aspect, repeat)
 	st := a.st
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
@@ -136,7 +136,7 @@ func (a *App) useMediaAsLogo(i int, cmd *control.Command) {
 	}
 	m := a.md.list[i]
 	a.setLogo(core.MediaLogo(m))
-	log.Printf("[freeworship] logo background: media %q", m.Title)
+	log.Printf("[freebeams] logo background: media %q", m.Title)
 	a.answer(cmd, nil)
 }
 
@@ -172,7 +172,7 @@ func (a *App) doDeleteMediaFile(m models.Media, cmd *control.Command) {
 				a.answer(cmd, err)
 				return err
 			}
-			log.Printf("[freeworship] moved %q to the Trash and removed media %d %q", m.Path, m.ID, m.Title)
+			log.Printf("[freebeams] moved %q to the Trash and removed media %d %q", m.Path, m.ID, m.Title)
 			if a.md.item != nil && a.md.item.ID == m.ID {
 				a.md.item, a.md.deck = nil, nil
 			}
@@ -196,7 +196,7 @@ func (a *App) updateMediaInSchedule(i int, cmd *control.Command) {
 		if a.schedSel >= 0 && a.schedSel < len(a.sched.Items) && a.sched.Items[a.schedSel].MediaID == m.ID {
 			a.selectScheduleItem(a.schedSel)
 		}
-		log.Printf("[freeworship] updated %d schedule item(s) from media %q", n, m.Title)
+		log.Printf("[freebeams] updated %d schedule item(s) from media %q", n, m.Title)
 	}
 	a.answer(cmd, nil)
 }
@@ -300,7 +300,7 @@ func (a *App) doRefreshMedia(missing []models.Media, cmd *control.Command) {
 				return err
 			}
 			for _, m := range missing {
-				log.Printf("[freeworship] refresh: removed media %d %q (file missing: %s)", m.ID, m.Title, m.Path)
+				log.Printf("[freebeams] refresh: removed media %d %q (file missing: %s)", m.ID, m.Title, m.Path)
 				if a.md.item != nil && a.md.item.ID == m.ID {
 					a.md.item, a.md.deck = nil, nil
 				}
@@ -330,7 +330,7 @@ func (a *App) usePresentationAsLogo(i int, cmd *control.Command) {
 		return
 	}
 	a.setLogo(bg)
-	log.Printf("[freeworship] logo background: presentation %q, page 1", p.Title)
+	log.Printf("[freebeams] logo background: presentation %q, page 1", p.Title)
 	a.answer(cmd, nil)
 }
 
@@ -365,7 +365,7 @@ func (a *App) doDeletePresentationFile(p models.Presentation, cmd *control.Comma
 				a.answer(cmd, err)
 				return err
 			}
-			log.Printf("[freeworship] moved %q to the Trash and removed presentation %d %q", p.Path, p.ID, p.Title)
+			log.Printf("[freebeams] moved %q to the Trash and removed presentation %d %q", p.Path, p.ID, p.Title)
 			if a.pr.item != nil && a.pr.item.ID == p.ID {
 				a.pr.item, a.pr.deck = nil, nil
 			}
@@ -472,7 +472,7 @@ func (a *App) doRefreshPresentations(missing []models.Presentation, cmd *control
 				return err
 			}
 			for _, p := range missing {
-				log.Printf("[freeworship] refresh: removed presentation %d %q (file missing: %s)", p.ID, p.Title, p.Path)
+				log.Printf("[freebeams] refresh: removed presentation %d %q (file missing: %s)", p.ID, p.Title, p.Path)
 				if a.pr.item != nil && a.pr.item.ID == p.ID {
 					a.pr.item, a.pr.deck = nil, nil
 				}
@@ -499,7 +499,7 @@ func (a *App) revealFile(path string, cmd *control.Command) {
 				a.fail("open file location", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out))))
 				return err
 			}
-			log.Printf("[freeworship] revealed %s", path)
+			log.Printf("[freebeams] revealed %s", path)
 			return nil
 		}
 	})

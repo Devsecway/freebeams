@@ -6,9 +6,9 @@ import (
 	"log"
 	"strings"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/importers/easyworship"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/importers/easyworship"
 )
 
 // scanEWBibles lists EasyWorship's Bible files off the main thread, so the
@@ -67,9 +67,9 @@ func (a *App) importCopyrightedBibles(cmd *control.Command, confirmed bool) {
 				return err
 			}
 			summary := core.BibleImportSummary(rep)
-			log.Printf("[freeworship] Bible import: %s", summary)
+			log.Printf("[freebeams] Bible import: %s", summary)
 			for _, w := range rep.Warnings {
-				log.Printf("[freeworship] import note: %s", w)
+				log.Printf("[freebeams] import note: %s", w)
 			}
 			a.setScriptStatus(summary, false)
 			a.loadBibles(cmd) // answers cmd with the refreshed list

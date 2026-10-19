@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/models"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/models"
+	"freebeams/internal/ui"
 )
 
 // Event handlers. They mutate state only; Process renders afterwards.
@@ -81,7 +81,7 @@ func (a *App) onToolbar(act ui.ToolbarAction) {
 	case ui.ActionLive:
 		a.setOutput(!a.pres.State.OutputEnabled)
 	default:
-		log.Printf("[freeworship] toolbar %s: not available in Phase 1", act)
+		log.Printf("[freebeams] toolbar %s: not available in Phase 1", act)
 	}
 }
 
@@ -261,7 +261,7 @@ func (a *App) saveSchedule(path string) error {
 		a.alert("Save Schedule", fmt.Errorf("Could not save the schedule as %q.\n\n%w", filepath.Base(path), err))
 		return err
 	}
-	log.Printf("[freeworship] saved schedule %s", path)
+	log.Printf("[freebeams] saved schedule %s", path)
 	a.rememberRecent(path)
 	return nil
 }
@@ -277,7 +277,7 @@ func (a *App) openSchedule(path string) error {
 	a.sched = s
 	a.schedVer++
 	a.syncScheduleSelection()
-	log.Printf("[freeworship] opened schedule %s (%d items)", path, len(s.Items))
+	log.Printf("[freebeams] opened schedule %s (%d items)", path, len(s.Items))
 	a.rememberRecent(path)
 	return nil
 }
@@ -463,7 +463,7 @@ func (a *App) saveSong(song models.Song, lyrics string, cmd *control.Command) {
 				a.alert("Save Song", fmt.Errorf("Could not save %q.\n\n%w", song.Title, err))
 				return err
 			}
-			log.Printf("[freeworship] saved song %d %q", song.ID, song.Title)
+			log.Printf("[freebeams] saved song %d %q", song.ID, song.Title)
 			if isNew || current {
 				a.song = &song
 				deck := a.newSongDeck(song)
@@ -501,7 +501,7 @@ func (a *App) doDeleteSong(row models.SongSummary, cmd *control.Command) {
 				a.alert("Delete Song", fmt.Errorf("Could not delete %q.\n\n%w", row.Title, err))
 				return err
 			}
-			log.Printf("[freeworship] deleted song %d %q", row.ID, row.Title)
+			log.Printf("[freebeams] deleted song %d %q", row.ID, row.Title)
 			if a.song != nil && a.song.ID == row.ID {
 				a.song = nil
 				a.songRes = resourcePreview{}

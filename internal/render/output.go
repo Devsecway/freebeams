@@ -3,11 +3,12 @@ package render
 import (
 	"errors"
 	"fmt"
+	"graphics.gd/classdb/RenderingServer"
 	"log"
 	"math"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 
 	"graphics.gd/classdb"
 	"graphics.gd/classdb/Control"
@@ -28,7 +29,7 @@ func RegisterAll() {
 }
 
 // OutputTitle is the title of the output window in windowed mode.
-const OutputTitle = "FreeWorship Output"
+const OutputTitle = "FreeBeams Output"
 
 // ScreenInfo describes one display.
 type ScreenInfo struct {
@@ -166,7 +167,7 @@ func (o *Output) SetTransitionDuration(d time.Duration) {
 
 // Open shows the output on screen. A non-primary screen gets a borderless
 // window covering it (see Strategy). The primary (or only) screen gets a
-// normal resizable 16:9 window titled "FreeWorship Output". An out-of-range
+// normal resizable 16:9 window titled "FreeBeams Output". An out-of-range
 // screen falls back to DefaultOutputScreen. Opening an open output moves it.
 func (o *Output) Open(screen int) {
 	screens := Screens()
@@ -381,7 +382,21 @@ func WindowScreenshot(w Window.Instance) ([]byte, error) {
 	return viewportPNG(w)
 }
 
+// ensureDrawn renders a frame when Godot has stopped rendering: its main
+// loop skips drawing while every window is occluded (another app in front
+// on the only display), so a capture would show the last frame drawn before
+// the cover. force_draw renders every viewport regardless.
+func ensureDrawn() {
+	for _, id := range DisplayServer.GetWindowList() {
+		if DisplayServer.WindowCanDraw(DisplayServer.Window(id)) {
+			return
+		}
+	}
+	RenderingServer.ForceDraw(0)
+}
+
 func viewportPNG(w Window.Instance) ([]byte, error) {
+	ensureDrawn()
 	tex := w.AsViewport().GetTexture()
 	img := tex.AsTexture2D().GetImage()
 	if img == Image.Nil || img.IsEmpty() {

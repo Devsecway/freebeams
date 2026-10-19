@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"freeworship/internal/importers/easyworship"
-	"freeworship/internal/models"
+	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/models"
 )
 
 func TestCopyrightedBiblesToImport(t *testing.T) {

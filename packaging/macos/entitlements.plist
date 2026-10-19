@@ -4,12 +4,12 @@
 <dict>
     <!--
       Hardened-runtime entitlements for Developer ID distribution (bin/sign-notarize
-      signs every Mach-O in FreeWorship.app with these; this is not an App Store
+      signs every Mach-O in FreeBeams.app with these; this is not an App Store
       sandbox profile).
 
       disable-library-validation matches the Godot export preset
       (codesign/entitlements/disable_library_validation=true): Godot sets it because
-      GDExtension libraries are usually signed by someone else. FreeWorship's only
+      GDExtension libraries are usually signed by someone else. FreeBeams's only
       extension is its own darwin_universal.dylib, signed with the same identity, so
       this can be dropped once a notarized build has been tested without it.
     -->

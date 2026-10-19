@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func TestVerseCountText(t *testing.T) {

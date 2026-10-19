@@ -2,7 +2,7 @@
 docs/ew-ui/
 releases/
 .DS_Store
-/freeworship
+/freebeams
 .playwright-mcp/
 __pycache__/
 .claude/

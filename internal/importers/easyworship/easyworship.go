@@ -17,9 +17,9 @@ import (
 	"sort"
 	"strings"
 
-	"freeworship/internal/importers/rtf"
-	"freeworship/internal/models"
-	"freeworship/internal/store"
+	"freebeams/internal/importers/rtf"
+	"freebeams/internal/models"
+	"freebeams/internal/store"
 )
 
 // BibleFile describes an EasyWorship .ewb Bible found on disk.
@@ -48,7 +48,7 @@ type Options struct {
 	// SkipMedia leaves the media library alone (ImportMedia runs it on its own).
 	SkipMedia bool
 
-	// BundledBibles are the abbreviations of the translations FreeWorship
+	// BundledBibles are the abbreviations of the translations FreeBeams
 	// ships (internal/bibles/bundled). Their EasyWorship files are reported
 	// as skipped "(bundled)" (case-insensitive), so an EasyWorship KJV never
 	// duplicates or races the bundled one.

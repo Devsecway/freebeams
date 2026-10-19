@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Windows bundle (FreeWorship.exe + windows_<arch>.dll), zip it, and
+# Build the Windows bundle (FreeBeams.exe + windows_<arch>.dll), zip it, and
 # on Windows build the Inno Setup installer.
 #
 # Native build (what release.yml does), under MSYS2 UCRT64 on Windows with Go
@@ -10,10 +10,10 @@
 #   bin/build-windows
 #
 # Outputs (<v> = bin/version, <arch> = GOARCH, amd64 by default):
-#   releases/windows/<arch>/                    FreeWorship.exe, windows_<arch>.dll
+#   releases/windows/<arch>/                    FreeBeams.exe, windows_<arch>.dll
 #                                               (+ runtime DLLs the .dll needs)
-#   releases/FreeWorship-<v>-windows-<arch>.zip the portable bundle
-#   releases/FreeWorship-<v>-Setup.exe          the installer (Windows with Inno Setup)
+#   releases/FreeBeams-<v>-windows-<arch>.zip the portable bundle
+#   releases/FreeBeams-<v>-Setup.exe          the installer (Windows with Inno Setup)
 #
 # Optional:
 #   SIGNTOOL_CMD="signtool sign /fd SHA256 /tr http://timestamp... /td SHA256 /a"
@@ -42,7 +42,7 @@ esac
 export GOARCH
 
 OUT="releases/windows/$GOARCH"
-EXE="$OUT/FreeWorship.exe"
+EXE="$OUT/FreeBeams.exe"
 DLL="graphics/windows_$GOARCH.dll"
 V="$("$ROOT/bin/version")"
 
@@ -102,17 +102,17 @@ fi
 step "icon and version resource"
 if [ "$native" = 1 ]; then
 	need curl "to download rcedit"
-	RCEDIT="${RCEDIT:-$HOME/.cache/freeworship/rcedit-x64.exe}"
+	RCEDIT="${RCEDIT:-$HOME/.cache/freebeams/rcedit-x64.exe}"
 	if [ ! -f "$RCEDIT" ]; then
 		mkdir -p "$(dirname "$RCEDIT")"
 		curl -fsSL -o "$RCEDIT" https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
 	fi
 	"$RCEDIT" "$EXE" \
 		--set-icon graphics/icon.ico \
-		--set-version-string ProductName "FreeWorship" \
-		--set-version-string FileDescription "FreeWorship worship presentation software" \
-		--set-version-string CompanyName "FreeWorship" \
-		--set-version-string LegalCopyright "Copyright 2026 FreeWorship contributors" \
+		--set-version-string ProductName "FreeBeams" \
+		--set-version-string FileDescription "FreeBeams worship presentation software" \
+		--set-version-string CompanyName "FreeBeams" \
+		--set-version-string LegalCopyright "Copyright 2026 FreeBeams contributors" \
 		--set-file-version "$V.0" --set-product-version "$V.0"
 else
 	echo "    skipped (rcedit runs on Windows)"
@@ -136,21 +136,21 @@ sign_files "$EXE" "$OUT/$(basename "$DLL")"
 
 # --- portable zip ------------------------------------------------------------
 step "zip"
-ZIP="releases/FreeWorship-$V-windows-$GOARCH.zip"
+ZIP="releases/FreeBeams-$V-windows-$GOARCH.zip"
 rm -f "$ZIP"
-zipdir() { # zipdir OUT.zip DIR  (archive the directory's contents under FreeWorship/)
+zipdir() { # zipdir OUT.zip DIR  (archive the directory's contents under FreeBeams/)
 	local out="$1" dir="$2" stage
-	stage="$(mktemp -d -t freeworship-zip)"
-	mkdir -p "$stage/FreeWorship"
-	cp -R "$dir"/. "$stage/FreeWorship/"
+	stage="$(mktemp -d -t freebeams-zip)"
+	mkdir -p "$stage/FreeBeams"
+	cp -R "$dir"/. "$stage/FreeBeams/"
 	if command -v zip >/dev/null 2>&1; then
-		(cd "$stage" && zip -qr "$OLDPWD/$out" FreeWorship)
+		(cd "$stage" && zip -qr "$OLDPWD/$out" FreeBeams)
 	elif command -v 7z >/dev/null 2>&1; then
-		(cd "$stage" && 7z a -bso0 -bsp0 "$OLDPWD/$out" FreeWorship)
+		(cd "$stage" && 7z a -bso0 -bsp0 "$OLDPWD/$out" FreeBeams)
 	elif command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
 		local py=python3
 		command -v python3 >/dev/null 2>&1 || py=python
-		(cd "$stage" && "$py" -m zipfile -c "$OLDPWD/$out" FreeWorship)
+		(cd "$stage" && "$py" -m zipfile -c "$OLDPWD/$out" FreeBeams)
 	else
 		rm -rf "$stage"
 		fail "no zip, 7z or python found to write $out"
@@ -163,7 +163,7 @@ ls -lh "$ZIP"
 # --- installer (Inno Setup, Windows only) ------------------------------------
 step "installer"
 if [ "$native" != 1 ]; then
-	echo "    skipped: Inno Setup runs on Windows (packaging/windows/freeworship.iss)"
+	echo "    skipped: Inno Setup runs on Windows (packaging/windows/freebeams.iss)"
 elif [ "${NO_INSTALLER:-0}" = "1" ]; then
 	echo "    skipped (NO_INSTALLER=1)"
 else
@@ -188,8 +188,8 @@ else
 		"/DIconFile=$(cygpath -w "$ROOT/graphics/icon.ico")" \
 		"/DSourceDir=$(cygpath -w "$ROOT/$OUT")" \
 		"/O$(cygpath -w "$ROOT/releases")" \
-		packaging/windows/freeworship.iss
-	SETUP="releases/FreeWorship-$V-Setup.exe"
+		packaging/windows/freebeams.iss
+	SETUP="releases/FreeBeams-$V-Setup.exe"
 	[ -f "$SETUP" ] || fail "$SETUP was not produced"
 	# The installer is what users download, so it is signed last.
 	sign_files "$SETUP"

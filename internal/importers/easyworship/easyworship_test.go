@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"freeworship/internal/models"
-	"freeworship/internal/store"
+	"freebeams/internal/models"
+	"freebeams/internal/store"
 )
 
 const localEW = "/Users/Shared/Softouch"

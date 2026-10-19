@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Themes are stored as JSON (models.Theme) with their name duplicated in a

@@ -3,7 +3,7 @@ package core
 import (
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func TestFrameMedia(t *testing.T) {

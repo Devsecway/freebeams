@@ -1,4 +1,4 @@
-// Package app is the FreeWorship application node: it wires the library store,
+// Package app is the FreeBeams application node: it wires the library store,
 // the presenter state machine, the schedule, the operator UI, the renderer and
 // the control server together.
 //
@@ -15,19 +15,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"freebeams/internal/appdirs"
 	"log"
 	"os"
 	"runtime/debug"
 	"sync"
 	"time"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/importers/easyworship"
-	"freeworship/internal/models"
-	"freeworship/internal/render"
-	"freeworship/internal/store"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/models"
+	"freebeams/internal/render"
+	"freebeams/internal/store"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb"
 	"graphics.gd/classdb/Node"
@@ -54,12 +55,12 @@ type resourcePreview struct {
 	index int
 }
 
-// App is the FreeWorship root node (FwApp).
+// App is the FreeBeams root node (FwApp).
 type App struct {
 	Node.Extension[App] `gd:"FwApp"`
 
 	// ---- services
-	inputRec *inputRecorder `gd:"-"` // FREEWORSHIP_INPUT_LOG debugging aid
+	inputRec *inputRecorder `gd:"-"` // FREEBEAMS_INPUT_LOG debugging aid
 	st       *store.Store
 	ctrl     *control.Server
 	ctx      context.Context
@@ -169,11 +170,12 @@ func (a *App) Ready() {
 	a.initPlayback()
 
 	SceneTree.Get(a.AsNode()).SetAutoAcceptQuit(false)
+	setAppName(appdirs.Name) // before buildUI installs the menu bar's own menus
 	a.buildUI()
 	a.openLibrary()
 	a.restoreLayout()
 	a.startControl()
-	log.Printf("[freeworship] %s", versionBanner())
+	log.Printf("[freebeams] %s", versionBanner())
 
 	a.loadSettings() // transition, output display, logo, interface color (settings.go)
 
@@ -182,7 +184,7 @@ func (a *App) Ready() {
 	if len(screens) > 1 {
 		a.pres.SetOutputEnabled(true)
 	}
-	log.Printf("[freeworship] %d screen(s); output %s", len(screens), map[bool]string{true: "on", false: "off until Live is pressed"}[len(screens) > 1])
+	log.Printf("[freebeams] %d screen(s); output %s", len(screens), map[bool]string{true: "on", false: "off until Live is pressed"}[len(screens) > 1])
 
 	a.startBundledInstall()
 	a.startImport()
@@ -195,7 +197,7 @@ func (a *App) Ready() {
 	a.dirty = true
 }
 
-// openLibrary opens the SQLite library (FREEWORSHIP_LIBRARY overrides the
+// openLibrary opens the SQLite library (FREEBEAMS_LIBRARY overrides the
 // default path).
 func (a *App) openLibrary() {
 	path := os.Getenv(core.LibraryEnv)
@@ -215,7 +217,7 @@ func (a *App) openLibrary() {
 		return
 	}
 	a.st = st
-	log.Printf("[freeworship] library: %s", st.Path())
+	log.Printf("[freebeams] library: %s", st.Path())
 }
 
 func (a *App) startControl() {
@@ -243,14 +245,14 @@ func (a *App) startImport() {
 	}
 	if !easyworship.Installed() {
 		a.importState = core.ImportState{Summary: "EasyWorship is not installed"}
-		log.Printf("[freeworship] EasyWorship not installed; the library starts empty")
+		log.Printf("[freebeams] EasyWorship not installed; the library starts empty")
 		return
 	}
 	a.importState = core.ImportState{Running: true}
 	a.songsStatus = core.SongsFooter(0, a.importState)
 	st := a.st
 	opt := a.ewImportOptions()
-	log.Printf("[freeworship] importing from EasyWorship…")
+	log.Printf("[freebeams] importing from EasyWorship…")
 	a.async(nil, func(ctx context.Context) func() error {
 		rep, err := easyworship.ImportInto(ctx, st, opt)
 		summary := core.ImportSummary(rep)
@@ -269,9 +271,9 @@ func (a *App) startImport() {
 				a.alert("EasyWorship Import", fmt.Errorf("The EasyWorship import failed, so the library may be incomplete.\n\n%w", err))
 			} else {
 				a.importState.Done, a.importState.Summary = true, summary
-				log.Printf("[freeworship] EasyWorship import: %s", summary)
+				log.Printf("[freebeams] EasyWorship import: %s", summary)
 				for _, w := range rep.Warnings {
-					log.Printf("[freeworship] import note: %s", w)
+					log.Printf("[freebeams] import note: %s", w)
 				}
 			}
 			a.songsStatus = core.SongsFooter(len(a.songs), a.importState)
@@ -299,7 +301,7 @@ func (a *App) async(cmd *control.Command, work func(ctx context.Context) func() 
 			defer func() {
 				if r := recover(); r != nil {
 					err := fmt.Errorf("panic in background task: %v", r)
-					log.Printf("[freeworship] %v\n%s", err, debug.Stack())
+					log.Printf("[freebeams] %v\n%s", err, debug.Stack())
 					apply = func() error { return err }
 				}
 			}()
@@ -345,7 +347,7 @@ func (a *App) fail(context string, err error) {
 		return
 	}
 	a.lastError = context + ": " + err.Error()
-	log.Printf("[freeworship] %s", a.lastError)
+	log.Printf("[freebeams] %s", a.lastError)
 }
 
 // maxAlerts bounds the queue of error messages waiting to be shown.
@@ -495,7 +497,7 @@ func (a *App) requestQuit() {
 		return // already quitting, or already asking
 	}
 	if a.win.Editor.Visible() {
-		a.win.Confirm.Ask("Quit FreeWorship", "The song editor is open. Quit without saving the song?", func() {
+		a.win.Confirm.Ask("Quit FreeBeams", "The song editor is open. Quit without saving the song?", func() {
 			a.event(func() {
 				a.win.Editor.Close()
 				// Ask about the schedule next frame, once this dialog is
@@ -511,7 +513,7 @@ func (a *App) requestQuit() {
 // quitIfScheduleSaved quits, asking first when the schedule has unsaved changes.
 func (a *App) quitIfScheduleSaved() {
 	if a.sched.Dirty {
-		a.win.Confirm.Ask("Quit FreeWorship", "The schedule \""+a.sched.Title+"\" has unsaved changes. Quit without saving?", func() {
+		a.win.Confirm.Ask("Quit FreeBeams", "The schedule \""+a.sched.Title+"\" has unsaved changes. Quit without saving?", func() {
 			a.event(func() { a.quitNext = true })
 		})
 		return
@@ -530,7 +532,7 @@ func (a *App) shutdown() {
 		return
 	}
 	a.quitting = true
-	log.Printf("[freeworship] shutting down")
+	log.Printf("[freebeams] shutting down")
 	a.cancel()
 	a.flushReplies()
 	for _, w := range a.waiters {
@@ -545,11 +547,11 @@ func (a *App) shutdown() {
 	// using the store, e.g. an import rolling back its write transaction.
 	// Their continuations are dropped (post gives up after cancel).
 	if !core.WaitTimeout(&a.jobs, shutdownWait) {
-		log.Printf("[freeworship] background jobs still running after %v; closing anyway", shutdownWait)
+		log.Printf("[freebeams] background jobs still running after %v; closing anyway", shutdownWait)
 	}
 	if a.st != nil {
 		if err := a.st.Close(); err != nil {
-			log.Printf("[freeworship] close library: %v", err)
+			log.Printf("[freebeams] close library: %v", err)
 		}
 		a.st = nil
 	}

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // SongDeck builds the displayable deck for a library song (not in the

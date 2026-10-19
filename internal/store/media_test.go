@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func mediaTitles(items []models.Media) []string {

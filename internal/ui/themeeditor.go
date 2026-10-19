@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 
 	"graphics.gd/classdb/Button"
 	"graphics.gd/classdb/CheckBox"

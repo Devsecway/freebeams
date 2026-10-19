@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Themes: the sample content the Themes tab and the theme editor render,

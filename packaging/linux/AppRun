@@ -1,5 +1,5 @@
 #!/bin/sh
-# AppImage entry point (also the launcher in the tar.gz bundle, as freeworship.sh).
+# AppImage entry point (also the launcher in the tar.gz bundle, as freebeams.sh).
 #
 # Runs the exported binary from its own directory, where Godot finds
 # linux_<arch>.so beside it, and preloads that .so: it is a Go c-shared library
@@ -16,4 +16,4 @@ for so in "$BIN"/linux_*.so; do
 	export LD_PRELOAD
 	break
 done
-exec "$BIN/freeworship" "$@"
+exec "$BIN/freebeams" "$@"

@@ -2,7 +2,7 @@
 // the running app. It is adapted from Bufflehead's control server.
 //
 // Every request must carry `Authorization: Bearer <key>`. The key is minted
-// per launch (or pinned with FREEWORSHIP_CONTROL_KEY for test harnesses) and
+// per launch (or pinned with FREEBEAMS_CONTROL_KEY for test harnesses) and
 // printed to stdout together with the address, so other local software can't
 // drive the app by blindly POSTing to the port.
 //
@@ -26,7 +26,7 @@ import (
 )
 
 // KeyEnv pins the control key (used by test harnesses).
-const KeyEnv = "FREEWORSHIP_CONTROL_KEY"
+const KeyEnv = "FREEBEAMS_CONTROL_KEY"
 
 // commandTimeout bounds how long a request waits for the main thread.
 const commandTimeout = 30 * time.Second
@@ -94,7 +94,7 @@ func generateKey() string {
 	}
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
-		return "freeworship-control-key-unavailable"
+		return "freebeams-control-key-unavailable"
 	}
 	return hex.EncodeToString(buf)
 }

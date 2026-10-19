@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/models"
-	"freeworship/internal/render"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/models"
+	"freebeams/internal/render"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/Input"
@@ -119,7 +119,7 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 		sp.SetPercent(args.Percent)
 		a.answer(cmd, nil)
 	case "replay-input":
-		// Re-inject a FREEWORSHIP_INPUT_LOG recording (see inputrec.go).
+		// Re-inject a FREEBEAMS_INPUT_LOG recording (see inputrec.go).
 		a.replayInput(cmd, args.Path)
 	case "drag-split":
 		// A real mouse drag on a splitter's handle, one motion per frame,

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func TestCleanText(t *testing.T) {
@@ -276,12 +276,12 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 }
 
 // realRepo returns the bible-translations clone named by
-// FREEWORSHIP_BIBLE_TRANSLATIONS (its json/ folder), or skips.
+// FREEBEAMS_BIBLE_TRANSLATIONS (its json/ folder), or skips.
 func realRepo(t *testing.T) string {
 	t.Helper()
-	dir := os.Getenv("FREEWORSHIP_BIBLE_TRANSLATIONS")
+	dir := os.Getenv("FREEBEAMS_BIBLE_TRANSLATIONS")
 	if dir == "" {
-		t.Skip("FREEWORSHIP_BIBLE_TRANSLATIONS is not set (a clone of github.com/hargarpay/bible-translations)")
+		t.Skip("FREEBEAMS_BIBLE_TRANSLATIONS is not set (a clone of github.com/hargarpay/bible-translations)")
 	}
 	if fi, err := os.Stat(filepath.Join(dir, "json", "KJV")); err != nil || !fi.IsDir() {
 		t.Skipf("%s has no json/KJV folder", dir)

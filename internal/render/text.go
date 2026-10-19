@@ -3,8 +3,8 @@ package render
 import (
 	"math"
 
-	"freeworship/internal/models"
-	"freeworship/internal/render/layout"
+	"freebeams/internal/models"
+	"freebeams/internal/render/layout"
 
 	"graphics.gd/classdb/Font"
 	"graphics.gd/classdb/GUI"

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Licence sentences of BibleFileQuestion. The confirm dialog is a fixed

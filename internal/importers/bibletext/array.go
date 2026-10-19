@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // The array layout is the form of github.com/thiagobodruk/bible and the

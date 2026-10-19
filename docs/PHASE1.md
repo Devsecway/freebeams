@@ -38,7 +38,7 @@ editor, presentations, settings UI, more transitions and packaging are **Phase 2
 
 ### Schedule
 - [ ] "Add to schedule" from Songs/Scriptures, remove, move up/down, and select an item to load it into Preview.
-- [ ] Save/Open `.fws` (JSON) through native file dialogs. The window title shows the schedule name and a dirty marker.
+- [ ] Save/Open `.fbs` (JSON) through native file dialogs. The window title shows the schedule name and a dirty marker.
 
 ### Testability
 - [ ] Control server (bearer-key HTTP, as in Bufflehead) with `GET /state`, `GET /screenshot?window=main|output`,

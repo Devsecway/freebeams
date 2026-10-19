@@ -1,4 +1,4 @@
-// Package bundled holds the Bible translations that ship inside FreeWorship:
+// Package bundled holds the Bible translations that ship inside FreeBeams:
 // the King James Version and the American Standard Version, both public
 // domain. Nothing else is ever bundled: copyrighted translations (NIV, NLT,
 // ESV, NKJV, MSG, …) only enter a library through the user's own import of a
@@ -20,8 +20,8 @@ import (
 	"io/fs"
 	"strings"
 
-	"freeworship/internal/importers/bibletext"
-	"freeworship/internal/store"
+	"freebeams/internal/importers/bibletext"
+	"freebeams/internal/store"
 )
 
 //go:embed data/*.json.gz

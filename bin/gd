@@ -1,5 +1,5 @@
 #!/bin/sh
-# FreeWorship's gd: the graphics.gd build tool pinned in go.mod (`tool`),
+# FreeBeams's gd: the graphics.gd build tool pinned in go.mod (`tool`),
 # with its own Godot install so other graphics.gd projects on this machine
 # (which may need a different Godot) are unaffected.
 #   ./bin/gd run                 run the app

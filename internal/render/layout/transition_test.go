@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func vecNear(a, b Vec) bool { return near(a.X, b.X) && near(a.Y, b.Y) }

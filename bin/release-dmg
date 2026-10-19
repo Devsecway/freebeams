@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Build the universal macOS app and package it as a DMG that holds
-# FreeWorship.app and an Applications symlink.
+# FreeBeams.app and an Applications symlink.
 #
 #   bin/release-dmg               GOOS=macos bin/gd build, then package
-#   SKIP_BUILD=1 bin/release-dmg  package the existing releases/darwin/universal/FreeWorship.app
+#   SKIP_BUILD=1 bin/release-dmg  package the existing releases/darwin/universal/FreeBeams.app
 #
-# Output: releases/FreeWorship-<version>-macOS.dmg, with <version> from
+# Output: releases/FreeBeams-<version>-macOS.dmg, with <version> from
 # bin/version (config/version in graphics/project.godot).
 #
 # The DMG is unsigned and not notarized: it runs on the machine that built it,
@@ -13,8 +13,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/releases/darwin/universal/FreeWorship.app"
-BIN="$APP/Contents/MacOS/FreeWorship"
+APP="$ROOT/releases/darwin/universal/FreeBeams.app"
+BIN="$APP/Contents/MacOS/FreeBeams"
 
 fail() {
 	echo "release-dmg: $*" >&2
@@ -30,7 +30,7 @@ need lipo "Xcode command line tools: xcode-select --install"
 need ditto "part of macOS"
 
 V="$("$ROOT/bin/version")"
-DMG="$ROOT/releases/FreeWorship-$V-macOS.dmg"
+DMG="$ROOT/releases/FreeBeams-$V-macOS.dmg"
 
 cd "$ROOT"
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
@@ -55,15 +55,15 @@ esac
 plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || true)"
 [ "$plist_version" = "$V" ] || fail "Info.plist has CFBundleShortVersionString '$plist_version', bin/version says '$V'"
 
-STAGE="$(mktemp -d -t freeworship-dmg)"
+STAGE="$(mktemp -d -t freebeams-dmg)"
 trap 'rm -rf "$STAGE"' EXIT
-echo "==> staging FreeWorship.app and the Applications link"
-ditto "$APP" "$STAGE/FreeWorship.app"
+echo "==> staging FreeBeams.app and the Applications link"
+ditto "$APP" "$STAGE/FreeBeams.app"
 ln -s /Applications "$STAGE/Applications"
 
 echo "==> writing $DMG"
 rm -f "$DMG"
-hdiutil create -quiet -volname "FreeWorship $V" -srcfolder "$STAGE" -ov -format UDZO -imagekey zlib-level=9 "$DMG"
+hdiutil create -quiet -volname "FreeBeams $V" -srcfolder "$STAGE" -ov -format UDZO -imagekey zlib-level=9 "$DMG"
 hdiutil verify -quiet "$DMG"
 
 echo "Done: $DMG"

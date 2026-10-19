@@ -126,7 +126,7 @@ func TestMediaScheduleItemRoundTrip(t *testing.T) {
 	m := Media{ID: 7, Kind: MediaVideo, Path: "/p/clip.mp4", Title: "Clip", Duration: 30 * time.Second, ThumbPath: "/t/clip.jpg"}
 	s := NewSchedule()
 	s.Add(ScheduleItem{Kind: ItemMedia, Title: m.Title, Subtitle: "Video", MediaID: m.ID, Theme: DefaultMediaTheme(), Slides: []Slide{m.Slide()}})
-	path := filepath.Join(t.TempDir(), "media.fws")
+	path := filepath.Join(t.TempDir(), "media.fbs")
 	if err := s.Save(path); err != nil {
 		t.Fatal(err)
 	}

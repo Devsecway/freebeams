@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/models"
-	"freeworship/internal/render"
-	"freeworship/internal/store"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/models"
+	"freebeams/internal/render"
+	"freebeams/internal/store"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/DisplayServer"
@@ -67,7 +67,7 @@ func (a *App) initThemes() {
 				return err
 			}
 			if wrote {
-				log.Printf("[freeworship] seeded the default themes")
+				log.Printf("[freebeams] seeded the default themes")
 			}
 			if a.th.gen.Current(ticket) {
 				a.applyThemes(list, defaults)
@@ -305,7 +305,7 @@ func (a *App) saveTheme(t models.Theme, cmd *control.Command) {
 		}
 		return nil
 	}, func() {
-		log.Printf("[freeworship] saved theme %d %q", saved.ID, saved.Name)
+		log.Printf("[freebeams] saved theme %d %q", saved.ID, saved.Name)
 		a.th.selID = saved.ID
 		a.applyThemeChange(saved)
 		// Apply on a new theme: the editor's copy (with any edits made since)
@@ -353,7 +353,7 @@ func (a *App) duplicateTheme(i int, cmd *control.Command) {
 		}
 		return nil
 	}, func() {
-		log.Printf("[freeworship] duplicated theme as %d %q", dup.ID, dup.Name)
+		log.Printf("[freebeams] duplicated theme as %d %q", dup.ID, dup.Name)
 		a.th.selID = dup.ID
 	})
 }
@@ -406,7 +406,7 @@ func (a *App) doDeleteTheme(t models.Theme, cmd *control.Command) {
 		}
 		return nil
 	}, func() {
-		log.Printf("[freeworship] deleted theme %d %q", t.ID, t.Name)
+		log.Printf("[freebeams] deleted theme %d %q", t.ID, t.Name)
 		if a.th.selID == t.ID {
 			a.th.selID = 0
 		}
@@ -426,7 +426,7 @@ func (a *App) setDefaultTheme(i int, kind models.ItemKind, cmd *control.Command)
 		}
 		return nil
 	}, func() {
-		log.Printf("[freeworship] default %s theme: %d %q", kind, t.ID, t.Name)
+		log.Printf("[freebeams] default %s theme: %d %q", kind, t.ID, t.Name)
 	})
 }
 
@@ -446,7 +446,7 @@ func (a *App) applyThemeToItem(theme, row int, cmd *control.Command) {
 	if core.ApplyItemTheme(a.sched, row, t) {
 		a.schedVer++
 		a.pres.RestyleDecks(core.RestyleByItemID(item.ID, t))
-		log.Printf("[freeworship] schedule item %q uses theme %q", item.Title, t.Name)
+		log.Printf("[freebeams] schedule item %q uses theme %q", item.Title, t.Name)
 	}
 	a.answer(cmd, nil)
 }

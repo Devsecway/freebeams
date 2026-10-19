@@ -1,12 +1,12 @@
-// FreeWorship: a native worship presentation app (an EasyWorship clone).
+// FreeBeams: a native worship presentation app (an EasyWorship clone).
 package main
 
 import (
 	"math"
 
-	"freeworship/internal/app"
-	"freeworship/internal/render"
-	"freeworship/internal/ui"
+	"freebeams/internal/app"
+	"freebeams/internal/render"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb/DisplayServer"
 	"graphics.gd/classdb/Engine"
@@ -59,7 +59,7 @@ func setupWindow() {
 	}
 	if tree, ok := Object.As[SceneTree.Instance](Engine.GetMainLoop()); ok {
 		if root := tree.Root(); root != Window.Nil {
-			root.SetTitle("FreeWorship")
+			root.SetTitle("FreeBeams")
 			root.SetContentScaleFactor(DisplayServer.ScreenGetScale())
 		}
 	}

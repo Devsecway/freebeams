@@ -3,8 +3,8 @@ package core
 import (
 	"strings"
 
-	"freeworship/internal/importers/easyworship"
-	"freeworship/internal/models"
+	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/models"
 )
 
 // CopyrightedBiblesToImport lists the abbreviations of EasyWorship's

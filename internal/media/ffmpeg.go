@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Tools runs ffprobe and ffmpeg. The zero value has no tools; Detect fills it

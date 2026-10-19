@@ -26,6 +26,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"freebeams/internal/appdirs"
 	"image"
 	"image/color"
 	"image/draw"
@@ -36,7 +37,7 @@ import (
 	"sort"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // ErrUnavailable is returned when no installed tool can render the document.
@@ -79,18 +80,18 @@ type Renderer interface {
 }
 
 // DefaultCacheDir is where rendered pages go:
-// <os.UserCacheDir()>/FreeWorship/presentations (directory created).
+// <os.UserCacheDir()>/FreeBeams/presentations (directory created).
 // override, when not empty, is the app's cache root instead (the
-// FREEWORSHIP_CACHE override the media library uses too), and the pages go
+// FREEBEAMS_CACHE override the media library uses too), and the pages go
 // into its "presentations" subfolder.
 func DefaultCacheDir(override string) (string, error) {
 	base := override
 	if base == "" {
-		b, err := os.UserCacheDir()
+		b, err := appdirs.Cache()
 		if err != nil {
 			return "", fmt.Errorf("presentation cache dir: %w", err)
 		}
-		base = filepath.Join(b, "FreeWorship")
+		base = b
 	}
 	dir := filepath.Join(base, "presentations")
 	if err := os.MkdirAll(dir, 0o755); err != nil {

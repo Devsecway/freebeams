@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestImportIntoSkipsBundledBibles: the translations FreeWorship bundles are
+// TestImportIntoSkipsBundledBibles: the translations FreeBeams bundles are
 // reported as skipped, whatever their case, so an EasyWorship KJV never
 // duplicates the bundled one.
 func TestImportIntoSkipsBundledBibles(t *testing.T) {

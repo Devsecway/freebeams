@@ -1,4 +1,4 @@
-# FreeWorship — Implementation Plan
+# FreeBeams — Implementation Plan
 
 A native, cross-platform worship presentation app (EasyWorship-class) written in Go,
 using the same stack as Bufflehead: **Go + graphics.gd (Godot 4.6) + pure-Go SQLite**.
@@ -10,7 +10,7 @@ using the same stack as Bufflehead: **Go + graphics.gd (Godot 4.6) + pure-Go SQL
 ### Bufflehead (the reference stack)
 `~/Documents/Work/Apex/bufflehead`
 
-| Concern | Bufflehead's choice | Reuse in FreeWorship |
+| Concern | Bufflehead's choice | Reuse in FreeBeams |
 |---|---|---|
 | UI / rendering | `graphics.gd` (Godot 4.6, all UI in Go, no `.gd` scripts) | Yes, as the core. Godot gives us GPU rendering, shaders, multi-window, video, and audio |
 | Build tool | `gd` CLI (`go install graphics.gd/cmd/gd@release`), `gd run`, `GOOS=macos gd build` | Yes (already installed at `~/go/bin/gd`) |
@@ -78,7 +78,7 @@ See **[docs/UI-SPEC.md](docs/UI-SPEC.md)** and the visual mockup `docs/mockup/ma
 5. **Media**: images and looping motion backgrounds behind text.
 6. **Themes**: background, font, size, color, outline/shadow, alignment, margins; auto-shrink text to fit.
 7. **Transitions**: at minimum, crossfade (Blend). Also Black / Clear / Logo screens.
-8. **Schedules**: add songs/verses/media, reorder, save/open `.fws` files.
+8. **Schedules**: add songs/verses/media, reorder, save/open `.fbs` files.
 9. **Hotkeys** matching EasyWorship.
 10. **Importer** for the existing EasyWorship song library (the 223 songs on this laptop).
 
@@ -92,7 +92,7 @@ presentations (PDF/PPTX → images), CCLI reporting (SongHistory), multiple outp
 ## 3. Architecture
 
 ```
-freeworship/
+freebeams/
 ├── main.go                     # startup, like bufflehead/main.go
 ├── graphics/                   # Godot project: project.godot, export_presets.cfg, icon, shaders/
 │   └── shaders/                # blend.gdshader, push.gdshader, wipe.gdshader, ...
@@ -189,7 +189,7 @@ media(id, path, kind, duration, width, height, thumb_path, transcoded_path)
 themes(id, name, json)                                   -- Theme serialized as JSON
 song_history(song_id, used_at)                           -- for CCLI reports
 ```
-Schedules are **files** (`.fws` = zip of `schedule.json` plus any referenced media), so they can be
+Schedules are **files** (`.fbs` = zip of `schedule.json` plus any referenced media), so they can be
 carried to another computer, as EasyWorship does with `.ewsx`.
 
 ---
@@ -199,7 +199,7 @@ carried to another computer, as EasyWorship does with `.ewsx`.
 Each milestone ends with something you can run (`gd run`) and demo.
 
 ### M0: Skeleton (1–2 days)
-- `go mod init freeworship`. Add `graphics.gd`, `modernc.org/sqlite`, `google/uuid`, `yaml.v3`.
+- `go mod init freebeams`. Add `graphics.gd`, `modernc.org/sqlite`, `google/uuid`, `yaml.v3`.
 - Copy and adapt from Bufflehead: `main.go` startup, `graphics/project.godot` + `library.gdextension` +
   `export_presets.cfg` (rename, fix audio driver), `theme.go` (colors/fonts), `control/`, `bin/release-dmg`.
 - Empty operator window with the 4-pane layout (`HSplitContainer`/`VSplitContainer`).
@@ -238,7 +238,7 @@ Each milestone ends with something you can run (`gd run`) and demo.
 
 ### M5: Schedules (3–4 days)
 - Schedule panel: add from the library (drag-drop and an "Add to schedule" button), reorder, delete, per-item theme override.
-- Save/Open `.fws`, a recent-files list, autosave, and a "dirty" indicator.
+- Save/Open `.fbs`, a recent-files list, autosave, and a "dirty" indicator.
 - Schedule hotkeys (↑/↓, PgUp/PgDn go-live-next).
 - **Done when:** a full service can be built, saved, reopened and run from the keyboard.
 
@@ -279,7 +279,7 @@ Each milestone ends with something you can run (`gd run`) and demo.
 ---
 
 ## 6. First concrete steps (what to do next)
-1. `go mod init freeworship` and copy Bufflehead's `graphics/` scaffolding, `main.go` startup and `control/`.
+1. `go mod init freebeams` and copy Bufflehead's `graphics/` scaffolding, `main.go` startup and `control/`.
 2. Build M0's two-window spike and **verify the output window on a real projector/TV** right away.
 3. Write `models/` (song splitting, scripture parser, presenter state) test-first. It has no Godot dependency.
 4. Write `CLAUDE.md` for this repo that carries over Bufflehead's state-machine UI rules.

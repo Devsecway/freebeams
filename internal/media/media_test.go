@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // writePNG writes a w×h PNG whose left half is left and right half is right.
@@ -141,7 +141,7 @@ func TestDefaultCacheDir(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(t.TempDir(), "xdg"))
 	t.Setenv("LocalAppData", filepath.Join(t.TempDir(), "lad"))
 	dir, err = DefaultCacheDir("")
-	if err != nil || filepath.Base(dir) != "media" || filepath.Base(filepath.Dir(dir)) != "FreeWorship" {
+	if err != nil || filepath.Base(dir) != "media" || filepath.Base(filepath.Dir(dir)) != "FreeBeams" {
 		t.Fatalf("DefaultCacheDir() = %q, %v", dir, err)
 	}
 }

@@ -3,7 +3,7 @@ package core
 import (
 	"strings"
 
-	"freeworship/internal/bibles/bundled"
+	"freebeams/internal/bibles/bundled"
 )
 
 // BundledState is the status of the bundled translations' installation

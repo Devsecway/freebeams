@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // wholeBibleArray builds a 66-book array-layout document: books maps a book
@@ -199,14 +199,14 @@ func TestCleanArrayText(t *testing.T) {
 	}
 }
 
-// TestRealArrayFiles decodes every *.json in $FREEWORSHIP_BIBLE_ARRAYS (a
+// TestRealArrayFiles decodes every *.json in $FREEBEAMS_BIBLE_ARRAYS (a
 // folder of array-layout Bibles such as en_kjv.json) and checks that each
 // is a whole Bible with John 3:16. It skips without the variable; the files
 // are the user's and are never committed.
 func TestRealArrayFiles(t *testing.T) {
-	dir := os.Getenv("FREEWORSHIP_BIBLE_ARRAYS")
+	dir := os.Getenv("FREEBEAMS_BIBLE_ARRAYS")
 	if dir == "" {
-		t.Skip("FREEWORSHIP_BIBLE_ARRAYS not set")
+		t.Skip("FREEBEAMS_BIBLE_ARRAYS not set")
 	}
 	files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
 	if len(files) == 0 {

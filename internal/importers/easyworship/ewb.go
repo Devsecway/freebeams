@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/text/encoding/charmap"
 
-	"freeworship/internal/importers/rtf"
-	"freeworship/internal/models"
+	"freebeams/internal/importers/rtf"
+	"freebeams/internal/models"
 )
 
 // The .ewb format (EasyWorship 6-8 Bible plugin) is a SQLite database. See

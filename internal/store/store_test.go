@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func openTemp(t *testing.T) *Store {
@@ -104,7 +104,7 @@ func TestDefaultPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(p) != "library.db" || filepath.Base(filepath.Dir(p)) != "FreeWorship" {
+	if filepath.Base(p) != "library.db" || filepath.Base(filepath.Dir(p)) != "FreeBeams" {
 		t.Fatalf("DefaultPath = %q", p)
 	}
 }

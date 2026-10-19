@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // The library tile menus (the Media and Presentations tabs' right-click and

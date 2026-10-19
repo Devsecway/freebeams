@@ -3,7 +3,7 @@ package ui
 import (
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 
 	"graphics.gd/classdb/Button"
 	"graphics.gd/classdb/Control"
@@ -283,7 +283,7 @@ type ConfirmDialog struct {
 // NewConfirmDialog builds the dialog. Add AsWindow() to the scene tree.
 func NewConfirmDialog() *ConfirmDialog {
 	c := &ConfirmDialog{}
-	c.dlg = newDialogWindow("FreeWorship", 420, 150)
+	c.dlg = newDialogWindow("FreeBeams", 420, 150)
 	c.msg = label("", "")
 	c.msg.SetAutowrapMode(TextServer.AutowrapWordSmart)
 	c.msg.SetClipText(false)
@@ -343,7 +343,7 @@ type MessageDialog struct {
 // NewMessageDialog builds the dialog. Add AsWindow() to the scene tree.
 func NewMessageDialog() *MessageDialog {
 	m := &MessageDialog{}
-	m.dlg = newDialogWindow("FreeWorship", 480, 210)
+	m.dlg = newDialogWindow("FreeBeams", 480, 210)
 	m.heading = label("", vTitle)
 	m.msg = label("", "")
 	m.msg.SetAutowrapMode(TextServer.AutowrapWordSmart)

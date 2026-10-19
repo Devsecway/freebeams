@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func TestItemViewAndSort(t *testing.T) {

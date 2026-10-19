@@ -3,7 +3,7 @@ package app
 import (
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Transitions: the configured models.Transition (settings.Transition) drives

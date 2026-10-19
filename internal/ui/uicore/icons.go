@@ -10,7 +10,7 @@ import (
 	"graphics.gd/variant/Color"
 )
 
-// FreeWorship's own icon set (see docs/ICONS.md): hand-written SVG bodies on
+// FreeBeams's own icon set (see docs/ICONS.md): hand-written SVG bodies on
 // two grids, rasterised by the ui package as DPITextures.
 //
 //   - 32 px toolbar icons: a 24 px live area (4 px padding). Filled shapes

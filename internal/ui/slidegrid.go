@@ -3,7 +3,7 @@ package ui
 import (
 	"strconv"
 
-	"freeworship/internal/ui/uicore"
+	"freebeams/internal/ui/uicore"
 
 	"graphics.gd/classdb/Container"
 	"graphics.gd/classdb/Control"

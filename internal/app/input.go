@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"freeworship/internal/app/core"
+	"freebeams/internal/app/core"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/DisplayServer"
@@ -172,9 +172,10 @@ func keyName(k Input.Key) string {
 
 // ---- native file dialogs -----------------------------------------------------------
 
-var scheduleFilters = []string{"*.fws ; FreeWorship Schedules"}
+var scheduleFilters = []string{"*.fbs, *.fws ; FreeBeams Schedules"}
 
-// openScheduleDialog shows the native Open dialog for .fws files.
+// openScheduleDialog shows the native Open dialog for .fbs files (and the
+// former .fws).
 func (a *App) openScheduleDialog() {
 	err := DisplayServer.FileDialogShow("Open Schedule", a.dialogDir(), "", false, DisplayServer.FileDialogModeOpenFile,
 		scheduleFilters, func(ok bool, paths []string, _ int) {

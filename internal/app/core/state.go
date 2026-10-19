@@ -1,6 +1,6 @@
 package core
 
-import "freeworship/internal/models"
+import "freebeams/internal/models"
 
 // DeckState summarises the Preview or Live deck for GET /state.
 type DeckState struct {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"freeworship/internal/models"
-	"freeworship/internal/store"
+	"freebeams/internal/models"
+	"freebeams/internal/store"
 )
 
 // asvOmitted are the New Testament verses the ASV leaves out (its critical

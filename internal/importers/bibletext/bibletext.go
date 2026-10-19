@@ -1,5 +1,5 @@
 // Package bibletext reads Bible translations from JSON text files and writes
-// FreeWorship's single-file Bible JSON. It is pure Go (no Godot).
+// FreeBeams's single-file Bible JSON. It is pure Go (no Godot).
 //
 // Three layouts are read (see docs/BIBLES.md):
 //
@@ -42,7 +42,7 @@ import (
 	"strconv"
 	"strings"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // Result is a decoded translation.

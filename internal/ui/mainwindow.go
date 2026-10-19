@@ -247,7 +247,7 @@ func (w *MainWindow) SetPalette(p Palette) {
 // CurrentPalette returns the active palette.
 func (w *MainWindow) CurrentPalette() Palette { return w.palette }
 
-// SetScheduleTitle sets the window title: "FreeWorship — <title>" with a "•"
+// SetScheduleTitle sets the window title: "FreeBeams — <title>" with a "•"
 // dirty marker.
 func (w *MainWindow) SetScheduleTitle(title string, dirty bool) {
 	w.title, w.dirty = title, dirty
@@ -256,7 +256,7 @@ func (w *MainWindow) SetScheduleTitle(title string, dirty bool) {
 
 // WindowTitle is the title the window shows for the current state.
 func (w *MainWindow) WindowTitle() string {
-	t := "FreeWorship — " + w.title
+	t := "FreeBeams — " + w.title
 	if w.dirty {
 		t += " •"
 	}

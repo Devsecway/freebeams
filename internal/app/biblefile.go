@@ -10,12 +10,12 @@ import (
 
 	"graphics.gd/classdb/DisplayServer"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/importers/bibletext"
-	"freeworship/internal/importers/easyworship"
-	"freeworship/internal/models"
-	"freeworship/internal/store"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/importers/bibletext"
+	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/models"
+	"freebeams/internal/store"
 )
 
 // bibleFileImport is a parsed Bible file waiting for the operator's
@@ -143,10 +143,10 @@ func (a *App) confirmOrImportBibleFile(cmd *control.Command, f *bibleFileImport,
 				a.answer(cmd, err)
 				return err
 			}
-			log.Printf("[freeworship] imported Bible %s (%s) from %s: %d verses, %d notes",
+			log.Printf("[freebeams] imported Bible %s (%s) from %s: %d verses, %d notes",
 				f.bible.Abbrev, f.bible.Name, f.path, len(f.verses), len(f.warnings))
 			for _, w := range f.warnings {
-				log.Printf("[freeworship] import note: %s", w)
+				log.Printf("[freebeams] import note: %s", w)
 			}
 			a.setScriptStatus(core.BibleFileSummary(f.bible, len(f.verses)), false)
 			a.loadBibles(cmd) // answers cmd with the refreshed list

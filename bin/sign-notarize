@@ -8,11 +8,11 @@
 #
 # Usage:
 #   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-#   NOTARY_PROFILE="freeworship-notary" \
+#   NOTARY_PROFILE="freebeams-notary" \
 #     bin/sign-notarize
 #
 # Flags / env:
-#   SKIP_BUILD=1     reuse releases/darwin/universal/FreeWorship.app instead of rebuilding
+#   SKIP_BUILD=1     reuse releases/darwin/universal/FreeBeams.app instead of rebuilding
 #   SKIP_NOTARIZE=1  sign only (fast local check; the app will NOT pass Gatekeeper
 #                    on other Macs without notarization)
 #
@@ -32,15 +32,15 @@
 #         APPLE_API_KEY_ID         the Key ID
 #         APPLE_API_ISSUER_ID      the Issuer ID (a UUID)
 #   (b) A keychain profile saved locally:
-#         xcrun notarytool store-credentials "freeworship-notary" \
+#         xcrun notarytool store-credentials "freebeams-notary" \
 #           --apple-id "you@example.com" --team-id "TEAMID" --password "app-specific-password"
-#         NOTARY_PROFILE=freeworship-notary
+#         NOTARY_PROFILE=freebeams-notary
 #
-# Output: releases/FreeWorship-<version>-macOS.dmg, signed, notarized and stapled.
+# Output: releases/FreeBeams-<version>-macOS.dmg, signed, notarized and stapled.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/releases/darwin/universal/FreeWorship.app"
+APP="$ROOT/releases/darwin/universal/FreeBeams.app"
 ENTITLEMENTS="$ROOT/packaging/macos/entitlements.plist"
 
 : "${SKIP_BUILD:=0}"
@@ -115,9 +115,9 @@ if [ -n "${MACOS_CERT_P12_BASE64:-}" ]; then
 	echo "==> importing the signing certificate into a temporary keychain"
 	# Outside the working tree on purpose: a crash between create and cleanup
 	# must not leave key material in the checkout.
-	KEYCHAIN="$(mktemp -d -t freeworship-kc)/build-signing.keychain-db"
+	KEYCHAIN="$(mktemp -d -t freebeams-kc)/build-signing.keychain-db"
 	KEYCHAIN_PW="$(uuidgen)"
-	P12="$(mktemp -t freeworship-cert)"
+	P12="$(mktemp -t freebeams-cert)"
 	CLEANUP_FILES+=("$P12")
 
 	b64decode MACOS_CERT_P12_BASE64 "$P12"
@@ -155,7 +155,7 @@ if [ "$SKIP_NOTARIZE" != "1" ]; then
 	if [ -n "${APPLE_API_KEY_P8_BASE64:-}" ]; then
 		require APPLE_API_KEY_ID "set APPLE_API_KEY_ID alongside APPLE_API_KEY_P8_BASE64"
 		require APPLE_API_ISSUER_ID "set APPLE_API_ISSUER_ID alongside APPLE_API_KEY_P8_BASE64"
-		API_KEY="$(mktemp -t freeworship-authkey)"
+		API_KEY="$(mktemp -t freebeams-authkey)"
 		CLEANUP_FILES+=("$API_KEY")
 		b64decode APPLE_API_KEY_P8_BASE64 "$API_KEY"
 		NOTARY_ARGS=(--key "$API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID")
@@ -170,7 +170,7 @@ fi
 
 cd "$ROOT"
 V="$("$ROOT/bin/version")"
-DMG="$ROOT/releases/FreeWorship-$V-macOS.dmg"
+DMG="$ROOT/releases/FreeBeams-$V-macOS.dmg"
 
 # --- 1. Build ----------------------------------------------------------------
 if [ "$SKIP_BUILD" = "1" ]; then
@@ -191,7 +191,7 @@ sign_one() {
 }
 
 echo "==> discovering nested Mach-O binaries"
-manifest="$(mktemp -t freeworship-manifest)"
+manifest="$(mktemp -t freebeams-manifest)"
 CLEANUP_FILES+=("$manifest")
 while IFS= read -r -d '' f; do
 	if file -b "$f" | grep -q "Mach-O"; then
@@ -215,7 +215,7 @@ while IFS= read -r -d '' fw; do
 	sign_one "$fw"
 done < <(find "$APP" -type d \( -name "*.framework" -o -name "*.bundle" \) -print0)
 
-echo "==> signing FreeWorship.app"
+echo "==> signing FreeBeams.app"
 sign_one "$APP"
 
 # --- 4. Verify ---------------------------------------------------------------
@@ -236,7 +236,7 @@ if [ "$SKIP_NOTARIZE" = "1" ]; then
 	echo "    NOTE: not notarized; Gatekeeper blocks this DMG on other Macs."
 else
 	echo "==> submitting to the Apple notary service (this can take a few minutes)"
-	submit_log="$(mktemp -t freeworship-notary)"
+	submit_log="$(mktemp -t freebeams-notary)"
 	CLEANUP_FILES+=("$submit_log")
 	xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait 2>&1 | tee "$submit_log"
 	if ! grep -q 'status: Accepted' "$submit_log"; then

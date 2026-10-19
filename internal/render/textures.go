@@ -3,8 +3,8 @@ package render
 import (
 	"os"
 
-	"freeworship/internal/models"
-	"freeworship/internal/render/layout"
+	"freebeams/internal/models"
+	"freebeams/internal/render/layout"
 
 	"graphics.gd/classdb/Gradient"
 	"graphics.gd/classdb/GradientTexture2D"

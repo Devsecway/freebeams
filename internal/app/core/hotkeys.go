@@ -1,4 +1,4 @@
-// Package core holds the pure, unit-testable logic of the FreeWorship app:
+// Package core holds the pure, unit-testable logic of the FreeBeams app:
 // the hotkey state machine, schedule item ↔ deck conversion, the control
 // state snapshot and the async generation counter. It must not import
 // graphics.gd classdb packages (go test cannot link them).
@@ -7,7 +7,7 @@ package core
 import (
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // KeyEvent is a key press, normalised away from Godot. Key is a lower-case

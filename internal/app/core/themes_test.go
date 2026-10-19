@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func namedTheme(id int64, name string) models.Theme {

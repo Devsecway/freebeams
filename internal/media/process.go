@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 // DefaultThumbWidth is the width of library thumbnails (pixels). A video's

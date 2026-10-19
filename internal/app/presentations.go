@@ -9,14 +9,14 @@ import (
 	"runtime/debug"
 	"time"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/importers/easyworship"
-	"freeworship/internal/models"
-	"freeworship/internal/presentations"
-	"freeworship/internal/render"
-	"freeworship/internal/store"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/models"
+	"freebeams/internal/presentations"
+	"freebeams/internal/render"
+	"freebeams/internal/store"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/DisplayServer"
@@ -84,7 +84,7 @@ func (a *App) initPresentations() {
 		tools := presentations.Detect(ctx)
 		return func() error {
 			a.pr.tools, a.pr.toolsKnown = tools, true
-			log.Printf("[freeworship] presentation renderers: %s", tools.Status())
+			log.Printf("[freebeams] presentation renderers: %s", tools.Status())
 			a.pr.status = a.presentationsFooter()
 			a.startPresentationWork()
 			return nil
@@ -309,7 +309,7 @@ func (a *App) doRemovePresentation(p models.Presentation, cmd *control.Command) 
 				a.answer(cmd, err)
 				return err
 			}
-			log.Printf("[freeworship] removed presentation %d %q", p.ID, p.Title)
+			log.Printf("[freebeams] removed presentation %d %q", p.ID, p.Title)
 			if a.pr.item != nil && a.pr.item.ID == p.ID {
 				a.pr.item, a.pr.deck = nil, nil
 			}
@@ -357,7 +357,7 @@ func (a *App) addPresentationPaths(paths []string, cmd *control.Command) {
 		}
 		return func() error {
 			for _, w := range warnings {
-				log.Printf("[freeworship] add presentation: %s", w)
+				log.Printf("[freebeams] add presentation: %s", w)
 			}
 			if err != nil {
 				a.alert("Add Presentation", fmt.Errorf("Could not add the presentation.\n\n%w", err))
@@ -370,7 +370,7 @@ func (a *App) addPresentationPaths(paths []string, cmd *control.Command) {
 				a.answer(cmd, err)
 				return err
 			}
-			log.Printf("[freeworship] add presentation: %d found, %d new", len(items), len(added))
+			log.Printf("[freebeams] add presentation: %d found, %d new", len(items), len(added))
 			a.loadPresentations(a.pr.query, cmd)
 			return nil
 		}
@@ -414,9 +414,9 @@ func (a *App) startPresentationImport() {
 				a.fail("EasyWorship presentations import", err)
 				return err
 			}
-			log.Printf("[freeworship] EasyWorship presentations: %d registered, %d already present", rep.PresentationsImported, rep.PresentationsSkipped)
+			log.Printf("[freebeams] EasyWorship presentations: %d registered, %d already present", rep.PresentationsImported, rep.PresentationsSkipped)
 			for _, w := range rep.Warnings {
-				log.Printf("[freeworship] presentations import note: %s", w)
+				log.Printf("[freebeams] presentations import note: %s", w)
 			}
 			if rep.PresentationsImported > 0 {
 				a.loadPresentations(a.pr.query, nil)
@@ -468,7 +468,7 @@ func (a *App) startPresentationWork() {
 		defer a.jobs.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[freeworship] panic in presentation work: %v\n%s", r, debug.Stack())
+				log.Printf("[freebeams] panic in presentation work: %v\n%s", r, debug.Stack())
 			}
 			a.post(func() {
 				a.pr.working = false
@@ -531,7 +531,7 @@ func (a *App) runPresentationWork(ctx context.Context, st *store.Store, svc *pre
 			a.post(func() { a.fail("save presentation "+p.Title, err) })
 			continue
 		}
-		log.Printf("[freeworship] rendered %q: %d pages (%s%s)", p.Title, p.Pages, p.Renderer, map[bool]string{true: ", embedded images only", false: ""}[p.Partial])
+		log.Printf("[freebeams] rendered %q: %d pages (%s%s)", p.Title, p.Pages, p.Renderer, map[bool]string{true: ", embedded images only", false: ""}[p.Partial])
 		a.post(func() { a.applyPresentationUpdate(p) })
 	}
 }
@@ -547,7 +547,7 @@ func (a *App) presentationFail(p models.Presentation, err error) {
 		if !a.pr.failed[p.ID] {
 			a.pr.failed[p.ID] = true
 			a.pr.thumbVer++
-			log.Printf("[freeworship] presentation %q: %v", p.Title, err)
+			log.Printf("[freebeams] presentation %q: %v", p.Title, err)
 		}
 	})
 }

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"freeworship/internal/models"
+	"freebeams/internal/models"
 )
 
 func localResourcesDir() string { return filepath.Join(localEW, "Easyworship/Default/Resources") }

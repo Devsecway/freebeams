@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"freeworship/internal/app/core"
-	"freeworship/internal/control"
-	"freeworship/internal/models"
-	"freeworship/internal/render"
-	"freeworship/internal/ui"
+	"freebeams/internal/app/core"
+	"freebeams/internal/control"
+	"freebeams/internal/models"
+	"freebeams/internal/render"
+	"freebeams/internal/ui"
 
 	"graphics.gd/classdb/SceneTree"
 )

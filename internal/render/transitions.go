@@ -1,8 +1,8 @@
 package render
 
 import (
-	"freeworship/internal/models"
-	"freeworship/internal/render/layout"
+	"freebeams/internal/models"
+	"freebeams/internal/render/layout"
 
 	"graphics.gd/classdb/CanvasItem"
 	"graphics.gd/variant/Color"

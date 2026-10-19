@@ -1,4 +1,4 @@
-// Package models holds FreeWorship's domain types and pure logic. It must not
+// Package models holds FreeBeams's domain types and pure logic. It must not
 // import graphics.gd; everything here is unit-testable with plain `go test`.
 package models
 

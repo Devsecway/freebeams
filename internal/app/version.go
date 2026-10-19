@@ -20,8 +20,8 @@ func Version() string {
 	return v
 }
 
-// versionBanner is the startup log line, e.g. "FreeWorship 0.1.0 (Godot
+// versionBanner is the startup log line, e.g. "FreeBeams 0.1.0 (Godot
 // 4.7.2-stable (official))".
 func versionBanner() string {
-	return fmt.Sprintf("FreeWorship %s (Godot %s)", Version(), Engine.GetVersionInfo().String)
+	return fmt.Sprintf("FreeBeams %s (Godot %s)", Version(), Engine.GetVersionInfo().String)
 }
