@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Concept "Verse": three centred lyric lines on the brand-blue tile. The gold
+       line is the one being sung right now (the Live line). Original artwork for
+       this project. Geometry follows macOS app-icon guides: 824 px tile on a
+       1024 px canvas, corner radius 186. Rasterised by docs/branding/tools/build.py. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4379DD"/>
+      <stop offset="1" stop-color="#2447A3"/>
+    </linearGradient>
+  </defs>
+  <rect id="bg" x="100" y="100" width="824" height="824" rx="186" fill="url(#tile)"/>
+  <g id="mark">
+    <rect x="252" y="256" width="520" height="128" rx="64" fill="#FFFFFF"/>
+    <rect x="292" y="448" width="440" height="128" rx="64" fill="#F6B73C"/>
+    <rect x="312" y="640" width="400" height="128" rx="64" fill="#FFFFFF"/>
+  </g>
+</svg>
