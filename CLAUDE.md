@@ -111,6 +111,25 @@ internal/app               Godot: the App node that wires store + presenter + ui
   projector vanished whenever another app was active. `cover_darwin.go` sets `hidesOnDeactivate:NO` and `canHide:NO`.
   `NSWindow.isVisible` still says YES for a window hidden that way; `occlusionState` and
   `CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly)` tell the truth (`Output.NativeState`, hook `output-native`).
+- `PopupMenu.AddSubmenuNodeItem(label, node)` trips graphics.gd's "illegal transfer of ownership" check and panics (and a
+  panic in `buildUI` leaves every later frame with nil views). Name the child PopupMenu and use `AddSubmenuItem(label, "Name")`.
+- A `Label` with `clip_text` (what `ui.label()` sets) that does not expand has zero minimum width in a BoxContainer and
+  vanishes. Inline captions need `SetClipText(false)` and `OverrunNoTrimming`.
+- Project widget values from state with the no-signal setters (`Range.SetValueNoSignal`, `BaseButton.SetPressedNoSignal`,
+  `OptionButton.Select`, `ColorPickerButton.SetColor`) and end the pass with a getter (`flushCalls`): a buffered setter
+  that emits would emit at flush time, after any `applying` guard has been reset.
+- `OS.GetSystemFonts()` returns installed family names (hidden ones start with ".") usable directly as `SystemFont` names.
+- cgo: a CoreFoundation ref cannot be compared with `nil` (`mismatched types C.CGPDFDocumentRef and untyped nil`); test
+  NULL in a one-line C helper. Core Graphics without AppKit is safe from a goroutine; it logs "CoreGraphics PDF has
+  logged an error" to stderr for a non-PDF (harmless, but it lands in app.log).
+- `CGPDFPageGetDrawingTransform` never scales a page up: compute the fit scale yourself (translate + scale, swapping the
+  box for `/Rotate` 90/270) and give the transform a rect of exactly the rotated box size.
+- A `CGBitmapContext` over a Go `[]byte` with `kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big` is RGBA,
+  rows top-down: usable as `image.RGBA.Pix`. Fill it opaque black first so premultiplied == straight.
+- Adding a field to a gofmt-aligned struct or map literal in a shared file realigns the whole block. Put new fields in
+  their own blank-line-separated block to keep diffs additive and merges clean (several agents edit these files).
+- A smoke block that adds a schedule item late must `save-schedule` before `# ---- quit`, or the close question makes
+  "the app did not exit after quit" fail.
 - `screencapture -D 2` and `DisplayServer.ScreenGetImage` need Screen Recording permission for the terminal. Without
   it, check the TV by eye and the content with `/screenshot?window=output`.
 - A node that only reacts to its own lifecycle needs no extension class: connect `OnVisibilityChanged` /
