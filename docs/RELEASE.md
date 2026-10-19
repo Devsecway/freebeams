@@ -72,7 +72,8 @@ bin/build-windows     # releases/windows/amd64/, releases/FreeBeams-<v>-windows-
 ```
 
 Native build on Windows under MSYS2 UCRT64 (`pacman -S mingw-w64-ucrt-x86_64-gcc`), with Go on PATH:
-`MSYSTEM=UCRT64 /c/msys64/usr/bin/bash -l bin/build-windows`. It runs `GOOS=windows bin/gd build` (gcc builds
+`MSYSTEM=UCRT64 /c/msys64/usr/bin/bash -l bin/build-windows`. On a fresh machine `bin/setup-windows.ps1` (an
+elevated PowerShell) installs Go, Git, MSYS2 with gcc and zip, and Inno Setup through winget, then runs this script. It runs `GOOS=windows bin/gd build` (gcc builds
 `windows_amd64.dll`, Godot exports the `Windows x86_64` preset), copies the DLL beside `FreeBeams.exe`, bundles any
 `lib*.dll` the DLL still needs, brands the exe with `rcedit` (icon, version resource: Godot only does this itself when
 rcedit is configured in its editor settings), zips the folder, and builds the installer from

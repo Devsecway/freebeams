@@ -56,7 +56,7 @@ need go "https://go.dev/dl/"
 if [ "$native" = 1 ]; then
 	# MinGW gcc builds the Go c-shared DLL. Link libgcc and winpthread
 	# statically so the DLL does not need the MinGW runtime beside it.
-	need gcc "MSYS2: pacman -S mingw-w64-ucrt-x86_64-gcc"
+	need gcc "MSYS2: pacman -S mingw-w64-ucrt-x86_64-gcc, or bin/setup-windows.ps1 installs every build tool"
 	export CC="${CC:-gcc}" CXX="${CXX:-g++}"
 	export CGO_LDFLAGS="${CGO_LDFLAGS:-} -static-libgcc -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic"
 else
@@ -181,7 +181,7 @@ else
 		done
 	}
 	iscc="$(find_iscc)"
-	[ -n "$iscc" ] || fail "Inno Setup (ISCC) not found: choco install innosetup, or winget install JRSoftware.InnoSetup, or NO_INSTALLER=1"
+	[ -n "$iscc" ] || fail "Inno Setup (ISCC) not found: winget install JRSoftware.InnoSetup (bin/setup-windows.ps1 does it), or NO_INSTALLER=1"
 	# Disable MSYS2 path mangling of the /D and /O switches for this native exe.
 	MSYS2_ARG_CONV_EXCL='*' "$iscc" \
 		"/DAppVersion=$V" \

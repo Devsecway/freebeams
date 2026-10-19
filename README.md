@@ -81,46 +81,43 @@ GitHub release with the artifacts and checksums.
 
 ### Building the Windows installer
 
-The installer (`FreeBeams-<version>-Setup.exe`) is built **on Windows**. The build runs in an MSYS2 shell because
-the Go side of the app is a C-shared DLL that MinGW gcc compiles; the installer itself comes from Inno Setup.
+The Setup.exe is self-contained: it installs `FreeBeams.exe`, the Go DLL and the runtime DLLs they need, so people
+installing FreeBeams need none of the tools below. The tools are for the machine that **builds** the installer,
+which has to be a Windows machine (the Go side of the app is a C-shared DLL that MinGW gcc compiles, and the
+installer comes from Inno Setup).
 
-1. **Install the tools** (once), from an administrator PowerShell with [winget](https://learn.microsoft.com/windows/package-manager/):
-   ```powershell
-   winget install GoLang.Go
-   winget install MSYS2.MSYS2
-   winget install JRSoftware.InnoSetup
-   winget install Git.Git
-   ```
-   Then open the **MSYS2 UCRT64** shell from the Start menu and install the compiler and zip:
-   ```bash
-   pacman -S --needed mingw-w64-ucrt-x86_64-gcc zip
-   ```
-   Go must be on the PATH inside that shell. If `go version` fails there, add it to `~/.bashrc`:
-   `export PATH="$PATH:/c/Program Files/Go/bin"`.
-2. **Get the source** in the UCRT64 shell:
-   ```bash
-   git clone git@github.com:Devsecway/freebeams.git
-   cd freebeams
-   ```
-3. **Build**:
-   ```bash
-   bin/build-windows
-   ```
-   (From a plain Windows terminal the same thing is `MSYSTEM=UCRT64 C:\msys64\usr\bin\bash -l bin/build-windows`
-   run from the repository folder.) The script:
-   - runs `GOOS=windows bin/gd build`, which compiles `windows_amd64.dll` with gcc and exports the
-     `Windows x86_64` preset with Godot (the first run downloads Godot and the Windows export template into
-     `~/gd/freeworship` and `%AppData%\Godot\export_templates`);
-   - copies the DLL next to `FreeBeams.exe` and bundles any MinGW runtime DLLs it still needs;
-   - downloads `rcedit` into `~/.cache/freebeams/` and brands the exe with the icon and version resource;
-   - zips the folder as `releases/FreeBeams-<v>-windows-amd64.zip`;
-   - finds `ISCC.exe` (on PATH, or in `Program Files (x86)\Inno Setup 6`, `Program Files\Inno Setup 6` or the
-     per-user `%LocalAppData%\Programs\Inno Setup 6`) and compiles `packaging/windows/freebeams.iss` into
-     `releases/FreeBeams-<v>-Setup.exe`.
-4. **Install it** by running the Setup. It installs per user by default (no admin rights needed, which suits church
-   laptops), with Start menu and optional desktop shortcuts and an uninstaller; the same `AppId` lets a newer Setup
-   upgrade in place. Windows SmartScreen warns about the unsigned file; set `SIGNTOOL_CMD="signtool sign /fd SHA256
-   /tr <timestamp URL> /td SHA256 /a"` before the build to sign every exe and DLL with your own certificate.
+**One command on a fresh machine.** Download the repository (or clone it), open PowerShell **as administrator** in
+the repository folder, and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File bin\setup-windows.ps1
+```
+
+`bin/setup-windows.ps1` installs with winget whatever is missing (Go, Git, MSYS2, Inno Setup), installs the gcc
+compiler and zip inside MSYS2, then runs `bin/build-windows` in an MSYS2 UCRT64 shell. It needs winget, which
+Windows 10 (1809 or later) and Windows 11 have as "App Installer". `-NoBuild` installs the tools only; rerunning
+skips what is already installed. When it finishes, the outputs are:
+
+- `releases\windows\amd64\`: the bundle (`FreeBeams.exe`, `windows_amd64.dll` and its runtime DLLs);
+- `releases\FreeBeams-<version>-windows-amd64.zip`: the same, portable;
+- `releases\FreeBeams-<version>-Setup.exe`: the installer.
+
+**What the build does** (`bin/build-windows`, which you can also run yourself from the MSYS2 UCRT64 shell for
+later builds):
+
+- runs `GOOS=windows bin/gd build`: gcc compiles `windows_amd64.dll`, Godot exports the `Windows x86_64` preset
+  (the first run downloads Godot and the Windows export template into `~/gd/freeworship` and
+  `%AppData%\Godot\export_templates`);
+- copies the DLL next to `FreeBeams.exe` and bundles any MinGW runtime DLLs it still needs;
+- downloads `rcedit` into `~/.cache/freebeams/` and brands the exe with the icon and version resource;
+- zips the folder;
+- finds `ISCC.exe` (on PATH, or in `Program Files (x86)\Inno Setup 6`, `Program Files\Inno Setup 6` or the
+  per-user `%LocalAppData%\Programs\Inno Setup 6`) and compiles `packaging/windows/freebeams.iss`.
+
+**Installing it.** The Setup installs per user by default (no admin rights needed, which suits church laptops),
+with Start menu and optional desktop shortcuts and an uninstaller; the same `AppId` lets a newer Setup upgrade in
+place. Windows SmartScreen warns about the unsigned file; set `SIGNTOOL_CMD="signtool sign /fd SHA256 /tr
+<timestamp URL> /td SHA256 /a"` before the build to sign every exe and DLL with your own certificate.
 
 Options: `NO_INSTALLER=1` builds only the zip; `GOARCH=arm64` builds for Windows on ARM. Cross-building the zip
 from macOS or Linux works with `zig` on PATH (`gd` uses `zig cc`), but the exe is not branded and no installer is
