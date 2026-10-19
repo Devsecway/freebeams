@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 388 checks (Phase 1: 191; media, presentations, themes, transitions and settings blocks); screenshots and app.log in test/out/
+test/smoke.sh          # 405 checks (Phase 1: 191; media, presentations, themes, transitions, settings and search blocks); screenshots and app.log in test/out/
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -204,6 +204,43 @@ transitions").
 - `internal/ui/mainwindow.go`: `Menus` and `Settings` fields, the menu bar above the toolbar, `Settings` in
   `dialogs()`, `TopDialogHost()`. `toolbar.go`, `splitter.go`, `monitor.go`, `events.go` are untouched.
 - `test/pngcheck.py`: a `same FILE2` mode. `test/smoke.sh`: one block before `# ---- quit`.
+
+## Search (songs, media, presentations)
+
+Recorded 2026-10-19 after the report "search should be case insensitive, and for songs not just the title but the
+lyrics if it matches". Diagnosis with the real EasyWorship library (223 songs, imported into a temp store by
+`TestSearchSongsLocalEW`): matching was already case-insensitive, prefix-per-word and over title, author and lyrics
+(FTS5 `unicode61 remove_diacritics 2`), and the user's `library.db` had all 223 lyrics indexed. What was wrong was the
+**ranking and the feedback**: results came in title order, so `AMAZING` listed "Alas And Did My Savior Bleed" (a lyric
+match) above "Amazing Grace", `O Holy Night` came after "Day Is Dying In The West", `it is well` put "It Is Well With
+My Soul" third, and nothing said why a row was there, so the search looked case-sensitive and title-only. Two smaller
+faults: a contraction such as `I'll` became `"i"* "ll"*`, two independent words anywhere in the row (33 songs, one of
+them through the author "Lloyd"), and the media / presentation searches used `lower(title) LIKE`, which folds ASCII
+case only (`CAFÉ` did not find "café", `cafe` never found "Café"). The scripture locator was fine: bad references are
+`ErrBadReference` shown in the status (`TestParseReferenceErrors`).
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Case- and diacritic-insensitive, every term a word prefix, title + author + lyrics | **pass** | `store.SearchSongs` (FTS5 unicode61). `TestSearchSongs`: `GRACE`, `amaz`, `señor`/`senor`, `newton wretch` across fields, `eventide` (lyrics only). Smoke: `search is case-insensitive and ranks the title match first`, `a prefix finds the same song first`, `a lyrics-only word finds the song and says so`, `two terms across title and lyrics`. |
+| Ranking: every term in the title, then title + author, then rows that needed their lyrics (a mixed title + lyrics match above lyrics-only); each tier in title order | **pass** | `searchSongsFTS`: one query; the tiers are uncorrelated `IN` subqueries with FTS5 column filters (`{title} : (…)`, `{title author} : (… OR …)`) in `ORDER BY`. `TestSearchSongs` ("title tier then lyrics tier", "limit applies after ranking"), `TestSearchSongsMatched` (three tiers, mixed matches), `TestSearchSongsLocalEW` (`AMAZING`, `O Holy Night`, `it is well`, `night divine`, `newton` first rows on the real data). |
+| Why a row matched: `SongSummary.Matched` (`title` / `author` / `lyrics`) and a lyric `Snippet` | **pass** | `snippet()` over the lyrics column, one line. UI: a narrow **Match** column in the song list ("author", "lyrics"), the excerpt in the row tooltip ("Matched in the lyrics: …"), the footer "5 songs · 2 matched in lyrics" (`core.SongsFooterMatches`). `/state.songs.first`, `/state.songs.lyricsMatches`. Smoke: `title first, the lyric matches counted in the footer`, screenshot `search-lyrics.png`. |
+| Phrases and contractions | **pass** | `searchTerms`: whitespace splits terms, a double-quoted run is one phrase (an unbalanced quote runs to the end), the words of a term form one prefix phrase `"w1 w2"*` that FTS5 tokenizes again, so `I'll` matches the adjacent tokens of I'll (22 songs instead of 33 on the real data; `Lord's` 10 instead of 106) and `John 3:16` matches 3:16. `TestFTSQuery`, `TestSearchSongs` ("quoted phrase", "quoted phrase keeps word order", "contraction is one phrase", curly apostrophe). Smoke: `a quoted phrase`, `a contraction is one phrase (fewer songs than i + ll)`. |
+| No input can produce an FTS5 syntax error | **pass** | Only letters, numbers, marks and spaces reach the quoted phrases; terms and words are capped at 16. `TestFTSQueryNeverErrors` (`"`, `*`, `(`, `-`, `:`, `^`, `NEAR(`, NUL, invalid UTF-8, a lone combining mark, …). Should the FTS query ever fail, `searchSongsPlain` (fold + substring over title and author) answers instead. Smoke: `punctuation and FTS syntax are harmless`, `only punctuation lists the library`. |
+| Media and presentations fold the same way | **pass** | `SearchMedia` / `SearchPresentations` match every word in Go with `fold()` (lower-case, NFD minus combining marks, ø/ł/đ/ß/æ/œ) as a substring of the title or path, so prefixes and literal `100%` / `_done` keep working; the limit applies to the matches. `TestFold`, `TestSearchMedia` / `TestSearchPresentations` ("diacritics folded", "accented query, any case", "limit applies to the matches"). Smoke: `media search ignores case`, `presentation search ignores case`. |
+
+Not done: indexing CCLI numbers and copyright (the FTS table has title, author, lyrics), a per-collection filter, and
+EasyWorship's search-mode choice (title / lyrics / author); the Match column is the simpler equivalent.
+
+### Shared files touched (search)
+
+- `internal/models/song.go`: `SongSummary.Matched` / `Snippet` (own block) and the `Matched*` constants.
+- `internal/app/core/state.go` (`SongsState.First`, `LyricsMatches`, own block), `core/deck.go` (`SongsFooterMatches`,
+  `LyricsMatches`, `FirstSongTitle`; `SongsFooter` delegates), `internal/app/events.go` (one line in `searchSongs`),
+  `internal/app/control.go` (one line in the `SongsState` literal), `internal/app/hooks.go` (`isSongTable` matches the
+  multi-column Tree, no longer exactly four columns).
+- `internal/ui/songs.go`: the fifth column and the tooltip in `render`; `internal/ui/uicore/match.go` is new.
+  `splitter.go`, `monitor.go`, `events.go`, `icons.go`, `theme.go` and `internal/render` are untouched.
+- `test/smoke.sh`: one block before `# ---- quit`.
 
 ## Remaining for Phase 2
 
