@@ -10,8 +10,10 @@ import (
 	"freeworship/internal/models"
 )
 
-// DefaultThumbWidth is the width of library thumbnails (pixels).
-const DefaultThumbWidth = 320
+// DefaultThumbWidth is the width of library thumbnails (pixels). A video's
+// thumbnail doubles as its poster on the output when it cannot play, so it
+// is wider than a grid tile needs.
+const DefaultThumbWidth = 640
 
 // Processor derives what a library item lacks: dimensions and duration
 // (Describe), a thumbnail (Thumbnail) and, for videos, a playable transcode
