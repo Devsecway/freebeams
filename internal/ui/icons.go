@@ -50,6 +50,7 @@ var icons16 = map[string]string{
 	"bible":        `<path d="M3.5 2.5h8.5v11H3.5z"/><path d="M5.5 13.5v-11M8.75 5v4M7.25 6.5h3"/>`,
 	"video":        `<rect x="1.5" y="4" width="9" height="8" rx="1"/><path d="M10.5 7l4-2.5v7l-4-2.5z"/>`,
 	"image":        `<rect x="2" y="3" width="12" height="10" rx="1"/><circle cx="5.5" cy="6.5" r="1.25"/><path d="M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3"/>`,
+	"presentation": `<rect x="1.5" y="2.5" width="13" height="8.5" rx="1"/><path d="M8 11v3M5.5 14h5M4.5 8.5l2.5-2 2 1.5 2.5-3"/>`,
 }
 
 // gearPath builds a cog outline for the 16px gear glyph.

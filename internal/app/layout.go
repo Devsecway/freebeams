@@ -16,14 +16,15 @@ const layoutSaveFrames = 30
 // hooks and the persisted layout (core.SettingLayout).
 func (a *App) splitters() map[string]*ui.Splitter {
 	return map[string]*ui.Splitter{
-		"main":         a.win.MainSplit,
-		"top":          a.win.TopSplit,
-		"preview-live": a.win.PreviewLiveSplit,
-		"preview":      a.win.PreviewSplit,
-		"live":         a.win.LiveSplit,
-		"resource":     a.win.ResourceSplit,
-		"songs":        a.win.Songs.Splitter(),
-		"scriptures":   a.win.Scriptures.Splitter(),
+		"main":          a.win.MainSplit,
+		"top":           a.win.TopSplit,
+		"preview-live":  a.win.PreviewLiveSplit,
+		"preview":       a.win.PreviewSplit,
+		"live":          a.win.LiveSplit,
+		"resource":      a.win.ResourceSplit,
+		"songs":         a.win.Songs.Splitter(),
+		"scriptures":    a.win.Scriptures.Splitter(),
+		"presentations": a.win.Presentations.Splitter(),
 	}
 }
 

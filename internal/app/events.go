@@ -144,12 +144,15 @@ func (a *App) stepSchedule(delta int, live bool) {
 }
 
 // selectScheduleItem selects row i and loads the item into Preview. A
-// video background plays from its transcode when the library has one.
+// video background plays from its transcode when the library has one; a
+// presentation whose snapshot pages are stale or gone shows the library's
+// current render of the document (the schedule itself is untouched).
 func (a *App) selectScheduleItem(i int) {
 	if i < 0 || i >= len(a.sched.Items) {
 		return
 	}
-	a.setPreview(core.ResolveDeck(core.ItemDeck(a.sched.Items[i]), a.lookupPlayable))
+	item := core.ResolvePresentationItem(a.sched.Items[i], a.lookupPages)
+	a.setPreview(core.ResolveDeck(core.ItemDeck(item), a.lookupPlayable))
 }
 
 // removeScheduleItem removes item i. When it was the selected item, the item
@@ -191,6 +194,9 @@ func (a *App) addCurrentToSchedule(cmd *control.Command) {
 		return
 	case ui.TabMedia:
 		a.addMediaToSchedule(cmd)
+		return
+	case ui.TabPresentations:
+		a.addPresentationToSchedule(cmd)
 		return
 	}
 	if a.songSel < 0 {
@@ -512,6 +518,8 @@ func (a *App) resourceGoLive() {
 		a.goLiveVerse()
 	case ui.TabMedia:
 		a.mediaGoLive()
+	case ui.TabPresentations:
+		a.presentationGoLive()
 	}
 }
 

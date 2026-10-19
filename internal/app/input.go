@@ -143,7 +143,7 @@ func (a *App) focus() core.Focus {
 	switch owner.ID() {
 	case a.win.Schedule.AsControl().ID():
 		return core.FocusList
-	case a.win.PreviewGrid.AsControl().ID(), a.win.Media.Grid().AsControl().ID():
+	case a.win.PreviewGrid.AsControl().ID(), a.win.Media.Grid().AsControl().ID(), a.win.Presentations.Grid().AsControl().ID():
 		return core.FocusGrid
 	}
 	return core.FocusNone

@@ -31,10 +31,22 @@ BASE=""
 
 log() { printf '[splitters] %s\n' "$*"; }
 
+# descendants lists the given processes and everything under them. bin/gd
+# execs `go tool gd`, which runs gd, which runs Godot as a grandchild: killing
+# only the launcher's children left Godot running after a failed run, and the
+# orphan then disturbed the next run's focus-dependent checks.
+descendants() {
+	local p
+	for p in "$@"; do
+		echo "$p"
+		# shellcheck disable=SC2046
+		descendants $(pgrep -P "$p" 2>/dev/null)
+	done
+}
+
 app_pids() {
 	[ -n "$APP_PID" ] || return 0
-	echo "$APP_PID"
-	pgrep -P "$APP_PID" 2>/dev/null || true
+	descendants "$APP_PID"
 }
 
 # godot_pid finds the Godot process under the launcher (up to two levels down).

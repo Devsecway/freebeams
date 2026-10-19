@@ -109,6 +109,8 @@ type App struct {
 
 	md mediaState // the Media tab (media.go)
 
+	pr presentationState // the Presentations tab (presentations.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -181,6 +183,7 @@ func (a *App) Ready() {
 	a.searchSongs("", nil)
 	a.loadBibles(nil)
 	a.initMedia()
+	a.initPresentations()
 	a.dirty = true
 }
 
