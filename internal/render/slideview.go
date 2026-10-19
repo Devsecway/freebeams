@@ -56,6 +56,10 @@ type SlideView struct {
 	transitioning bool
 	progress      float64
 	skipFrame     bool // ignore the (often long) frame that started the fade
+
+	// role selects the shared native player a video / audio background opens
+	// (videosource.go); RoleNone shows the poster only.
+	role VideoRole
 }
 
 // NewSlideView returns a SlideView showing black, with the default 500ms
@@ -119,22 +123,85 @@ const maxFadeStep = 1.0 / 10
 // Ready implements Node.
 func (v *SlideView) Ready() {
 	v.build()
-	v.AsNode().SetProcess(v.transitioning)
+	v.updateProcess()
 	v.relayout()
 }
 
+// EnterTree implements Node: the layers' players follow the view into the
+// tree (a hidden or detached view holds none).
+func (v *SlideView) EnterTree() {
+	v.build()
+	v.syncNative()
+}
+
 // ExitTree implements Node: a view leaving the tree (or being freed) never
-// leaves a transition, and the low-processor refcount, dangling.
+// leaves a transition, the low-processor refcount or a media player dangling.
+// The node still counts as visible in the tree here, so the players are
+// released outright; EnterTree re-opens them if the view comes back.
 func (v *SlideView) ExitTree() {
 	if v.transitioning {
 		v.finishTransition()
 	}
+	for _, l := range v.layers() {
+		l.native.setVisible(false)
+	}
+	v.updateProcess()
 }
 
-// Process implements Node. It only runs while a transition is in progress.
+// SetVideoRole selects which shared native player the view's video and audio
+// backgrounds open (RoleNone: the poster still only). Call it before the
+// first SetFrame; a change re-opens the current file under the new role.
+func (v *SlideView) SetVideoRole(role VideoRole) {
+	v.role = role
+	v.build()
+	for _, l := range v.layers() {
+		l.native.setRole(role)
+	}
+	v.updateProcess()
+}
+
+// VideoRole returns the view's role.
+func (v *SlideView) VideoRole() VideoRole { return v.role }
+
+func (v *SlideView) layers() []*layer {
+	if v.prev == nil {
+		return []*layer{v.cur}
+	}
+	return []*layer{v.cur, v.prev}
+}
+
+// syncNative re-evaluates every layer's player against its visibility.
+func (v *SlideView) syncNative() {
+	for _, l := range v.layers() {
+		l.native.setVisible(l.root.AsCanvasItem().IsVisibleInTree())
+	}
+	v.updateProcess()
+}
+
+// holdsMedia reports whether a layer has a native player open.
+func (v *SlideView) holdsMedia() bool {
+	for _, l := range v.layers() {
+		if l.native.src != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// updateProcess runs Process while a transition animates or a media player
+// needs pumping (videosource.go).
+func (v *SlideView) updateProcess() {
+	v.AsNode().SetProcess(v.transitioning || v.holdsMedia())
+}
+
+// Process implements Node. It runs while a transition is in progress and
+// while the view holds a native media player.
 func (v *SlideView) Process(delta Float.X) {
+	if v.holdsMedia() {
+		pumpSources()
+	}
 	if !v.transitioning {
-		v.AsNode().SetProcess(false)
+		v.updateProcess()
 		return
 	}
 	d := v.transitionDuration().Seconds()
@@ -170,7 +237,7 @@ func (v *SlideView) build() {
 	bc.SetMouseFilter(Control.MouseFilterIgnore)
 	bc.SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
 	v.AsNode().AddChild(v.bars.AsNode())
-	v.cur = newLayer(v.AsNode())
+	v.cur = newLayer(v.AsNode(), v.role)
 	v.want = blackVisual
 	c.OnResized(v.relayout)
 }
@@ -216,7 +283,7 @@ func (v *SlideView) show() {
 		return
 	}
 	if v.prev == nil {
-		v.prev = newLayer(v.AsNode())
+		v.prev = newLayer(v.AsNode(), v.role)
 	}
 	v.prev, v.cur = v.cur, v.prev
 	v.cur.apply(v.want, r, s)
@@ -228,7 +295,7 @@ func (v *SlideView) show() {
 	v.progress = 0
 	v.skipFrame = true
 	AcquireAnimating()
-	v.AsNode().SetProcess(true)
+	v.updateProcess()
 }
 
 func (v *SlideView) finishTransition() {
@@ -241,7 +308,7 @@ func (v *SlideView) finishTransition() {
 	if v.prev != nil {
 		v.prev.root.AsCanvasItem().SetVisible(false)
 	}
-	v.AsNode().SetProcess(false)
+	v.updateProcess()
 	ReleaseAnimating()
 }
 
@@ -266,6 +333,8 @@ func normalizeBackground(b models.Background) models.Background {
 		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path}
 	case models.BackgroundVideo:
 		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path, Poster: b.Poster}
+	case models.BackgroundAudio:
+		return models.Background{Kind: b.Kind, Color: b.Color, Path: b.Path}
 	default: // color, unknown
 		return models.Background{Kind: models.BackgroundColor, Color: b.Color}
 	}
@@ -314,7 +383,8 @@ type layer struct {
 	inner  Control.Instance // holds the content; moved by push / cover / reveal (transitions.go)
 	bg     ColorRect.Instance
 	tex    TextureRect.Instance
-	video  *videoLayer // motion background, between tex and the text (video.go)
+	video  *videoLayer  // Theora motion background, between tex and the text (video.go)
+	native *nativeLayer // the platform player's frames, same place (videosource.go)
 	body   Label.Instance
 	footer Label.Instance
 	// LabelSettings are deliberately not kept here: a Go reference reachable
@@ -330,12 +400,17 @@ type layer struct {
 
 func ignoreMouse(c Control.Instance) { c.SetMouseFilter(Control.MouseFilterIgnore) }
 
-func newLayer(parent Node.Instance) *layer {
+func newLayer(parent Node.Instance, role VideoRole) *layer {
 	l := &layer{}
 	l.root = Control.New()
 	l.root.SetClipContents(true)
 	ignoreMouse(l.root)
 	l.root.AsCanvasItem().OnDraw(l.drawMask)
+	// A layer hidden after a crossfade (or with its view) releases its
+	// player; shown again it re-opens the file.
+	l.root.AsCanvasItem().OnVisibilityChanged(func() {
+		l.native.setVisible(l.root.AsCanvasItem().IsVisibleInTree())
+	})
 	l.inner = Control.New()
 	ignoreMouse(l.inner)
 	l.root.AsNode().AddChild(l.inner.AsNode())
@@ -361,6 +436,8 @@ func newLayer(parent Node.Instance) *layer {
 	n.AddChild(l.bg.AsNode())
 	n.AddChild(l.tex.AsNode())
 	l.video = newVideoLayer(n)
+	l.native = newNativeLayer(n)
+	l.native.role = role
 	n.AddChild(l.body.AsNode())
 	n.AddChild(l.footer.AsNode())
 	parent.AddChild(l.root.AsNode())
@@ -497,13 +574,14 @@ func (l *layer) apply(vis visual, r layout.Rect, s float64) {
 		} else {
 			l.tex.AsCanvasItem().SetVisible(false)
 		}
-	case models.BackgroundVideo:
+	case models.BackgroundVideo, models.BackgroundAudio:
 		l.applyVideo(vis.bg)
 	default:
 		l.tex.AsCanvasItem().SetVisible(false)
 	}
-	if vis.bg.Kind != models.BackgroundVideo {
+	if !vis.bg.Kind.Plays() {
 		l.video.hide()
+		l.native.hide()
 	}
 
 	th := vis.theme

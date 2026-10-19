@@ -233,6 +233,7 @@ func (o *Output) Open(screen int) {
 	root.SetMouseFilter(Control.MouseFilterIgnore)
 	view := NewSlideView()
 	view.SetTransitionDuration(o.fade)
+	view.SetVideoRole(RoleLive) // shares the live monitor's player (one decoder, sound once)
 	view.AsControl().SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
 	root.AsNode().AddChild(view.AsNode())
 	win.AsNode().AddChild(root.AsNode())

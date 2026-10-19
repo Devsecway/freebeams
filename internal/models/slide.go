@@ -32,8 +32,12 @@ const (
 	BackgroundColor    BackgroundKind = "color"
 	BackgroundGradient BackgroundKind = "gradient" // vertical, Color (top) -> Color2 (bottom)
 	BackgroundImage    BackgroundKind = "image"    // Path, scaled to cover
-	BackgroundVideo    BackgroundKind = "video"    // Path (Ogg Theora plays; else Poster, else Color)
+	BackgroundVideo    BackgroundKind = "video"    // Path plays where the platform can (else Poster, else Color)
+	BackgroundAudio    BackgroundKind = "audio"    // Path plays (sound only) over the Color
 )
+
+// Plays reports whether the background kind is media that plays over time.
+func (k BackgroundKind) Plays() bool { return k == BackgroundVideo || k == BackgroundAudio }
 
 // Background describes a slide or theme background.
 type Background struct {
@@ -44,6 +48,11 @@ type Background struct {
 	// Poster is a still shown in place of a video that cannot play (no
 	// transcode yet, or the file is missing).
 	Poster string `json:"poster,omitempty"`
+
+	// Loop makes a video or audio background start again when it ends (the
+	// default for motion backgrounds). It is the item's default; the operator
+	// can switch looping on and off while it plays (the transport bar).
+	Loop bool `json:"loop,omitempty"`
 }
 
 // SlideKind tells the renderer and UI what produced a slide.

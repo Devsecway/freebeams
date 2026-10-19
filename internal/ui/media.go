@@ -42,6 +42,7 @@ var mediaFilters = []struct {
 	{"All Media", "", "library"},
 	{"Videos", models.MediaVideo, "video"},
 	{"Images", models.MediaImage, "image"},
+	{"Audio", models.MediaAudio, "audio"},
 }
 
 // MediaPanel is the Media resource tab: the library pane (search locator and

@@ -78,6 +78,11 @@ type MediaState struct {
 	FFmpeg    bool   `json:"ffmpeg"`
 	Theora    bool   `json:"theora"`
 	Tools     string `json:"tools"` // media.Tools.Status()
+
+	// Audio files in the library, and whether videos and audio play natively
+	// (AVFoundation) so that no transcode is needed (playback.go).
+	Audio  int  `json:"audio"`
+	Native bool `json:"native"`
 }
 
 // PresentationsState summarises the Presentations tab.
@@ -167,6 +172,10 @@ type State struct {
 
 	// Bundled is the bundled translations' installation (bundled.go).
 	Bundled BundledState `json:"bundled"`
+
+	// Playback is the video / audio transport of the live and preview
+	// monitors (playback.go).
+	Playback PlaybackStates `json:"playback"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -202,6 +211,8 @@ type StateInput struct {
 	Presentations PresentationsState
 
 	Bundled BundledState
+
+	Playback PlaybackStates
 }
 
 // deckState summarises deck d with slide i selected.
@@ -261,6 +272,7 @@ func BuildState(in StateInput) State {
 	if st.Scripture.CopyrightedAvailable == nil {
 		st.Scripture.CopyrightedAvailable = []string{}
 	}
+	st.Playback = in.Playback
 	st.Bundled = in.Bundled
 	if st.Bundled.Installed == nil {
 		st.Bundled.Installed = []string{}

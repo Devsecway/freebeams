@@ -480,7 +480,7 @@ if [ "$VIDEOS" -gt 0 ]; then
 	if [ "$FFMPEG" = "True" ]; then
 		pixel "video output shows the poster frame or the video" "$OUT/media-video-output.png" notblank
 	fi
-	check "video playability matches the Theora encoder" "$LAST" '(s["media"]["theora"] and s["media"]["playable"] == s["media"]["videos"]) or (not s["media"]["theora"] and s["media"]["playable"] == 0)'
+	check "video playability matches the player (native or the Theora encoder)" "$LAST" '((s["media"]["native"] or s["media"]["theora"]) and s["media"]["playable"] == s["media"]["videos"]) or (not s["media"]["native"] and not s["media"]["theora"] and s["media"]["playable"] == 0)'
 fi
 act "all media" search-media '{"q":""}' 's["media"]["kind"] == "" and s["media"]["results"] == s["media"]["count"]'
 act "Songs tab" tab '{"tab":"songs"}' 's["tab"] == 0'
@@ -946,6 +946,106 @@ act "media search ignores case" search-media '{"q":"STILL"}' "s[\"media\"][\"res
 act "all media again" search-media '{"q":""}' 's["media"]["results"] == s["media"]["count"]'
 act "presentation search ignores case" search-presentations '{"q":"ZZZ-NOTHING"}' 's["presentations"]["results"] == 0'
 act "all presentations again" search-presentations '{"q":""}' "s[\"presentations\"][\"results\"] == $PRES_COUNT"
+
+# ---- playback ----------------------------------------------------------------------------
+# Videos and audio play through the platform's media player (AVFoundation on
+# macOS, docs/MEDIA.md): a 4 s solid #2a7f62 clip with a 440 Hz tone and a 3 s
+# WAV, driven through the transport actions and /state.playback. Skipped
+# where the player is not native (nothing plays without a Theora transcode)
+# or ffmpeg (which makes the clip) is absent.
+# pb_wait DESCRIPTION EXPR: polls /state (up to 10 s) until EXPR holds, then checks it.
+pb_wait() {
+	for _ in $(seq 1 40); do
+		LAST="$(state)"
+		python3 -c 'import json,sys; s=json.loads(sys.argv[1])["data"]; sys.exit(0 if eval(sys.argv[2], {"s": s}) else 1)' "$LAST" "$2" 2>/dev/null && break
+		sleep 0.25
+	done
+	check "$1" "$LAST" "$2"
+}
+LAST="$(state)"
+check "playback state is present" "$LAST" '"live" in s["playback"] and "preview" in s["playback"] and not s["playback"]["live"]["media"]'
+PB_NATIVE="$(field "$LAST" playback.live.native)" # before the refusal below leaves an error reply in LAST
+act "a monitor without media refuses play" play '' 'not r["ok"]'
+if [ "$FFMPEG" = "True" ] && [ "$PB_NATIVE" = "True" ]; then
+	PB_DIR="$OUT/playback"
+	mkdir -p "$PB_DIR"
+	ffmpeg -v error -y -f lavfi -i "color=c=0x2a7f62:s=320x180:r=30:d=4" -f lavfi -i "sine=frequency=440:duration=4" \
+		-vf "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
+		-c:v libx264 -preset veryfast -c:a aac -shortest "$PB_DIR/smoke-clip.mp4" || fail "ffmpeg could not make the test clip"
+	python3 - "$PB_DIR/smoke-tone.wav" <<'PY'
+import math, struct, sys, wave
+w = wave.open(sys.argv[1], "wb")
+w.setnchannels(1)
+w.setsampwidth(2)
+w.setframerate(22050)
+w.writeframes(b"".join(struct.pack("<h", int(8000 * math.sin(2 * math.pi * 440 * i / 22050))) for i in range(22050 * 3)))
+w.close()
+PY
+	act "Media tab (playback)" tab '{"tab":"media"}' 's["tab"] == 2'
+	PB_COUNT="$(field "$LAST" media.count)"
+	PB_VIDEOS="$(field "$LAST" media.videos)"
+	PB_AUDIO="$(field "$LAST" media.audio)"
+	act "add the test clip and tone" add-media "{\"path\":\"$PB_DIR\"}" "s[\"media\"][\"count\"] == $PB_COUNT + 2 and s[\"media\"][\"videos\"] == $PB_VIDEOS + 1 and s[\"media\"][\"audio\"] == $PB_AUDIO + 1 and s[\"media\"][\"native\"] and s[\"media\"][\"playable\"] == s[\"media\"][\"videos\"]"
+	check "the footer counts the audio file" "$LAST" '"1 audio" in s["media"]["countText"] or "2 audio" in s["media"]["countText"]'
+	act "the audio collection" search-media '{"q":"","kind":"audio"}' 's["media"]["kind"] == "audio" and s["media"]["results"] == s["media"]["audio"] and s["media"]["results"] >= 1'
+	act "all media (playback)" search-media '{"q":""}' 's["media"]["kind"] == "" and s["media"]["results"] == s["media"]["count"]'
+	act "select the clip: the preview waits, paused at 0" select-media '{"title":"smoke-clip"}' 's["media"]["current"] == "smoke-clip" and s["playback"]["preview"]["media"] and not s["playback"]["preview"]["playing"] and s["playback"]["preview"]["position"] == 0 and s["playback"]["preview"]["title"] == "smoke-clip" and s["playback"]["preview"]["loop"] and not s["playback"]["live"]["media"]'
+	pb_wait "the preview player opened the clip (video and audio)" 's["playback"]["preview"]["duration"] > 3.9 and s["playback"]["preview"]["hasVideo"] and s["playback"]["preview"]["hasAudio"] and not s["playback"]["preview"].get("failed")'
+	check "the preview is still paused at 0" "$LAST" 'not s["playback"]["preview"]["playing"] and s["playback"]["preview"]["position"] == 0'
+	act "the clip goes live and plays (looping, full volume)" go-live '' 's["live"]["title"] == "smoke-clip" and s["playback"]["live"]["media"] and s["playback"]["live"]["playing"] and s["playback"]["live"]["loop"] and s["playback"]["live"]["volume"] == 1 and s["playback"]["live"]["title"] == "smoke-clip"'
+	pb_wait "the live player plays the clip" 's["playback"]["live"]["position"] > 0.2 and s["playback"]["live"]["duration"] > 3.9 and s["playback"]["live"]["hasVideo"] and s["playback"]["live"]["hasAudio"]'
+	PB_POS="$(field "$LAST" playback.live.position)"
+	sleep 0.5
+	LAST="$(state)"
+	check "the live position advances" "$LAST" "s[\"playback\"][\"live\"][\"position\"] > $PB_POS"
+	check "the preview player is untouched by live" "$LAST" 'not s["playback"]["preview"]["playing"] and s["playback"]["preview"]["position"] == 0'
+	wait_idle
+	shot playback-output output
+	shot playback-main main
+	pixel "the output shows the clip" "$OUT/playback-output.png" has 2a7f62 0.25 0.25 0.75 0.75 10000
+	pixel "the live monitor shows the clip" "$OUT/playback-main.png" has 2a7f62 0.71 0.40 0.89 0.55 2000
+	pixel "the preview monitor shows the clip's first frame" "$OUT/playback-main.png" has 2a7f62 0.31 0.40 0.49 0.55 2000
+	act "pause" pause '' 'not s["playback"]["live"]["playing"]'
+	sleep 0.3
+	LAST="$(state)"
+	PB_POS="$(field "$LAST" playback.live.position)"
+	sleep 0.4
+	LAST="$(state)"
+	check "the position holds while paused" "$LAST" "s[\"playback\"][\"live\"][\"position\"] == $PB_POS and not s[\"playback\"][\"live\"][\"playing\"]"
+	act "seek to 1 s" seek '{"seconds":1.0}' 'r["ok"]'
+	pb_wait "the position follows the seek" 'abs(s["playback"]["live"]["position"] - 1.0) < 0.15 and not s["playback"]["live"]["playing"]'
+	act "loop off" loop '{"on":false}' 'not s["playback"]["live"]["loop"]'
+	act "seek near the end" seek '{"seconds":3.5}' 'r["ok"]'
+	act "play" play '' 's["playback"]["live"]["playing"]'
+	pb_wait "the clip stops at its end with loop off" 'not s["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 3.8'
+	act "toggle-play restarts a clip that ended" toggle-play '' 's["playback"]["live"]["playing"]'
+	act "loop on again" loop '{"on":true}' 's["playback"]["live"]["loop"]'
+	act "black stops the media" black '' 's["mode"] == "black" and not s["playback"]["live"]["media"]'
+	wait_idle # the fade to black ends: the player closes
+	act "black off brings the clip back" black '' 's["mode"] == "normal" and s["playback"]["live"]["media"] and s["playback"]["live"]["playing"] and s["playback"]["live"]["loop"]'
+	pb_wait "the clip plays again from the start" 's["playback"]["live"]["position"] > 0.1 and s["playback"]["live"]["position"] < 2.5 and s["playback"]["live"]["hasVideo"]'
+	act "a seek without seconds is refused" seek '{}' 'not r["ok"]'
+	act "a bad target is refused" seek '{"seconds":1,"target":"output"}' 'not r["ok"]'
+	act "the preview's volume is its own" volume '{"value":0.25,"target":"preview"}' 's["playback"]["preview"]["volume"] == 0.25 and s["playback"]["live"]["volume"] == 1'
+	act "play on the preview target (a second decoder)" play '{"target":"preview"}' 's["playback"]["preview"]["playing"] and s["playback"]["live"]["playing"]'
+	pb_wait "the preview plays while live plays" 's["playback"]["preview"]["position"] > 0.1 and s["playback"]["live"]["playing"]'
+	# The tone: sound only, over a black slide; the live volume carries over.
+	act "select the tone" select-media '{"title":"smoke-tone"}' 's["media"]["current"] == "smoke-tone" and s["playback"]["preview"]["title"] == "smoke-tone" and not s["playback"]["preview"]["playing"]'
+	act "the tone goes live and plays once" go-live '' 's["playback"]["live"]["media"] and s["playback"]["live"]["playing"] and not s["playback"]["live"]["loop"] and s["playback"]["live"]["title"] == "smoke-tone"'
+	pb_wait "the live player plays the tone (audio only)" 's["playback"]["live"]["position"] > 0.2 and s["playback"]["live"]["duration"] > 2.9 and s["playback"]["live"]["hasAudio"] and not s["playback"]["live"]["hasVideo"]'
+	act "volume" volume '{"value":0.5}' 's["playback"]["live"]["volume"] == 0.5'
+	act "a volume that is not a number is refused" volume '{"value":"loud"}' 'not r["ok"]'
+	wait_idle
+	shot playback-audio-output output
+	shot playback-audio-main main
+	pixel "audio shows a black output" "$OUT/playback-audio-output.png" black
+	act "remove the clip" remove-media '{"title":"smoke-clip","confirm":true}' "s[\"media\"][\"count\"] == $PB_COUNT + 1"
+	act "remove the tone" remove-media '{"title":"smoke-tone","confirm":true}' "s[\"media\"][\"count\"] == $PB_COUNT and s[\"media\"][\"audio\"] == $PB_AUDIO"
+	check "the tone keeps playing from the live deck" "$LAST" 's["live"]["title"] == "smoke-tone" and s["playback"]["live"]["media"]'
+	act "Songs tab (playback)" tab '{"tab":"songs"}' 's["tab"] == 0'
+else
+	log "playback: skipped (ffmpeg=$FFMPEG native=$PB_NATIVE)"
+fi
 
 # ---- quit ------------------------------------------------------------------------------------
 LAST="$(post close)"

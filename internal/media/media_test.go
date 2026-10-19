@@ -72,11 +72,12 @@ func TestScan(t *testing.T) {
 		t.Fatalf("warnings = %q", warnings)
 	}
 	// Ordered by full path: sub/deep/f.webm sorts before sub/e.jpg.
-	want := []string{"a.png", "b.MP4", "f.webm", "e.jpg"}
+	want := []string{"a.png", "b.MP4", "f.webm", "e.jpg", "song.mp3"}
 	if got := paths(items); !slices.Equal(got, want) {
 		t.Fatalf("Scan = %v, want %v", got, want)
 	}
-	kinds := map[string]models.MediaKind{"a.png": models.MediaImage, "b.MP4": models.MediaVideo, "e.jpg": models.MediaImage, "f.webm": models.MediaVideo}
+	kinds := map[string]models.MediaKind{"a.png": models.MediaImage, "b.MP4": models.MediaVideo, "e.jpg": models.MediaImage,
+		"f.webm": models.MediaVideo, "song.mp3": models.MediaAudio}
 	for _, m := range items {
 		if m.Kind != kinds[filepath.Base(m.Path)] || m.Title == "" || !filepath.IsAbs(m.Path) || m.ID != 0 {
 			t.Errorf("item = %+v", m)
@@ -88,7 +89,7 @@ func TestScan(t *testing.T) {
 	if got := paths(items); !slices.Equal(got, want) {
 		t.Fatalf("Scan with duplicates = %v, want %v", got, want)
 	}
-	if len(warnings) != 2 || !strings.Contains(warnings[0], "nope") || !strings.Contains(warnings[1], "not an image or video") {
+	if len(warnings) != 2 || !strings.Contains(warnings[0], "nope") || !strings.Contains(warnings[1], "not an image, video or audio") {
 		t.Fatalf("warnings = %q", warnings)
 	}
 	if items, warnings := Scan(); items != nil || warnings != nil {
@@ -436,20 +437,23 @@ func TestHasEncoderAndStatus(t *testing.T) {
 
 func TestParseProbe(t *testing.T) {
 	tests := []struct {
-		name string
-		json string
-		want Info
-		err  bool
+		name  string
+		json  string
+		audio bool
+		want  Info
+		err   bool
 	}{
-		{"video", `{"streams":[{"width":1280,"height":720}],"format":{"duration":"30.037000"}}`,
+		{"video", `{"streams":[{"width":1280,"height":720}],"format":{"duration":"30.037000"}}`, false,
 			Info{Width: 1280, Height: 720, Duration: 30037 * time.Millisecond}, false},
-		{"image has no duration", `{"streams":[{"width":1920,"height":1080}],"format":{}}`, Info{Width: 1920, Height: 1080}, false},
-		{"N/A duration", `{"streams":[{"width":10,"height":10}],"format":{"duration":"N/A"}}`, Info{Width: 10, Height: 10}, false},
-		{"no stream", `{"streams":[],"format":{"duration":"1"}}`, Info{Duration: time.Second}, true},
-		{"garbage", `nope`, Info{}, true},
+		{"image has no duration", `{"streams":[{"width":1920,"height":1080}],"format":{}}`, false, Info{Width: 1920, Height: 1080}, false},
+		{"N/A duration", `{"streams":[{"width":10,"height":10}],"format":{"duration":"N/A"}}`, false, Info{Width: 10, Height: 10}, false},
+		{"no stream", `{"streams":[],"format":{"duration":"1"}}`, false, Info{Duration: time.Second}, true},
+		{"garbage", `nope`, false, Info{}, true},
+		{"audio", `{"streams":[{}],"format":{"duration":"3.5"}}`, true, Info{Duration: 3500 * time.Millisecond}, false},
+		{"audio without duration", `{"streams":[{}],"format":{}}`, true, Info{}, true},
 	}
 	for _, tc := range tests {
-		got, err := parseProbe([]byte(tc.json))
+		got, err := parseProbe([]byte(tc.json), tc.audio)
 		if (err != nil) != tc.err || got != tc.want {
 			t.Errorf("%s: parseProbe = %+v, %v; want %+v, err %v", tc.name, got, err, tc.want, tc.err)
 		}

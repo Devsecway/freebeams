@@ -121,4 +121,5 @@ func ReleaseCaches() {
 		paragraph = TextParagraph.Nil
 	}
 	clear(fitCache)
+	CloseSources() // native media players and their textures (videosource.go)
 }

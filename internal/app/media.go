@@ -60,13 +60,20 @@ type mediaState struct {
 	again    bool              // rerun when the current pass ends
 	progress map[int64]float64 // transcode progress by media id
 	failed   map[int64]bool    // items whose derivation failed this session (not retried)
+
+	audio int // library count of audio files
+}
+
+// mediaCounts are the library's counts by kind.
+func (a *App) mediaCounts() core.MediaCounts {
+	return core.MediaCounts{Videos: a.md.videos, Images: a.md.images, Audio: a.md.audio}
 }
 
 // progressInterval throttles transcode progress posts to the main thread.
 const progressInterval = 250 * time.Millisecond
 
 // mediaFileFilters are the native dialog filters for Add Media Files….
-var mediaFileFilters = []string{"*.png, *.jpg, *.jpeg, *.webp, *.bmp, *.mp4, *.mov, *.m4v, *.ogv, *.webm ; Images and Videos"}
+var mediaFileFilters = []string{"*.png, *.jpg, *.jpeg, *.webp, *.bmp, *.mp4, *.mov, *.m4v, *.ogv, *.webm, *.mp3, *.m4a, *.aac, *.wav, *.aiff, *.aif, *.flac, *.ogg ; Images, Videos and Audio"}
 
 // initMedia prepares the cache dir, detects the tools in the background and
 // loads the library. Called from Ready.
@@ -94,18 +101,22 @@ func (a *App) initMedia() {
 	a.loadMedia("", "", nil)
 }
 
-// mediaCaps is what the machine can do with videos.
+// mediaCaps is what the machine can do with videos and audio.
 func (a *App) mediaCaps() core.MediaCaps {
-	return core.MediaCaps{FFmpeg: a.md.tools.Available(), Theora: a.md.tools.CanTranscode()}
+	return core.MediaCaps{FFmpeg: a.md.tools.Available(), Theora: a.md.tools.CanTranscode(), Native: render.NativeVideoSupported()}
 }
 
 func (a *App) mediaFooter() string {
-	return core.MediaFooter(a.md.videos, a.md.images, a.md.kind, a.mediaCaps(), a.md.working)
+	return core.MediaFooter(a.mediaCounts(), a.md.kind, a.mediaCaps(), a.md.working)
 }
 
 // lookupPlayable maps a video's source path to its playable file (for
-// core.MediaDeck / core.ResolveDeck).
+// core.MediaDeck / core.ResolveDeck). With a native player the source plays
+// as it is, so nothing is substituted.
 func (a *App) lookupPlayable(src string) (string, bool) {
+	if render.NativeVideoSupported() {
+		return "", false
+	}
 	p, ok := a.md.playable[src]
 	return p, ok
 }
@@ -152,11 +163,13 @@ func (a *App) mediaRows() []ui.MediaRow {
 
 // mediaStateDoc summarises the tab for GET /state.
 func (a *App) mediaStateDoc() core.MediaState {
+	native := render.NativeVideoSupported()
 	st := core.MediaState{
-		Count: a.md.videos + a.md.images, Videos: a.md.videos, Images: a.md.images,
+		Count: a.mediaCounts().Total(), Videos: a.md.videos, Images: a.md.images,
 		Query: a.md.query, Kind: string(a.md.kind), Results: len(a.md.list), Selected: a.md.sel,
 		CountText: a.md.status, Working: a.md.working,
 		FFmpeg: a.md.tools.Available(), Theora: a.md.tools.CanTranscode(), Tools: a.md.tools.Status(),
+		Audio: a.md.audio, Native: native,
 	}
 	if a.md.item != nil {
 		st.Current = a.md.item.Title
@@ -165,7 +178,7 @@ func (a *App) mediaStateDoc() core.MediaState {
 		if media.NeedsThumbnail(m) {
 			st.Pending++
 		}
-		if m.Kind == models.MediaVideo && !media.NeedsTranscode(m) {
+		if m.Kind == models.MediaVideo && (native || !media.NeedsTranscode(m)) {
 			st.Playable++
 		}
 	}
@@ -189,12 +202,13 @@ func (a *App) loadMedia(q string, kind models.MediaKind, cmd *control.Command) {
 		rows, err := st.SearchMedia(ctx, q, kind, 0)
 		videos, verr := st.CountMedia(ctx, models.MediaVideo)
 		images, ierr := st.CountMedia(ctx, models.MediaImage)
+		audio, aerr := st.CountMedia(ctx, models.MediaAudio)
 		return func() error {
 			if !a.md.gen.Current(ticket) {
 				return nil // superseded
 			}
-			if verr == nil && ierr == nil {
-				a.md.videos, a.md.images = videos, images
+			if verr == nil && ierr == nil && aerr == nil {
+				a.md.videos, a.md.images, a.md.audio = videos, images, audio
 			}
 			if err != nil {
 				a.fail("search media", err)
@@ -343,8 +357,8 @@ func (a *App) addMediaPaths(paths []string, cmd *control.Command) {
 				return err
 			}
 			if len(items) == 0 {
-				err := errors.New("no image or video files found")
-				a.alert("Add Media", fmt.Errorf("No image or video files were found in the selection."))
+				err := errors.New("no image, video or audio files found")
+				a.alert("Add Media", fmt.Errorf("No image, video or audio files were found in the selection."))
 				a.answer(cmd, err)
 				return err
 			}
@@ -425,7 +439,8 @@ func (a *App) mediaNeedsWork() bool {
 		if a.md.failed[m.ID] {
 			continue
 		}
-		if media.NeedsThumbnail(m) || media.NeedsDescribe(m) || (media.NeedsTranscode(m) && a.md.tools.CanTranscode()) {
+		if media.NeedsThumbnail(m) || media.NeedsDescribe(m) ||
+			(media.NeedsTranscode(m) && a.md.tools.CanTranscode() && !render.NativeVideoSupported()) {
 			return true
 		}
 	}
@@ -449,6 +464,7 @@ func (a *App) startMediaWork() {
 	a.md.status = a.mediaFooter()
 	st, ctx := a.st, a.ctx
 	proc := media.NewProcessor(a.md.tools, a.md.cache)
+	proc.Native = render.NativeVideoSupported() // no transcodes: the sources play as they are
 	skip := make(map[int64]bool, len(a.md.failed))
 	for id := range a.md.failed {
 		skip[id] = true
@@ -511,9 +527,9 @@ func (a *App) runMediaWork(ctx context.Context, st *store.Store, proc *media.Pro
 			save(*m)
 		}
 	}
-	// Pass 2: transcodes (slow).
+	// Pass 2: transcodes (slow). A native player plays the sources as they are.
 	for i := range items {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || proc.Native {
 			return
 		}
 		m := &items[i]

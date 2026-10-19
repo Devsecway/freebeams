@@ -58,6 +58,9 @@ type viewCache struct {
 	presRows   []ui.PresentationRow
 	presSel    int
 	presStatus string
+
+	// Playback (playback.go): the seek request last applied per monitor (live, preview).
+	seekApplied [2]int
 }
 
 func newViewCache() viewCache {
@@ -167,6 +170,7 @@ func (a *App) buildUI() {
 	a.wirePresentations()
 	a.wireThemes()
 	a.wireSettings() // the Options dialog and the menus (settings.go)
+	a.wirePlayback() // monitor player roles and the transport bars (playback.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -237,6 +241,7 @@ func (a *App) render() {
 	}
 	a.renderTransition(a.settings.Transition)
 	a.out.SetFrame(live)
+	a.renderPlayback() // the monitors' players and transport bars (playback.go)
 
 	// Toolbar toggles.
 	toggles := [4]bool{st.Mode == models.ModeLogo, st.Mode == models.ModeBlack, st.Mode == models.ModeClear, st.OutputEnabled}

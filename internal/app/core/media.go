@@ -15,11 +15,27 @@ const SettingMediaImportDone = "import.easyworship.media.done"
 // CacheEnv overrides the media cache directory (thumbnails, transcodes).
 const CacheEnv = "FREEWORSHIP_CACHE"
 
-// MediaCaps is what the machine can do with videos.
+// MediaCaps is what the machine can do with videos and audio.
 type MediaCaps struct {
 	FFmpeg bool // ffmpeg and ffprobe found: videos get poster frames and metadata
 	Theora bool // ffmpeg has the libtheora encoder: videos can be transcoded for playback
+
+	// Native means the renderer plays every video and audio file as it is
+	// (AVFoundation on macOS): nothing needs a transcode.
+	Native bool
 }
+
+// CanPlay reports whether a video item can play on this machine: natively,
+// or through its Theora transcode (playable says whether that exists).
+func (c MediaCaps) CanPlay(playable bool) bool { return c.Native || playable }
+
+// MediaCounts are the library's item counts by kind.
+type MediaCounts struct {
+	Videos, Images, Audio int
+}
+
+// Total is the number of items of every kind.
+func (c MediaCounts) Total() int { return c.Videos + c.Images + c.Audio }
 
 // MediaDeck builds the deck for a library media item: one slide showing the
 // media, with a video's source path replaced by its playable file through
@@ -36,11 +52,14 @@ func MediaDeck(m models.Media, lookup func(string) (string, bool)) models.Deck {
 // ResolveDeck substitutes the playable file when the item is shown.
 func MediaItem(m models.Media) models.ScheduleItem {
 	sub := "Image"
-	if m.Kind == models.MediaVideo {
+	switch m.Kind {
+	case models.MediaVideo:
 		sub = "Video"
-		if m.Duration > 0 {
-			sub += " · " + FormatDuration(m.Duration)
-		}
+	case models.MediaAudio:
+		sub = "Audio"
+	}
+	if m.Kind.Plays() && m.Duration > 0 {
+		sub += " · " + FormatDuration(m.Duration)
 	}
 	return models.ScheduleItem{
 		Kind:     models.ItemMedia,
@@ -82,10 +101,10 @@ func ResolveDeck(d *models.Deck, lookup func(string) (string, bool)) *models.Dec
 }
 
 // StillBackground returns the background a thumbnail draws for bg: a video
-// becomes its poster image (or the plain color without one). Other kinds are
-// returned unchanged. nil stays nil.
+// becomes its poster image (or the plain color without one), audio the plain
+// color. Other kinds are returned unchanged. nil stays nil.
 func StillBackground(bg *models.Background) *models.Background {
-	if bg == nil || bg.Kind != models.BackgroundVideo {
+	if bg == nil || !bg.Kind.Plays() {
 		return bg
 	}
 	still := models.Background{Kind: models.BackgroundColor, Color: bg.Color}
@@ -121,18 +140,25 @@ func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", m, s)
 }
 
-// MediaBadge is the short text on a media tile's right: a video's duration
-// when it can play, its conversion progress while it is being transcoded
-// (progress in (0,1)), or why it cannot play yet (failed: its derivation
-// failed). Images have none.
+// MediaBadge is the short text on a media tile's right: a video's or audio
+// file's duration when it can play, a video's conversion progress while it
+// is being transcoded (progress in (0,1)), or why it cannot play yet
+// (failed: its derivation failed). Images have none.
 func MediaBadge(m models.Media, playable bool, caps MediaCaps, progress float64, failed bool) string {
-	if m.Kind != models.MediaVideo {
+	switch m.Kind {
+	case models.MediaAudio:
+		if d := FormatDuration(m.Duration); d != "" {
+			return d
+		}
+		return "Audio"
+	case models.MediaVideo:
+	default:
 		return ""
 	}
 	switch {
 	case progress > 0 && progress < 1:
 		return fmt.Sprintf("Converting %d%%", int(progress*100))
-	case playable:
+	case caps.CanPlay(playable):
 		if d := FormatDuration(m.Duration); d != "" {
 			return d
 		}
@@ -148,26 +174,34 @@ func MediaBadge(m models.Media, playable bool, caps MediaCaps, progress float64,
 }
 
 // MediaFooter is the Media tab's footer text: the counts for the listed
-// collection, and what is holding videos back.
-func MediaFooter(videos, images int, kind models.MediaKind, caps MediaCaps, working bool) string {
+// collection, and what is holding videos back (nothing does with a native
+// player).
+func MediaFooter(c MediaCounts, kind models.MediaKind, caps MediaCaps, working bool) string {
 	var parts []string
 	switch kind {
 	case models.MediaVideo:
-		parts = append(parts, plural(videos, "video", "videos"))
+		parts = append(parts, plural(c.Videos, "video", "videos"))
 	case models.MediaImage:
-		parts = append(parts, plural(images, "image", "images"))
+		parts = append(parts, plural(c.Images, "image", "images"))
+	case models.MediaAudio:
+		parts = append(parts, plural(c.Audio, "audio file", "audio files"))
 	default:
-		parts = append(parts, plural(videos+images, "item", "items"))
-		if videos+images > 0 {
-			parts = append(parts, plural(videos, "video", "videos"), plural(images, "image", "images"))
+		parts = append(parts, plural(c.Total(), "item", "items"))
+		if c.Total() > 0 {
+			parts = append(parts, plural(c.Videos, "video", "videos"), plural(c.Images, "image", "images"))
+			if c.Audio > 0 {
+				parts = append(parts, fmt.Sprintf("%d audio", c.Audio))
+			}
 		}
 	}
+	videosListed := c.Videos > 0 && (kind == "" || kind == models.MediaVideo)
 	switch {
 	case working:
 		parts = append(parts, "preparing media…")
-	case videos > 0 && kind != models.MediaImage && !caps.FFmpeg:
+	case caps.Native:
+	case videosListed && !caps.FFmpeg:
 		parts = append(parts, "ffmpeg not found: videos cannot play")
-	case videos > 0 && kind != models.MediaImage && !caps.Theora:
+	case videosListed && !caps.Theora:
 		parts = append(parts, "ffmpeg has no Theora encoder: videos cannot play")
 	}
 	return strings.Join(parts, " · ")

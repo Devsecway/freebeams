@@ -88,6 +88,18 @@ var icons = map[string]IconSpec{
 
 	// ---- arrows (8) ----
 	"arrow_down": {8, `<path d="M0.75 2.25h6.5L4 6z"/>`},
+
+	// ---- transport & audio (16) ----
+	// The library's Audio collection (an eighth note), the transport bar
+	// under the output monitors (pause, skip to start / end, loop, volume;
+	// play is the existing "play") and the sliders' round grabber.
+	"audio":     {16, `<path d="M6.75 12.25V3.25l5.5 1.5v2.5"/><circle cx="4.9" cy="12.25" r="1.85"/>`},
+	"pause":     {16, `<rect x="3.75" y="3.25" width="2.5" height="9.5" rx="0.5" fill="{c}" stroke="none"/><rect x="9.75" y="3.25" width="2.5" height="9.5" rx="0.5" fill="{c}" stroke="none"/>`},
+	"skip_back": {16, `<path d="M3.75 3.75v8.5"/><path d="M13.25 3.75L7.25 8l6 4.25z" fill="{c}" stroke="{c}"/>`},
+	"skip_fwd":  {16, `<path d="M12.25 3.75v8.5"/><path d="M2.75 3.75L8.75 8l-6 4.25z" fill="{c}" stroke="{c}"/>`},
+	"loop":      {16, `<path d="M3.25 9.25V7.25a2.5 2.5 0 0 1 2.5-2.5h6"/><path d="M9.75 2.75l2 2-2 2"/><path d="M12.75 6.75v2a2.5 2.5 0 0 1-2.5 2.5h-6"/><path d="M6.25 13.25l-2-2 2-2"/>`},
+	"volume":    {16, `<path d="M2.75 6.25h2.5l3.5-3v9.5l-3.5-3h-2.5z" fill="{c}" stroke="{c}" stroke-linejoin="round"/><path d="M11.25 5.5a3.5 3.5 0 0 1 0 5"/><path d="M13.25 3.75a6 6 0 0 1 0 8.5"/>`},
+	"knob":      {16, `<circle cx="8" cy="8" r="5.5" fill="{c}" stroke="none"/>`},
 }
 
 // gearPath builds the 16 px cog: 8 teeth between radii 4.9 and 6.5 and a hub.

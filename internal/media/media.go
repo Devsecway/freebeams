@@ -53,7 +53,7 @@ func Scan(dirs ...string) (items []models.Media, warnings []string) {
 				seen[abs] = true
 				items = append(items, m)
 			} else if !ok {
-				warnings = append(warnings, fmt.Sprintf("%s: not an image or video file", dir))
+				warnings = append(warnings, fmt.Sprintf("%s: not an image, video or audio file", dir))
 			}
 			continue
 		}
