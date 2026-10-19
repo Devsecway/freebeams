@@ -7,6 +7,8 @@ const (
 	ItemSong      ItemKind = "song"
 	ItemScripture ItemKind = "scripture"
 	ItemMedia     ItemKind = "media"
+	// ItemPresentation is a PDF / PowerPoint deck shown as page images.
+	ItemPresentation ItemKind = "presentation"
 )
 
 // ScheduleItem is one entry in a service schedule. It references library
@@ -21,6 +23,13 @@ type ScheduleItem struct {
 	Passage  *Passage `json:"passage,omitempty"`
 	BibleID  int64    `json:"bibleId,omitempty"`
 	MediaID  int64    `json:"mediaId,omitempty"`
+	// PresentationID, Source and CacheKey identify a presentation item: the
+	// library row, the document it was rendered from and the cache folder its
+	// page images (the Slides' backgrounds) live in. The app re-renders the
+	// pages from Source when the cache is gone (core.ResolvePresentations).
+	PresentationID int64  `json:"presentationId,omitempty"`
+	Source         string `json:"source,omitempty"`
+	CacheKey       string `json:"cacheKey,omitempty"`
 	// Theme is the theme to render with (resolved when the item was added).
 	Theme  Theme   `json:"theme"`
 	Slides []Slide `json:"slides"`

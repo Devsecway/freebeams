@@ -54,6 +54,9 @@ const (
 	SlideScripture SlideKind = "scripture"
 	SlideBlank     SlideKind = "blank"
 	SlideMedia     SlideKind = "media" // a full-screen image or video, no text
+	// SlidePresentation is one page of a PDF / PowerPoint deck, rendered to
+	// an image (internal/presentations); no text.
+	SlidePresentation SlideKind = "presentation"
 )
 
 // Slide is the unit of display. It is plain data: the renderer turns a Slide
