@@ -38,8 +38,10 @@ type MainWindow struct {
 	Songs           *SongLibraryPanel `gd:"-"`
 	Scriptures      *ScripturePanel   `gd:"-"`
 	Media           *MediaPanel       `gd:"-"`
+	Themes          *ThemePanel       `gd:"-"`
 	ResourcePreview *MonitorHost      `gd:"-"` // host slot for the resource preview
 	Editor          *SongEditor       `gd:"-"`
+	ThemeEditor     *ThemeEditor      `gd:"-"`
 	Confirm         *ConfirmDialog    `gd:"-"`
 	Message         *MessageDialog    `gd:"-"` // errors for the operator
 
@@ -105,6 +107,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.MainSplit.SetBarControl(w.Resources.AsControl())
 
 	w.Editor = NewSongEditor()
+	w.ThemeEditor = NewThemeEditor()
 	w.Confirm = NewConfirmDialog()
 	w.Message = NewMessageDialog()
 	for _, d := range w.dialogs() {
@@ -118,7 +121,7 @@ func NewMainWindow(p Palette) *MainWindow {
 
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
-	return []*dialogWindow{w.Editor.dlg, w.Confirm.dlg, w.Message.dlg}
+	return []*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Confirm.dlg, w.Message.dlg}
 }
 
 // dialogHost is where a dialog that is opening must live: under the topmost
@@ -361,12 +364,13 @@ func (w *MainWindow) buildResourcePages() Control.Instance {
 	w.Songs = NewSongLibraryPanel()
 	w.Scriptures = NewScripturePanel()
 	w.Media = NewMediaPanel()
+	w.Themes = NewThemePanel()
 	w.pages = []Control.Instance{
 		w.Songs.AsControl(),
 		w.Scriptures.AsControl(),
 		w.Media.AsControl(),
 		placeholderPage(),
-		placeholderPage(),
+		w.Themes.AsControl(),
 	}
 	for _, p := range w.pages {
 		p.SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
