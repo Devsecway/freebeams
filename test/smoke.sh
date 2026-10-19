@@ -875,6 +875,31 @@ act "File ▸ New Schedule (clean schedule, no question)" menu '{"item":"new-sch
 act "open the saved schedule again" open-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["title"] == "smoke-schedule"'
 act "Songs tab again" tab '{"tab":"songs"}' 's["tab"] == 0'
 
+# ---- search: ranking, lyrics hint, harmless punctuation, consistent libraries ------------
+# In the real library "Alas And Did My Savior Bleed" has "amazing" in its lyrics and sorted
+# above "Amazing Grace" while results were in title order.
+act "search is case-insensitive and ranks the title match first" search-songs '{"q":"AMAZING"}' 's["songs"]["results"] >= 2 and s["songs"]["first"] == "Amazing Grace" and s["songs"]["lyricsMatches"] >= 1'
+act "a prefix finds the same song first" search-songs '{"q":"amaz"}' 's["songs"]["first"] == "Amazing Grace" and s["songs"]["results"] >= 2'
+act "title first, the lyric matches counted in the footer" search-songs '{"q":"Amazing Grace"}' 's["songs"]["first"] == "Amazing Grace" and s["songs"]["lyricsMatches"] == s["songs"]["results"] - 1'
+act "a lyrics-only word finds the song and says so" search-songs '{"q":"wretch"}' 's["songs"]["results"] == 1 and s["songs"]["first"] == "Amazing Grace" and s["songs"]["lyricsMatches"] == 1 and "1 matched in lyrics" in s["songs"]["countText"]'
+wait_idle
+shot search-lyrics main
+act "two terms across title and lyrics" search-songs '{"q":"grace sweet"}' 's["songs"]["results"] >= 2 and s["songs"]["first"] == "Amazing Grace" and s["songs"]["lyricsMatches"] >= 1'
+act "a quoted phrase" search-songs '{"q":"\"how sweet the sound\""}' 's["songs"]["results"] >= 1 and s["songs"]["first"] == "Amazing Grace"'
+act "two separate words (i, ll) for comparison" search-songs '{"q":"i ll"}' 's["songs"]["results"] >= 1'
+LOOSE="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["songs"]["results"])' "$LAST")"
+act "a contraction is one phrase (fewer songs than i + ll)" search-songs '{"q":"I'"'"'ll"}' "s[\"songs\"][\"results\"] >= 1 and s[\"songs\"][\"results\"] < $LOOSE"
+act "punctuation and FTS syntax are harmless" search-songs '{"q":"Lord'"'"'s \"grace (sweet)* -NEAR: ^"}' 'r["ok"] and s["songs"]["query"].startswith("Lord")'
+act "only punctuation lists the library" search-songs '{"q":"*\"(-:^"}' 's["songs"]["results"] == s["songs"]["count"] and s["songs"]["lyricsMatches"] == 0'
+act "search cleared" search-songs '{"q":""}' 's["songs"]["results"] == s["songs"]["count"] and s["songs"]["lyricsMatches"] == 0 and s["songs"]["first"] != ""'
+# The media and presentation searches fold case and diacritics the same way.
+act "media search, lower case" search-media '{"q":"still"}' 's["media"]["query"] == "still"'
+STILL="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["media"]["results"])' "$LAST")"
+act "media search ignores case" search-media '{"q":"STILL"}' "s[\"media\"][\"results\"] == $STILL"
+act "all media again" search-media '{"q":""}' 's["media"]["results"] == s["media"]["count"]'
+act "presentation search ignores case" search-presentations '{"q":"ZZZ-NOTHING"}' 's["presentations"]["results"] == 0'
+act "all presentations again" search-presentations '{"q":""}' "s[\"presentations\"][\"results\"] == $PRES_COUNT"
+
 # ---- quit ------------------------------------------------------------------------------------
 LAST="$(post close)"
 log "closing the window (clean schedule)"
