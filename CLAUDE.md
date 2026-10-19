@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-FreeWorship is a native worship presentation app (an EasyWorship 8 clone) built with **Go + graphics.gd (Godot 4.6)
+FreeWorship is a native worship presentation app (an EasyWorship 8 clone) built with **Go + graphics.gd (Godot 4.7)
 + pure-Go SQLite (`modernc.org/sqlite`)**. The stack and conventions come from Bufflehead
 (`~/Documents/Work/Apex/bufflehead`). Read its `CLAUDE.md` and `internal/ui`, `internal/control` for working
 graphics.gd idioms.
@@ -11,10 +11,16 @@ graphics.gd idioms.
 ## Build & run
 ```bash
 go build ./... && go vet ./... && go test ./...
-gd run                  # builds graphics/darwin_*.dylib and launches Godot (~/gd/bin/godot.app)
-GOOS=macos gd build     # release build into releases/
+bin/gd run              # builds graphics/darwin_*.dylib and launches Godot 4.7 (~/gd/freeworship/bin/Godot.app)
+GOOS=macos bin/gd build # release build into releases/
+test/smoke.sh           # end to end through the control API; screenshots and app.log in test/out/
+test/splitters.sh       # drags every splitter through Godot's input pipeline (the layout-crash regression test)
 ```
-`gd` generates `graphics/library.gdextension` and the dylibs. Never hand-write or commit them.
+`bin/gd` runs the graphics.gd build tool pinned in `go.mod` (`tool graphics.gd/cmd/gd`) with `GDPATH=~/gd/freeworship`,
+so it installs and uses its own Godot and leaves Bufflehead's `~/gd/bin` alone. Keep the local Go toolchain at the
+`go.mod` version: with an auto-downloaded toolchain `gd` says so and builds without its resident-callback runtime patch.
+`gd` generates `graphics/library.gdextension` and the dylibs. Never hand-write or commit them (`graphics/icon.svg` and
+`main.tscn` are template files it writes once; they are committed).
 The first run on a clean checkout runs a headless Godot import. That import needs no dylib, and `gd` builds it afterwards.
 
 ## Package layout & dependency rules
@@ -82,6 +88,22 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - A synthesized key event needs `unicode` set to type into a LineEdit.
 - Changing a Tree selection in code (`set_selected`/`deselect_all`) needs `QueueRedraw()` to show.
 - There is no `timeout` command on macOS. Run `gd run` directly, and have demos quit themselves.
+- A `GetMinimumSize` must not depend on the control's own size inside a `ScrollContainer`. The slide grid's height
+  came from its width, the height decided the scrollbar, and the scrollbar changed the width: at some widths Godot
+  toggled the scrollbar forever inside one message-queue flush, until `Message queue out of memory` and a crash while a
+  splitter was dragged. Lay out from a width the scrollbar cannot change (`SlideGrid.layoutWidth`).
+- Millions of `Object was deleted while awaiting a callback.` lines are Godot dumping its message queue after that
+  out-of-memory, not a graphics.gd leak. The cause is above them: `Failed method: ... Message queue out of memory`.
+- To find a layout loop, count Godot→Go callbacks per frame and `debug.PrintStack()` past a threshold: the Go frames
+  name the handlers even though Godot's frames are stripped. For a hang, `sample <godot pid>` (see `test/splitters.sh`).
+- graphics.gd before 2026-10 could corrupt its call batch when a Go signal handler (e.g. `resized`) made engine calls
+  during a flush (`crash in ring buffer flush at entry N`). The pinned version handles nested flushes; never go back.
+- Fullscreen modes let the macOS menu bar slide in at the top of the projector while the output has no focus.
+  `render.CoverScreen` raises the output's NSWindow above the menu bar instead (`cover_darwin.go`, cgo).
+- Vsync in two windows on displays with different refresh rates makes every frame wait for both. The output disables
+  vsync on the operator window while it is fullscreen (`Output.syncToOutput`).
+- `screencapture -D 2` and `DisplayServer.ScreenGetImage` need Screen Recording permission for the terminal. Without
+  it, check the TV by eye and the content with `/screenshot?window=output`.
 
 ## Conventions
 - Errors are wrapped with context (`fmt.Errorf("load song %d: %w", id, err)`). No panics in library code.

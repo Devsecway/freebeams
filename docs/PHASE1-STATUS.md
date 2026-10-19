@@ -2,6 +2,8 @@
 
 Status of every acceptance criterion in [PHASE1.md](PHASE1.md), and how each was verified. Recorded 2026-10-18 on
 macOS (Apple M3 Max, one built-in Retina display, EasyWorship 8 data installed at `/Users/Shared/Softouch`).
+Updated 2026-10-19 after the move to Godot 4.7.2 + graphics.gd 2026-10-14 (`bin/gd`), with a 1080p LG TV over HDMI as
+the second display, the splitter-crash fix and the two formerly partial criteria (splitters, copyrighted Bibles) closed.
 
 Legend: **pass**: verified. **partial**: works, but part of the criterion is not met or not verified.
 **fail**: not met. **untested**: implemented but not verifiable on this machine.
@@ -9,7 +11,8 @@ Legend: **pass**: verified. **partial**: works, but part of the criterion is not
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 178 checks; screenshots and app.log in test/out/
+test/smoke.sh          # 191 checks; screenshots and app.log in test/out/
+test/splitters.sh      # 102 checks: every splitter dragged through Godot's input pipeline
 ```
 In this document, "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`. Screenshots that `test/smoke.sh`
 captured are copied to `docs/screens/app-*.png`.
@@ -28,7 +31,7 @@ captured are copied to `docs/screens/app-*.png`.
 | Criterion | Status | Verification |
 |---|---|---|
 | 58px toolbar: New, Open, Save \| Go Live \| Logo, Black, Clear \| Live, own icons | **pass** | Screenshots `app-main-*.png`. Toggles reflect state: Black is highlighted in `app-main-black.png`, and Live is highlighted while the output is open. Web, Remote and Alerts are shown disabled (Phase 2). |
-| Schedule \| Preview \| Live on top, resources below, draggable splitters at the spec percentages | **partial** | The layout matches `ui-main-dark.png` (screenshots). The splitter percentages are the `ui` package's: main 71%, schedule 19.44%, slide grid 46.38%. **Deviation:** Preview/Live is 50%, not EasyWorship's 71.19% (a deliberate `ui` choice, documented in `mainwindow.go`). The app does not drive splitter dragging; the drag and snap logic is covered by `uicore` tests only. |
+| Schedule \| Preview \| Live on top, resources below, draggable splitters at the spec percentages | **pass** | The layout matches `ui-main-dark.png` and the mockup. Percentages: main 71%, schedule 19.44%, slide grids 46.38%, resources 85.42%; Preview \| Live defaults to 50% as in `docs/mockup/main-window.html` (EasyWorship's 71.19% is a design-time value; UI-SPEC §3.2 says so). Real drags go through Godot's input pipeline (`drag-split`): smoke `drag Preview \| Live left` / `back`, `Preview \| Live is back at 50%`, `drag the resource splitter left` / `back`; `test/splitters.sh` drags all six main splitters both ways, with bursts of motions per frame, and moves them through their snap zones (102 checks). Positions persist in the `ui.layout` setting and are restored at startup (`TestLayoutRoundTrip`; `/state.splitters`). See "Splitter crash" below. |
 | 28px panel headers titled Schedule / Preview / Live | **pass** | Screenshots. |
 | Resource tab bar: Songs, Scriptures, Media/Presentations/Themes ("Coming in Phase 2") | **pass** | Smoke: `Media tab`, then the screenshot `test/out/media-tab.png` shows "Coming in Phase 2". Songs and Scriptures appear in every main screenshot. |
 
@@ -44,7 +47,7 @@ captured are copied to `docs/screens/app-*.png`.
 
 | Criterion | Status | Verification |
 |---|---|---|
-| EW Bibles imported; only public-domain ones automatically; copyrighted (HCSB) skipped unless the user opts in | **partial** | KJV and RVA are imported, and HCSB is skipped as copyrighted (smoke `KJV imported`; import summary in the log). **Gap:** the opt-in exists only in the importer API (`easyworship.Options.IncludeCopyrightedBibles`). The app has no UI or setting for it yet (settings UI is Phase 2). |
+| EW Bibles imported; only public-domain ones automatically; copyrighted (HCSB) skipped unless the user opts in | **pass** | KJV and RVA are imported, and HCSB is skipped as copyrighted (smoke `KJV imported`; import summary in the log). The opt-in is the Scriptures gear menu's "Import Copyrighted Bibles from EasyWorship…" (enabled while EasyWorship has copyrighted Bibles the library lacks), which asks first (screenshot `test/out/import-bibles-confirm.png`) and then imports only Bibles (`easyworship.Options{BiblesOnly, IncludeCopyrightedBibles}`). Smoke: `HCSB is offered for import`, `import-bibles asks first`, `cancel the import`, `import the copyrighted Bibles` (HCSB listed, status "Imported HCSB"), `the imported Bible works`. Unit: `TestRealImportCopyrightedBiblesOnly`, `TestCopyrightedBiblesToImport`, `TestBibleImportSummary`. |
 | References `jn 3:16`, `John 3:16-18`, `1 cor 13`, `ps 23:1-3` show one verse per slide with a reference footer | **pass** | Smoke: `reference jn 3:16` (footer `(KJV)`), `reference John 3:16-18` (3 slides), `reference 1 cor 13` (13), `reference ps 23:1-3` (3, footer `Psalms 23:1 (KJV)`), `reference in another Bible` (RVA). Errors are shown in the panel status: `missing verses report an error` ("No verses found"), and `unparseable reference reports an error`. Screenshots `app-main-scripture-live.png`, `app-output-scripture.png`. |
 
 ## Presenting
@@ -52,7 +55,7 @@ captured are copied to `docs/screens/app-*.png`.
 | Criterion | Status | Verification |
 |---|---|---|
 | Double-click a slide or press Enter / Go Live: the item goes live on the clicked slide | **pass** (see note) | Smoke: `go live (crossfade running)`, `Enter in the preview grid sends that slide live` (a native key event goes to the grid's activate callback, the same one double-click uses), `Enter (no focus) goes live with the preview`, `scripture live`, `select schedule item 0` → `schedule item live`. **Note:** a mouse double-click is not automated. |
-| Output: full screen on the first non-primary display; a normal 16:9 window with one display | **pass** | Verified on a 1080p LG TV over HDMI (extended display), 2026-10-18. The output opens automatically at startup with `ExclusiveFullscreen` and covers the whole TV with no menu bar. The first approach (a borderless always-on-top window) left the macOS menu bar over the top of the output, so it was replaced (commit ba81789). Toggling Live off and on reopens it cleanly, and the operator display is unaffected (user-confirmed). One display: smoke `output on` (windowed 16:9). |
+| Output: full screen on the first non-primary display; a normal 16:9 window with one display | **pass** | Verified on a 1080p LG TV over HDMI (extended display), 2026-10-18. The output opens automatically at startup with `ExclusiveFullscreen` and covers the whole TV with no menu bar. The first approach (a borderless always-on-top window) left the macOS menu bar over the top of the output, so it was replaced (commit ba81789). Toggling Live off and on reopens it cleanly, and the operator display is unaffected (user-confirmed). One display: smoke `output on` (windowed 16:9). **2026-10-19:** `ExclusiveFullscreen` turned out to let the menu bar slide in at the top edge while the output has no focus, so the default is now `render.CoverScreen`: a borderless window raised above the menu bar level with Cocoa (`cover_darwin.go`; a failure to do so is logged, and the smoke log has no such line). The operator window drops vsync while the output is up, so a 120 Hz laptop does not pace the 60 Hz TV (`Output.syncToOutput`). The smoke and splitter suites ran with the TV as the output; a visual re-check of the menu bar after this change is still to be confirmed by eye. |
 | Auto-fit text with outline and shadow; color, gradient or image backgrounds | **pass** | `app-output-song.png` and `app-output-scripture.png`: crisp 1080p text with outline and shadow on gradient themes. The logo shows an image background (`test/out/logo-output.png`, the first EW stock image). Auto-fit is unit-tested in `render/layout`. Smoke pixel checks: `song output has content`, `scripture output has content`, `logo output has content`. |
 | 0.5s crossfade between live slides and into/out of Black/Clear/Logo | **pass** | Smoke: the go-live reply has `transitioning: true` (`go live (crossfade running)`, `native Ctrl+B` into black). The duration is `render.DefaultTransition` (500 ms) on the live monitor and the output. The render demo's mid-fade capture is `docs/screens/render-output-mid.png`. |
 | Hotkeys (UI-SPEC §3.7): next/prev, first/last, schedule up/down, Ctrl+B/C/L, section jumps V/C/B/R/T/I/E | **pass** | `TestHotkeys` covers every key, ⌘ as well as Ctrl, the 1 s digit timeout (V then 2 = Verse 2, S 4 2 = slide 42), key repeat for arrows only, and focus rules. Smoke drives the control `key` path and real Godot key events (`native-key`): Right/Space/N, Backspace, Home/End, V+2, V+3, PgDn/PgUp, Down, Ctrl/⌘+B, Ctrl+L, Ctrl+C. Hotkeys are off in text fields (`N types into the search field`, `Cmd+C in a text field is not Clear`) and while a dialog is open (`hotkeys are off while a dialog is open`). |
@@ -69,8 +72,8 @@ captured are copied to `docs/screens/app-*.png`.
 
 | Criterion | Status | Verification |
 |---|---|---|
-| Control server: `GET /state`, `GET /screenshot?window=main\|output`, POST actions | **pass** | Used by every smoke step. Actions: `search-songs`, `select-song`, `reference`, `select-preview-slide`, `go-live`, `next`, `prev`, `first`, `last`, `jump`, `black`, `clear`, `logo`, `output`, `go-back`, `add-to-schedule`, `select-schedule`, `remove-schedule`, `move-schedule`, `save-schedule`, `open-schedule`, `new-schedule`, `key`, `wait-idle`, `quit`. UI-driving hooks: `native-key` (`window: "output"` targets the output window), `focus`, `tab`, `editor`, `save-song`, `delete-song`, `dismiss` (topmost dialog), `accept` (topmost dialog's OK), `click-schedule`, `resource-go-live`, `close`. Screenshot windows: `main`, `output`, `editor`, `dialog`, `message`. `/state` also reports the open dialogs (`dialog`) and the resource preview (`resource`). |
-| `test/smoke.sh` drives a song and a scripture to live, saves screenshots, asserts `/state` | **pass** | 178 checks. Screenshots go to `test/out/` (git-ignored). The run ends through the real window-close path, and the script fails on any log error or warning. |
+| Control server: `GET /state`, `GET /screenshot?window=main\|output`, POST actions | **pass** | Used by every smoke step. Actions: `search-songs`, `select-song`, `reference`, `select-preview-slide`, `go-live`, `next`, `prev`, `first`, `last`, `jump`, `black`, `clear`, `logo`, `output`, `go-back`, `add-to-schedule`, `select-schedule`, `remove-schedule`, `move-schedule`, `save-schedule`, `open-schedule`, `new-schedule`, `key`, `wait-idle`, `quit`. UI-driving hooks: `native-key` (`window: "output"` targets the output window), `focus`, `tab`, `editor`, `save-song`, `delete-song`, `dismiss` (topmost dialog), `accept` (topmost dialog's OK), `click-schedule`, `resource-go-live`, `close`, `split` and `drag-split` (move a named splitter programmatically or with a real mouse drag), `replay-input` (re-inject a `FREEWORSHIP_INPUT_LOG` recording), `import-bibles`. Screenshot windows: `main`, `output`, `editor`, `dialog`, `message`. `/state` also reports the open dialogs (`dialog`), the resource preview (`resource`), every splitter's position (`splitters`), the focused control (`focusOwner`) and the copyrighted Bibles available for import (`scripture.copyrightedAvailable`). |
+| `test/smoke.sh` drives a song and a scripture to live, saves screenshots, asserts `/state` | **pass** | 191 checks. Screenshots go to `test/out/` (git-ignored). The run ends through the real window-close path, and the script fails on any log error or warning. `test/splitters.sh` (102 checks) is the stress test for the layout crash below. |
 
 ## Review fixes
 
@@ -93,3 +96,31 @@ Fixes for the independent review's verified findings (2026-10-18). Every fix has
 | 12 | Hand-made `.fws` files kept missing/duplicate item ids | `LoadSchedule` gives items without an id, or repeating an earlier id, a new unique id. | `TestLoadScheduleRepairsIDs`. |
 | 13 | First grid tile drawn ~6px up-left after a deck change | Root cause: container sort handlers' buffered `FitChildInRect` calls were flushed inside a tile's own `Draw`. Godot moved the tile while it was drawing and dropped the redraw that refreshes its canvas transform. Sort handlers (`tileFlow`, `MonitorHost`, `Splitter`) now end with `flushCalls`. | Smoke pixel checks on `grid-deck-change.png`: `first preview tile is not drawn at the grid corner`, `first preview tile is at the grid padding`. (`pngcheck.py` gained `lacks`.) |
 | 14 | Shutdown could stall on `Store.Close` | Async jobs are tracked. Shutdown cancels them and waits at most 3 s (`core.WaitTimeout`) before closing the library. `Store.Close` runs `PRAGMA optimize` on its own connection with a 500 ms busy timeout, because SQLite's busy handler ignores context cancellation. | `TestCloseIsBoundedWhileAnotherWriterHoldsTheLock` (10 s before, 0.5 s after), `TestWaitTimeout`. Smoke ends through the real close path. |
+
+## Splitter crash (fixed 2026-10-19)
+
+Dragging a splitter could take the app down with `Failed method: Container::_sort_children. Message queue out of
+memory`, millions of `Object was deleted while awaiting a callback.` lines and a SIGSEGV. The crash reproduced under
+automation with `drag-split` on the Preview | Live splitter (`test/splitters.sh`, which was written for it).
+
+**Root cause:** a layout oscillation inside Godot, not a graphics.gd fault. The slide grid's content (`tileFlow`)
+computed its minimum height from its own width. Inside a `ScrollContainer` that width depends on whether the vertical
+scrollbar is showing, which depends on the content height. At widths where the tiles fit only without the scrollbar,
+Godot toggled the scrollbar forever inside one message-queue flush (resize → re-sort → minimum size → resize …), each
+round queuing more deferred calls, until the 32 MB queue overflowed. Counting Godot→Go callbacks per frame and dumping
+the Go stack past 20,000 showed `tileFlow.GetMinimumSize` and the thumbnail `SlideView` resize handlers running
+thousands of times in a single frame.
+
+**Fix:** `SlideGrid.layoutWidth` lays the tiles out in the scroll area's width minus the vertical scrollbar, whether or
+not it is showing, so the content height no longer depends on the scrollbar (`internal/ui/slidegrid.go`). The
+`Callable.Defer`-based relayout tried in the meantime was not needed and was dropped.
+
+**Also:** graphics.gd was moved from the June 2026 build to 2026-10-14 (Godot 4.7.2, via `bin/gd`): the older call ring
+could corrupt a batch when a Go signal handler made engine calls during a flush (`crash in ring buffer flush at entry
+N: FitChildInRect`), which is how the oscillation ended in a SIGSEGV on the old build. Both the smoke and the splitter
+suites pass on the new build; the fix alone was not re-tested on the old one.
+
+**Tests:** smoke `drag Preview | Live left` / `back` / `Preview | Live is back at 50%` / `drag the resource splitter
+left` / `back`; `test/splitters.sh` (102 checks: six splitters × four deltas × two burst sizes, programmatic moves through
+the snap zones, positions asserted via `/state.splitters`, clean shutdown, clean log; it samples the Godot process on a
+hang).

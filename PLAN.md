@@ -271,7 +271,7 @@ Each milestone ends with something you can run (`gd run`) and demo.
 | Output window on macOS full screen / Spaces / always-on-top quirks | Prototype in **M0** on a real second display before building anything else. Fall back to a borderless window sized to the screen |
 | Low-processor mode throttling animations | Toggle it off while the output is animating, and on again when idle |
 | HiDPI / scaling differences between operator and projector | Logical 1920×1080 slide canvas. The output SubViewport uses the native size of the target screen |
-| graphics.gd API churn (pre-1.0) | Pin the same version as Bufflehead (`v0.0.0-20260618124756-e71c1a978ca2`), bump deliberately |
+| graphics.gd API churn (pre-1.0) | Pin a version in `go.mod` and bump deliberately. Pinned: `v0.0.0-20261014193348-f9563e0035a9` with Godot 4.7.2 (its call ring survives nested flushes; the June 2026 version did not) |
 | Bible licensing | Ship only public-domain texts. Imports of user-licensed translations stay local |
 | RTF lyrics import edge cases | Small dedicated RTF tokenizer with golden tests against this machine's 223 songs |
 | Live-service reliability | No modal dialogs on output. All I/O off the main thread. Autosave schedules. Test that output survives a display unplug |

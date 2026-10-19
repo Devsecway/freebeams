@@ -123,6 +123,9 @@ Logo, Black and Clear are toggles (StaysSelected, AllowAllUnSelected): they show
 
 Splitter bars are 1px `splitterbar`. A snapped-closed splitter shows a gradient grip (`hsplitterbar.closed` / `vsplitterbar.closed`) that reopens it on click.
 
+FreeWorship defaults Preview | Live to **50%**, as in the mockup (`docs/mockup/main-window.html`); EasyWorship's 71.19% is
+its design-time value. Positions the user drags to are saved in the `ui.layout` setting and restored at startup.
+
 ### 3.3 Panel header mini-toolbars (Schedule / Preview / Live)
 - Height **28**, padding-left 6, gradient `toolbar.mini`, 1px bottom border `border.bl` (`sd.toolbar.mini.bl.style`).
 - Left: title label (`label.semibold`: "Schedule", "Preview", "Live").
