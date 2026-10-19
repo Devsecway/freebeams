@@ -103,6 +103,10 @@ internal/app               Godot: the App node that wires store + presenter + ui
   `render.CoverScreen` raises the output's NSWindow above the menu bar instead (`cover_darwin.go`, cgo).
 - Vsync in two windows on displays with different refresh rates makes every frame wait for both. The output disables
   vsync on the operator window while it is fullscreen (`Output.syncToOutput`).
+- Godot marks a borderless window that covers its screen `hidesOnDeactivate` (`_update_window_style`), so the
+  projector vanished whenever another app was active. `cover_darwin.go` sets `hidesOnDeactivate:NO` and `canHide:NO`.
+  `NSWindow.isVisible` still says YES for a window hidden that way; `occlusionState` and
+  `CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly)` tell the truth (`Output.NativeState`, hook `output-native`).
 - `screencapture -D 2` and `DisplayServer.ScreenGetImage` need Screen Recording permission for the terminal. Without
   it, check the TV by eye and the content with `/screenshot?window=output`.
 - A node that only reacts to its own lifecycle needs no extension class: connect `OnVisibilityChanged` /

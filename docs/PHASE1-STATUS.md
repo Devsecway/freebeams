@@ -1,4 +1,4 @@
-# Phase 1 status
+The smoke and splitter suites ran with the TV as the output, and the user confirmed by eye (2026-10-19) that the TV is covered with no menu bar. **Later the same day:** the cover-screen window vanished whenever another app was active, because Godot marks a borderless screen-covering window `hidesOnDeactivate`; `cover_darwin.go` now clears that (and `canHide`), and the smoke check `output stays on the TV while another app is active` switches to Finder and asserts through the window server (`output-native`: `onScreen`, `shown`) that the output is still displayed. |# Phase 1 status
 
 Status of every acceptance criterion in [PHASE1.md](PHASE1.md), and how each was verified. Recorded 2026-10-18 on
 macOS (Apple M3 Max, one built-in Retina display, EasyWorship 8 data installed at `/Users/Shared/Softouch`).

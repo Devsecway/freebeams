@@ -7,3 +7,5 @@ package render
 const coverSupported = false
 
 func coverScreen(handle uintptr) bool { return false }
+
+func coverState(handle uintptr) (NativeWindowState, bool) { return NativeWindowState{}, false }

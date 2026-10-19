@@ -152,6 +152,19 @@ shot app-main-start main
 
 act "output on" output '{"on":true}' 's["outputOpen"] and s["outputEnabled"]'
 
+# A projector must stay up while the operator works in another app (browser,
+# planning tools). Godot marks a borderless window that covers its screen
+# hidesOnDeactivate, which emptied the TV until FreeWorship was active again;
+# the cover-screen code turns that off. Checked through the window server (what
+# a screenshot of the TV would show), only when a second display is present.
+if python3 -c 'import json,sys; sys.exit(0 if json.loads(sys.argv[1])["data"]["screens"] > 1 else 1)' "$LAST" 2>/dev/null; then
+	osascript -e 'tell application "Finder" to activate' >/dev/null 2>&1 || true
+	sleep 1.5
+	act "output stays on the TV while another app is active" output-native '' 'd["onScreen"] and d["shown"] and not d["hidesOnDeactivate"]'
+	osascript -e 'tell application "Godot" to activate' >/dev/null 2>&1 || true
+	sleep 1
+fi
+
 # ---- song ------------------------------------------------------------------------
 act "search amazing" search-songs '{"q":"amazing"}' 's["songs"]["results"] >= 1 and s["songs"]["query"] == "amazing"'
 act "select Amazing Grace" select-song '{"title":"Amazing Grace"}' '"Amazing Grace" in s["preview"]["title"] and s["preview"]["index"] == 0'

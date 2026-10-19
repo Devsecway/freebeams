@@ -8,6 +8,7 @@ import (
 	"freeworship/internal/app/core"
 	"freeworship/internal/control"
 	"freeworship/internal/models"
+	"freeworship/internal/render"
 	"freeworship/internal/ui"
 
 	"graphics.gd/classdb/Control"
@@ -120,6 +121,20 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 			return true
 		}
 		a.dragSplit(cmd, sp, args.Delta, args.Steps, max(args.Burst, 1))
+	case "output-native":
+		// What the OS says about the projector window (macOS): on screen, level,
+		// hidden while the app is inactive. For the smoke test's app-switch check.
+		st, ok := a.out.NativeState()
+		if !ok {
+			cmd.RespondErr(errors.New("output-native: the output is closed or not probeable here"))
+			return true
+		}
+		a.replies = append(a.replies, func() {
+			cmd.RespondJSON(struct {
+				render.NativeWindowState
+				State core.State `json:"state"`
+			}{st, a.state()})
+		})
 	case "close":
 		// What the window manager sends when the operator closes the window.
 		root := SceneTree.Get(a.AsNode()).Root()

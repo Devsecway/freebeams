@@ -278,13 +278,38 @@ func (o *Output) cover() {
 		if !o.IsOpen() {
 			return
 		}
-		h := DisplayServer.WindowGetNativeHandle(DisplayServer.WindowHandle, DisplayServer.Window(o.win.GetWindowId()))
-		if !coverScreen(uintptr(h)) {
+		if !coverScreen(o.nativeHandle()) {
 			log.Printf("[render] could not raise the output window above the menu bar")
 		}
 	}
 	apply()
 	Callable.Defer(Callable.New(apply))
+}
+
+// nativeHandle is the output window's OS window handle (an NSWindow on macOS).
+func (o *Output) nativeHandle() uintptr {
+	return uintptr(DisplayServer.WindowGetNativeHandle(DisplayServer.WindowHandle, DisplayServer.Window(o.win.GetWindowId())))
+}
+
+// NativeWindowState is what the OS says about the output window: on screen,
+// its window level, and whether it is hidden while the app is inactive.
+type NativeWindowState struct {
+	Visible           bool `json:"visible"`           // AppKit: ordered in
+	Level             int  `json:"level"`             // NSWindow level
+	HidesOnDeactivate bool `json:"hidesOnDeactivate"` // hidden while the app is inactive
+	AppActive         bool `json:"appActive"`         // NSApp.isActive
+	OnActiveSpace     bool `json:"onActiveSpace"`
+	Shown             bool `json:"shown"`    // occlusion state: visible
+	OnScreen          bool `json:"onScreen"` // the window server lists it on screen
+}
+
+// NativeState reports the OS window state of the open output (ok is false
+// when the output is closed or the platform has no such probe).
+func (o *Output) NativeState() (NativeWindowState, bool) {
+	if !o.IsOpen() || !coverSupported {
+		return NativeWindowState{}, false
+	}
+	return coverState(o.nativeHandle())
 }
 
 // syncToOutput paces the frame loop by the projector while the output is up:
