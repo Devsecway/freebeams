@@ -13,7 +13,7 @@ import (
 func TestSettingsDefaultsAndNormalized(t *testing.T) {
 	def := DefaultSettings("")
 	if def.Transition != models.DefaultTransition() || def.OutputScreen != AutoScreen ||
-		def.Logo != LogoGradient() || def.InterfaceColor != ColorDark {
+		def.Logo != LogoGradient() || def.InterfaceColor != ColorDark || def.Alerts != models.DefaultAlertStyles() {
 		t.Fatalf("defaults = %+v", def)
 	}
 	tests := []struct {
@@ -28,6 +28,7 @@ func TestSettingsDefaultsAndNormalized(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.want.Alerts = models.DefaultAlertStyles() // missing alert styles get the defaults
 			if got := tt.in.Normalized(""); got != tt.want {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
 			}

@@ -146,6 +146,12 @@ type DialogState struct {
 	// operator window, else the dialog under it ("editor", …). It is never the
 	// output window. "" when no dialog is open.
 	Host string `json:"host,omitempty"`
+
+	// AlertDialog names the topmost open alert dialog: alert-manager,
+	// alert-editor, alert-fill, nursery or countdown ("" when none).
+	AlertDialog string `json:"alertDialog,omitempty"`
+	// AlertsMenu reports the toolbar's Alerts ▾ menu being open.
+	AlertsMenu bool `json:"alertsMenu,omitempty"`
 }
 
 // ResourceState is what the resource preview (right of the resource tabs) shows.
@@ -200,6 +206,10 @@ type State struct {
 
 	// Remote is the LAN remote control (remote.go).
 	Remote RemoteState `json:"remote"`
+
+	// Alerts is the alert overlay: message alerts, nursery codes, the
+	// countdown and the clock (alerts.go).
+	Alerts AlertsState `json:"alerts"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -239,6 +249,7 @@ type StateInput struct {
 	Playback PlaybackStates
 
 	Remote RemoteState
+	Alerts AlertsState
 }
 
 // deckState summarises deck d with slide i selected.
@@ -301,6 +312,16 @@ func BuildState(in StateInput) State {
 	}
 	st.Playback = in.Playback
 	st.Remote = in.Remote.normalized()
+	st.Alerts = in.Alerts
+	if st.Alerts.Active == nil {
+		st.Alerts.Active = []AlertRunState{}
+	}
+	if st.Alerts.Nursery == nil {
+		st.Alerts.Nursery = []string{}
+	}
+	if st.Alerts.Saved == nil {
+		st.Alerts.Saved = []models.Alert{}
+	}
 	st.Bundled = in.Bundled
 	if st.Bundled.Installed == nil {
 		st.Bundled.Installed = []string{}

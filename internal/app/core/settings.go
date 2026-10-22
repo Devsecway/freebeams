@@ -35,6 +35,10 @@ type Settings struct {
 	OutputScreen   int               `json:"outputScreen"` // AutoScreen or a display index
 	Logo           models.Background `json:"logo"`
 	InterfaceColor string            `json:"interfaceColor"`
+
+	// Alerts is Options ▸ Alerts: the look and place of the message band,
+	// the nursery badge, the countdown and the clock (SettingAlertStyles).
+	Alerts models.AlertStyles `json:"alerts"`
 }
 
 // DefaultSettings returns the built-in settings: a 500 ms blend, the automatic
@@ -46,6 +50,7 @@ func DefaultSettings(logoDir string) Settings {
 		OutputScreen:   AutoScreen,
 		Logo:           LogoBackground(logoDir),
 		InterfaceColor: ColorDark,
+		Alerts:         models.DefaultAlertStyles(),
 	}
 }
 
@@ -63,6 +68,7 @@ func (s Settings) Normalized(logoDir string) Settings {
 	if s.InterfaceColor != ColorLight {
 		s.InterfaceColor = ColorDark
 	}
+	s.Alerts = s.Alerts.Normalized()
 	return s
 }
 
