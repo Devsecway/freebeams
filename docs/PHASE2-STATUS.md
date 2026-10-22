@@ -10,7 +10,8 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 970 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control, alerts, audio-playlist and tile-menu blocks)
+test/smoke.sh          # 976 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control, alerts, audio-playlist and tile-menu blocks)
+FREEBEAMS_PLAYER=ffmpeg test/smoke.sh   # 979: the same with the ffmpeg player (Windows / Linux) on a Mac
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -551,7 +552,12 @@ transport, looping, seeking, volume, the crossfade and the audio playlist work a
 | Every spawned ffmpeg / ffprobe (and pdftoppm / soffice) hides its console on Windows | **pass** (cross-vetted) / **untested** (Windows) | `internal/sysproc` (`HideWindow` + `CREATE_NO_WINDOW`, `TestHideWindow`); `media.Tools`, the player and `presentations` use `sysproc.CommandContext`. `GOOS=windows go vet` is clean. |
 | Bundled LGPL ffmpeg in the Windows zip / installer and the Linux tar.gz / AppImage, pinned and checksummed | **partial** | `bin/build-ffmpeg` (FFmpeg 8.1.3, SHA-256 checked, no GPL / nonfree, static, trimmed encoders / muxers; fails unless configure reports LGPL and the needed muxers / encoders exist), `bin/build-windows`, `bin/build-linux`, `packaging/ffmpeg/NOTICE.txt`, `release.yml` (cache, MSYS2 / apt build deps, the player tests against the bundle), README licensing, [RELEASE.md](RELEASE.md) "Bundled ffmpeg". Built and tested on macOS arm64 only; the Windows (MSYS2) and Linux (static glibc) builds have not run. |
 
-Smoke: SMOKE_COUNTS.
+Smoke on 2026-10-22, after merging main (audio playlists): `FREEBEAMS_PLAYER=ffmpeg test/smoke.sh` **979/979
+PASS** (Homebrew ffmpeg 8.1.1; three checks run only with the ffmpeg player), and the default AVFoundation run
+**976/976 PASS**, log hygiene clean in both. Earlier attempts failed outside the media blocks: `close the theme
+editor` (ffmpeg run, a focus check), and three AVFoundation runs while an installed `/Applications/FreeBeams.app`
+was open and frontmost (`the song is live in the app` with `"mode": "black"`, the app quitting itself at `select the
+clip`, `Cmd+C in a text field is not Clear`); each passed on the rerun once it had closed.
 
 Not verified here: the app on a real Windows or Linux machine (audio devices, the Windows process kill, the static
 ffmpeg builds), the CI jobs, a long-running loop for drift (the unit tests check that a pass is exactly the
