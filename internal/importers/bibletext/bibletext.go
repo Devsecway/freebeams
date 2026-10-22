@@ -444,8 +444,30 @@ func dropLeakedHeading(s string, chapter, verse int) string {
 // reads and the bundled translations use): books keyed by their canonical
 // English name, chapters and verses in numeric order, one chapter per line.
 func Encode(w io.Writer, b models.Bible, verses []models.Verse) error {
+	hdr, err := json.Marshal(struct {
+		Abbrev    string `json:"abbrev"`
+		Name      string `json:"name,omitempty"`
+		Language  string `json:"language,omitempty"`
+		Copyright string `json:"copyright,omitempty"`
+	}{strings.TrimSpace(b.Abbrev), b.Name, b.Language, b.Copyright})
+	if err != nil {
+		return fmt.Errorf("encode bible %s: %w", b.Abbrev, err)
+	}
+	return EncodeWithHeader(w, hdr, b, verses)
+}
+
+// EncodeWithHeader is Encode with the header object given: hdr is a JSON
+// object on one line (what json.Marshal writes) holding at least "abbrev";
+// "books" follows it on the next line. Bible packages (internal/bibles/biblepkg)
+// add their own fields this way, and the header line can be read without
+// decoding the books.
+func EncodeWithHeader(w io.Writer, hdr []byte, b models.Bible, verses []models.Verse) error {
 	if strings.TrimSpace(b.Abbrev) == "" {
 		return errors.New("encode bible: abbrev is required")
+	}
+	hdr = bytes.TrimSpace(hdr)
+	if len(hdr) < 2 || hdr[0] != '{' || hdr[len(hdr)-1] != '}' || bytes.ContainsAny(hdr, "\n\r") {
+		return fmt.Errorf("encode bible %s: the header must be a one-line JSON object", b.Abbrev)
 	}
 	sorted := append([]models.Verse(nil), verses...)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -465,15 +487,6 @@ func Encode(w io.Writer, b models.Bible, verses []models.Verse) error {
 	}
 
 	bw := bufio.NewWriter(w)
-	hdr, err := json.Marshal(struct {
-		Abbrev    string `json:"abbrev"`
-		Name      string `json:"name,omitempty"`
-		Language  string `json:"language,omitempty"`
-		Copyright string `json:"copyright,omitempty"`
-	}{strings.TrimSpace(b.Abbrev), b.Name, b.Language, b.Copyright})
-	if err != nil {
-		return fmt.Errorf("encode bible %s: %w", b.Abbrev, err)
-	}
 	bw.Write(hdr[:len(hdr)-1]) // reopen the object for "books"
 	bw.WriteString(",\n\"books\":{")
 	book, chapter := 0, 0
