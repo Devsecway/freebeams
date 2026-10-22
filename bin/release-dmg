@@ -55,7 +55,7 @@ esac
 plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || true)"
 [ "$plist_version" = "$V" ] || fail "Info.plist has CFBundleShortVersionString '$plist_version', bin/version says '$V'"
 
-STAGE="$(mktemp -d -t freebeams-dmg)"
+STAGE="$(mktemp -d -t freebeams-dmg.XXXXXX)"
 trap 'rm -rf "$STAGE"' EXIT
 echo "==> staging FreeBeams.app and the Applications link"
 ditto "$APP" "$STAGE/FreeBeams.app"

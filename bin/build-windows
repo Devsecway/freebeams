@@ -142,7 +142,7 @@ ZIP="releases/FreeBeams-$V-windows-$GOARCH.zip"
 rm -f "$ZIP"
 zipdir() { # zipdir OUT.zip DIR  (archive the directory's contents under FreeBeams/)
 	local out="$1" dir="$2" stage
-	stage="$(mktemp -d -t freebeams-zip)"
+	stage="$(mktemp -d -t freebeams-zip.XXXXXX)"
 	mkdir -p "$stage/FreeBeams"
 	cp -R "$dir"/. "$stage/FreeBeams/"
 	if command -v zip >/dev/null 2>&1; then
