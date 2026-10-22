@@ -144,6 +144,8 @@ type App struct {
 
 	ps previewStyleState // restyling the item in Preview (previewstyle.go)
 
+	sp spellState // the song editor's spelling checker (spell.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -223,6 +225,8 @@ func (a *App) Ready() {
 	a.initRemote()   // the LAN remote control, when it is enabled (remote.go)
 
 	a.loadStageSettings() // the stage display (stage.go)
+
+	a.initSpell() // the song editor's spelling checker (spell.go)
 
 	// The projector output opens by itself only when a second display exists.
 	screens := render.Screens()
@@ -509,7 +513,7 @@ func (a *App) runTimers() {
 
 // busy reports async work or a running transition.
 func (a *App) busy() bool {
-	return a.pending > 0 || len(a.timers) > 0 || a.transitioning() || a.dirty
+	return a.pending > 0 || len(a.timers) > 0 || a.transitioning() || a.dirty || a.spellBusy()
 }
 
 func (a *App) transitioning() bool {

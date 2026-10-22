@@ -164,7 +164,7 @@ func NewMainWindow(p Palette) *MainWindow {
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
 	return append([]*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg, w.Remote.dlg},
-		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg)...)
+		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg, w.Editor.sp.dlg.dlg)...)
 }
 
 // dialogName names a dialog window node for TopDialogHost.
@@ -193,6 +193,9 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 		return "color"
 	case w.MediaPicker.dlg.win.AsNode().ID():
 		return "media-picker"
+	}
+	if n.ID() == w.Editor.sp.dlg.dlg.win.AsNode().ID() {
+		return "spelling"
 	}
 	return "other"
 }

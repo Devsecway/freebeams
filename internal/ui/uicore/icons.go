@@ -172,6 +172,10 @@ var icons = map[string]IconSpec{
 	"stop":       {16, `<rect x="3.75" y="3.75" width="8.5" height="8.5" rx="1" fill="{c}" stroke="none"/>`},
 	"shuffle":    {16, `<path d="M2.75 4.75h2.25l5 6.5h2.75"/><path d="M2.75 11.25h2.25l1.75-2.25"/><path d="M9.25 6.75l1-2h2.75"/><path d="M11.25 2.75l2 2-2 2"/><path d="M11.25 9.25l2 2-2 2"/>`},
 	"repeat_one": {16, `<path d="M3.25 9.25V7.25a2.5 2.5 0 0 1 2.5-2.5h6"/><path d="M9.75 2.75l2 2-2 2"/><path d="M12.75 6.75v2a2.5 2.5 0 0 1-2.5 2.5h-6"/><path d="M6.25 13.25l-2-2 2-2"/><path d="M7.25 7l1-0.75v3.5"/>`},
+
+	// ---- song editor (16) ----
+	// The Lyrics header's SpellCheck button (ui/spelling.go): an "a" with a check mark.
+	"spellcheck": {16, `<path d="M2.25 10.75L5 3.25l2.75 7.5M3.25 8h3.5"/><path d="M8 10.25l2.25 2.5 3.75-5.5"/>`},
 }
 
 // gearPath builds the 16 px cog: 8 teeth between radii 4.9 and 6.5 and a hub.

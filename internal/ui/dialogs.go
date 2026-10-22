@@ -162,6 +162,10 @@ type SongEditor struct {
 	themeChoices []ThemeChoice
 	themeID      int64
 	themesDirty  bool
+
+	// Spell checking (spelling.go): the app's side and the editor's state.
+	Spell SongSpell
+	sp    editorSpell
 }
 
 var songFields = []struct{ key, label string }{
@@ -209,7 +213,7 @@ func NewSongEditor() *SongEditor {
 	hint.SetAutowrapMode(TextServer.AutowrapWordSmart)
 	hint.SetClipText(false)
 	hint.SetTextOverrunBehavior(TextServer.OverrunNoTrimming)
-	add(e.dlg.body, grid.AsControl(), fixed(0, 4), lyricsLbl.AsControl(), e.lyrics.AsControl(), hint.AsControl())
+	add(e.dlg.body, grid.AsControl(), fixed(0, 4), e.buildSpell(lyricsLbl), e.lyrics.AsControl(), hint.AsControl())
 
 	e.errLbl = label("", vError)
 	e.errLbl.AsControl().SetSizeFlagsHorizontal(Control.SizeExpandFill)
@@ -245,10 +249,15 @@ func (e *SongEditor) Open(song models.Song, lyricsText string) {
 	e.render()
 	e.dlg.popup()
 	e.fields["title"].AsControl().GrabFocus()
+	e.SetSpelling(nil)
+	e.requestSpell() // at once, not after the typing debounce
 }
 
 // Close hides the editor without calling OnCancel.
-func (e *SongEditor) Close() { e.dlg.hide() }
+func (e *SongEditor) Close() {
+	e.sp.dlg.dlg.hide()
+	e.dlg.hide()
+}
 
 // Visible reports whether the editor is open.
 func (e *SongEditor) Visible() bool { return e.dlg.win.Visible() }
@@ -276,6 +285,7 @@ func (e *SongEditor) save() {
 	}
 	e.errText = ""
 	e.render()
+	e.sp.dlg.dlg.hide()
 	e.dlg.hide()
 	if e.OnSave != nil {
 		e.OnSave(song, e.lyrics.Text())

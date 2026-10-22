@@ -1902,6 +1902,31 @@ act "remove the restyled item" remove-schedule "{\"index\":$PS_ROW}" "len(s[\"sc
 act "remove the background image" remove-media '{"title":"smoke-style-bg","confirm":true}' "s[\"media\"][\"count\"] == $PS_MEDIA"
 act "save the schedule (restyle end)" save-schedule '{}' 'not s["schedule"]["dirty"]'
 
+# ---- spell check ---------------------------------------------------------------------------------
+# The song editor's spelling checker (internal/spell; NSSpellChecker on macOS): section tags and
+# worship words are never flagged, a misspelling gets a red wavy underline and suggestions, and
+# Add to Dictionary (persisted) clears it.
+act "spell-check flags recieve only" spell-check '{"text":"[Verse 1]\nI will recieve Thy grace\nV2\n[Chorus]\nHallelujah Hosanna Emmanuel"}' '[m["word"] for m in d["misspellings"]] == ["recieve"] and d["misspellings"][0]["line"] == 1 and d["misspellings"][0]["col"] == 7'
+act "spell-suggest offers receive" spell-suggest '{"text":"recieve"}' '"receive" in d["suggestions"]'
+act "open the editor (spelling)" editor '{"mode":"new"}' 's["dialog"]["editor"]'
+act "lyrics with a misspelling are flagged" editor-lyrics '{"lyrics":"[Verse 1]\nI will recieve Thy grace\nSmokewordzz is here\n\nV2\nHallelujah, I’ll sing\n\n[Chorus]\nHosanna Jehovah Selah"}' 's["dialog"]["spell"]["flagged"] == ["recieve", "Smokewordzz"] and not s["dialog"]["spell"]["checking"]'
+shot spell-editor editor
+pixel "the misspelling has a red underline" "$OUT/spell-editor.png" has ff3b30 0.0 0.25 0.6 0.5 20
+act "right-click menu on recieve" spell-menu '{"index":0}' '(s["dialog"]["spell"].get("menu") or [])[:1] == ["receive"] and "Add to Dictionary" in s["dialog"]["spell"]["menu"] and "Paste" in s["dialog"]["spell"]["menu"]'
+shot spell-menu spell-menu
+act "pick the suggestion" spell-menu-pick '{"item":"receive"}' 's["dialog"]["spell"]["flagged"] == ["Smokewordzz"]'
+act "Spelling dialog stops at the next misspelling" spell-dialog '{"mode":"open"}' 's["dialog"]["spell"]["dialog"]["word"] == "Smokewordzz" and s["dialog"]["host"] == "editor"'
+shot spell-dialog spelling
+pixel "Spelling dialog has content" "$OUT/spell-dialog.png" notblank
+act "Add to Dictionary in the dialog ends the check" spell-dialog '{"mode":"add"}' 's["dialog"]["spell"]["dialog"]["done"] and s["dialog"]["spell"]["flagged"] == [] and "smokewordzz" in s["dialog"]["spell"]["personal"]'
+act "close the Spelling dialog" spell-dialog '{"mode":"close"}' 'not s["dialog"]["spell"].get("dialog") and s["dialog"]["editor"]'
+act "forget the learned word" spell-forget '{"text":"Smokewordzz"}' 's["dialog"]["spell"]["flagged"] == ["Smokewordzz"]'
+act "spell-learn clears the flag" spell-learn '{"text":"Smokewordzz"}' 's["dialog"]["spell"]["flagged"] == [] and "smokewordzz" in s["dialog"]["spell"]["personal"]'
+shot spell-editor-clean editor
+pixel "no underline after learning" "$OUT/spell-editor-clean.png" lacks ff3b30 0.0 0.25 0.6 0.5 5
+act "tags only: nothing flagged" editor-lyrics '{"lyrics":"[Verse 1]\n[Pre-Chorus]\nV1\nC2\nChorus:\nBridge 2\n[Repeat x2]"}' 's["dialog"]["spell"]["flagged"] == []'
+act "close the editor (spelling)" editor '{"mode":"close"}' 'not s["dialog"]["editor"] and "spell" not in s["dialog"]'
+
 # ---- item menus (media and presentation tile menus) --------------------------------------------
 # The right-click / gear menus of the media and presentation tiles (UI-SPEC §3.6), driven
 # through `media-menu {item}` / `presentation-menu {item}`. A square image whose top quarter

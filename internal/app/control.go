@@ -55,6 +55,7 @@ func (a *App) state() core.State {
 	}
 	dialog.AlertDialog, dialog.AlertsMenu = a.win.AlertDialog(), a.win.Toolbar.AlertsMenuVisible()
 	dialog.PreviewMenu, dialog.PreviewDialog = a.previewDialogState()
+	dialog.Spell = a.spellStateDoc() // spell.go
 	return core.BuildState(core.StateInput{
 		Presenter:        a.pres.State,
 		Schedule:         a.sched,
@@ -561,6 +562,9 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
+		if a.handleSpellCommand(cmd, args) { // spell.go
+			return
+		}
 		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleStageCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleAudioCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
@@ -606,6 +610,10 @@ func (a *App) screenshot(cmd *control.Command) {
 	case "alerts-menu":
 		png, err = render.WindowScreenshot(a.win.Toolbar.AlertsMenuWindow())
 	default:
+		if shot, ok, serr := a.spellScreenshot(cmd.Query["window"]); ok { // spelling | spell-menu (spell.go)
+			png, err = shot, serr
+			break
+		}
 		if w, ok := a.previewStyleWindow(cmd.Query["window"]); ok { // the Preview Output menu (previewstyle.go)
 			png, err = render.WindowScreenshot(w)
 			break

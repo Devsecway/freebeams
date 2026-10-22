@@ -178,6 +178,10 @@ type DialogState struct {
 	// open; PreviewDialog names its open dialog: color, media or item-theme.
 	PreviewMenu   bool   `json:"previewMenu,omitempty"`
 	PreviewDialog string `json:"previewDialog,omitempty"`
+
+	// Spell is the song editor's spelling checker while the editor is open
+	// (spell.go).
+	Spell *SpellState `json:"spell,omitempty"`
 }
 
 // ResourceState is what the resource preview (right of the resource tabs) shows.

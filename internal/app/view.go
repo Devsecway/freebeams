@@ -464,6 +464,8 @@ func (a *App) render() {
 		a.th.editView.SetFrame(a.editorPreviewFrame(*a.th.editing)) // compared by content
 	}
 
+	a.renderSpell() // the song editor's underlines (spell.go)
+
 	// Resource preview for the visible tab.
 	frame, title, caption := a.resourcePreviewFrame()
 	a.resView.SetFrame(frame)
