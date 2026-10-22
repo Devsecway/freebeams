@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 877 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control, alerts and tile-menu blocks)
+test/smoke.sh          # 970 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control, alerts, audio-playlist and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -500,7 +500,7 @@ units per second rather than EasyWorship's slow / medium / fast; there is no hot
 ## Audio playlists (PLAN v0.2 item 3, second half)
 
 Recorded 2026-10-22 on the same machine (HDMI TV as the projector). "smoke: X" names a check in the
-`# ---- audio playlist` section of `test/smoke.sh` (before `# ---- item menus`, 91 checks). EasyWorship has no
+`# ---- audio playlist` section of `test/smoke.sh` (before `# ---- item menus`, 93 checks; the full run passed with 970). EasyWorship has no
 playlist (its audio files are schedule items with Media Usage / Repeating, `Form_VideoProperties`), so the design
 is our own and minimal; the decisions are in [MEDIA.md](MEDIA.md) "Audio playlist".
 
