@@ -68,3 +68,37 @@ func TestConfigAndCache(t *testing.T) {
 		}
 	}
 }
+
+func TestBiblesPath(t *testing.T) {
+	home := func() (string, error) { return "/home/u", nil }
+	tests := []struct {
+		name, override, xdg, goos, want string
+	}{
+		{"override wins", "/tmp/b/", "/x", "linux", "/tmp/b"},
+		{"macOS Documents", "", "", "darwin", "/home/u/Documents/FreeBeams/Bibles"},
+		{"Windows Documents", "", "", "windows", filepath.Join("/home/u", "Documents", "FreeBeams", "Bibles")},
+		{"Linux XDG documents", "", "/home/u/Dokumente", "linux", "/home/u/Dokumente/FreeBeams/Bibles"},
+		{"Linux relative XDG is ignored", "", "Docs", "linux", "/home/u/Documents/FreeBeams/Bibles"},
+		{"XDG is Linux only", "", "/x", "darwin", "/home/u/Documents/FreeBeams/Bibles"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := biblesPath(tc.override, tc.xdg, tc.goos, home)
+			if err != nil || got != filepath.FromSlash(tc.want) {
+				t.Errorf("biblesPath = %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestBiblesCreatesTheFolder(t *testing.T) {
+	d := filepath.Join(t.TempDir(), "x", "Bibles")
+	t.Setenv(BiblesEnv, d)
+	got, err := Bibles()
+	if err != nil || got != d {
+		t.Fatalf("Bibles = %q, %v", got, err)
+	}
+	if fi, err := os.Stat(d); err != nil || !fi.IsDir() {
+		t.Errorf("not created: %v", err)
+	}
+}

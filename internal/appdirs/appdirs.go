@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Name is the directory name under the OS's config and cache roots.
@@ -54,4 +55,42 @@ func dir(base string) (string, error) {
 		return "", fmt.Errorf("app dir %s: %w", d, err)
 	}
 	return d, nil
+}
+
+// BiblesEnv overrides the Bibles folder (tests use a temporary one).
+const BiblesEnv = "FREEBEAMS_BIBLES_DIR"
+
+// Bibles returns the Bibles folder, where Bible packages and Bible files the
+// operator drops appear in the Bible Manager: $FREEBEAMS_BIBLES_DIR, else
+// Documents/FreeBeams/Bibles in the home folder (macOS and Windows:
+// ~/Documents; Linux: $XDG_DOCUMENTS_DIR when set, else ~/Documents). It is
+// created on first use. It sits in Documents rather than the hidden
+// application-data folder so the operator can find it and drop files in.
+func Bibles() (string, error) {
+	d, err := biblesPath(os.Getenv(BiblesEnv), os.Getenv("XDG_DOCUMENTS_DIR"), runtime.GOOS, os.UserHomeDir)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		return "", fmt.Errorf("bibles folder %s: %w", d, err)
+	}
+	return d, nil
+}
+
+// biblesPath picks the Bibles folder (Bibles, without creating it).
+func biblesPath(override, xdgDocs, goos string, home func() (string, error)) (string, error) {
+	if override != "" {
+		return filepath.Clean(override), nil
+	}
+	docs := ""
+	if goos == "linux" && filepath.IsAbs(xdgDocs) {
+		docs = xdgDocs
+	} else {
+		h, err := home()
+		if err != nil {
+			return "", fmt.Errorf("bibles folder: %w", err)
+		}
+		docs = filepath.Join(h, "Documents")
+	}
+	return filepath.Join(docs, Name, "Bibles"), nil
 }

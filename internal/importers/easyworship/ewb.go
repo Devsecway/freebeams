@@ -173,6 +173,30 @@ func cleanNotice(s string) string {
 	return strings.Join(out, "\n")
 }
 
+// ReadBibleInfo reads only a .ewb file's header and verse count (the
+// verse_info records), without inflating the books: what a folder listing
+// needs. The copyright follows readEWB (public-domain translations say so).
+func ReadBibleInfo(path string) (models.Bible, int, error) {
+	db, err := openReadOnly(path)
+	if err != nil {
+		return models.Bible{}, 0, err
+	}
+	defer db.Close()
+	h, err := readEWBHeader(db)
+	if err != nil {
+		return models.Bible{}, 0, fmt.Errorf("read bible %s: %w", path, err)
+	}
+	bible := models.Bible{Abbrev: h.Abbrev, Name: h.Name, Language: h.Lang, Copyright: h.Copyright}
+	if isPublicDomain(h.Abbrev, h.Name) {
+		bible.Copyright = "Public Domain"
+	}
+	var n sql.NullInt64
+	if err := db.QueryRow(`SELECT sum(length(verse_info)) FROM books`).Scan(&n); err != nil {
+		return models.Bible{}, 0, fmt.Errorf("read bible %s: books: %w", path, err)
+	}
+	return bible, int(n.Int64) / ewbRecordSize, nil
+}
+
 // readEWB decodes a whole .ewb file.
 func readEWB(path string) (models.Bible, []models.Verse, error) {
 	db, err := openReadOnly(path)

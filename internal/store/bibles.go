@@ -59,11 +59,19 @@ func (s *Store) CreateBible(ctx context.Context, b models.Bible) (models.Bible, 
 // CreateBibleWithVerses creates a translation and inserts its verses in one
 // transaction, so an interrupted import never leaves a half-filled Bible.
 func (s *Store) CreateBibleWithVerses(ctx context.Context, b models.Bible, verses []models.Verse) (models.Bible, error) {
+	return s.CreateBibleWithVersesProgress(ctx, b, verses, nil)
+}
+
+// CreateBibleWithVersesProgress is CreateBibleWithVerses reporting its
+// progress: progress (when not nil) is called from the calling goroutine
+// every few thousand verses and once at the end, with the verses written so
+// far and the total.
+func (s *Store) CreateBibleWithVersesProgress(ctx context.Context, b models.Bible, verses []models.Verse, progress func(done, total int)) (models.Bible, error) {
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
 		if err := createBibleTx(ctx, tx, &b); err != nil {
 			return err
 		}
-		return insertVersesTx(ctx, tx, b.ID, verses)
+		return insertVersesTx(ctx, tx, b.ID, verses, progress)
 	})
 	if err != nil {
 		return models.Bible{}, err
@@ -105,11 +113,15 @@ func (s *Store) InsertVerses(ctx context.Context, bibleID int64, verses []models
 		if err != nil {
 			return fmt.Errorf("insert verses: bible %d: %w", bibleID, err)
 		}
-		return insertVersesTx(ctx, tx, bibleID, verses)
+		return insertVersesTx(ctx, tx, bibleID, verses, nil)
 	})
 }
 
-func insertVersesTx(ctx context.Context, tx *sql.Tx, bibleID int64, verses []models.Verse) error {
+// progressEvery is how many verses insertVersesTx writes between progress
+// reports.
+const progressEvery = 2000
+
+func insertVersesTx(ctx context.Context, tx *sql.Tx, bibleID int64, verses []models.Verse, progress func(done, total int)) error {
 	ins, err := tx.PrepareContext(ctx, `
 		INSERT INTO verses (bible_id, book, chapter, verse, text) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT (bible_id, book, chapter, verse) DO UPDATE SET text = excluded.text`)
@@ -134,7 +146,13 @@ func insertVersesTx(ctx context.Context, tx *sql.Tx, bibleID int64, verses []mod
 		return fmt.Errorf("insert verses: %w", err)
 	}
 	seen := make(map[int64]bool, len(verses))
-	for _, v := range verses {
+	for i, v := range verses {
+		if progress != nil && i > 0 && i%progressEvery == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			progress(i, len(verses))
+		}
 		if !validVerseRef(v.Book, v.Chapter, v.Verse) {
 			return fmt.Errorf("insert verses: invalid reference %d %d:%d", v.Book, v.Chapter, v.Verse)
 		}
@@ -152,7 +170,84 @@ func insertVersesTx(ctx context.Context, tx *sql.Tx, bibleID int64, verses []mod
 			return fmt.Errorf("index verse %d %d:%d: %w", v.Book, v.Chapter, v.Verse, err)
 		}
 	}
+	if progress != nil {
+		progress(len(verses), len(verses))
+	}
 	return nil
+}
+
+// DeleteBible removes a translation, its verses and their search index rows
+// in one transaction. A missing bible is ErrNotFound. Schedule items keep
+// the slides they were made with, so nothing else refers to it.
+func (s *Store) DeleteBible(ctx context.Context, bibleID int64) error {
+	return s.inTx(ctx, func(tx *sql.Tx) error {
+		var abbrev string
+		err := tx.QueryRowContext(ctx, `SELECT abbrev FROM bibles WHERE id = ?`, bibleID).Scan(&abbrev)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("delete bible %d: %w", bibleID, ErrNotFound)
+		}
+		if err != nil {
+			return fmt.Errorf("delete bible %d: %w", bibleID, err)
+		}
+		// The index rows of this bible are exactly its rowid range (verseKey).
+		if _, err := tx.ExecContext(ctx, `DELETE FROM verses_fts WHERE rowid BETWEEN ? AND ?`,
+			bibleID<<24, bibleID<<24|0xFFFFFF); err != nil {
+			return fmt.Errorf("delete bible %s: index: %w", abbrev, err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM verses WHERE bible_id = ?`, bibleID); err != nil {
+			return fmt.Errorf("delete bible %s: verses: %w", abbrev, err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM bibles WHERE id = ?`, bibleID); err != nil {
+			return fmt.Errorf("delete bible %s: %w", abbrev, err)
+		}
+		return nil
+	})
+}
+
+// AllVerses returns every verse of a translation in canonical order (what
+// "Save as Package" writes).
+func (s *Store) AllVerses(ctx context.Context, bibleID int64) ([]models.Verse, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT book, chapter, verse, text FROM verses WHERE bible_id = ? ORDER BY book, chapter, verse`, bibleID)
+	if err != nil {
+		return nil, fmt.Errorf("all verses of bible %d: %w", bibleID, err)
+	}
+	defer rows.Close()
+	out := []models.Verse{}
+	for rows.Next() {
+		var v models.Verse
+		if err := rows.Scan(&v.Book, &v.Chapter, &v.Verse, &v.Text); err != nil {
+			return nil, fmt.Errorf("all verses of bible %d: %w", bibleID, err)
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("all verses of bible %d: %w", bibleID, err)
+	}
+	return out, nil
+}
+
+// BibleVerseCounts returns the number of verses of every installed
+// translation, by bible ID.
+func (s *Store) BibleVerseCounts(ctx context.Context) (map[int64]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT bible_id, count(*) FROM verses GROUP BY bible_id`)
+	if err != nil {
+		return nil, fmt.Errorf("bible verse counts: %w", err)
+	}
+	defer rows.Close()
+	out := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, fmt.Errorf("bible verse counts: %w", err)
+		}
+		out[id] = n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("bible verse counts: %w", err)
+	}
+	return out, nil
 }
 
 // Verses returns the verses of a passage in canonical order. Whole-chapter and

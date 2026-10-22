@@ -222,6 +222,10 @@ func TestReadSyntheticBible(t *testing.T) {
 	if err != nil || len(files) != 1 || files[0].Abbrev != "TST" || files[0].PublicDomain || files[0].Path != path {
 		t.Fatalf("FindBibles = %+v, %v", files, err)
 	}
+	info, n, err := ReadBibleInfo(path)
+	if err != nil || info != wantBible || n != 3 {
+		t.Fatalf("ReadBibleInfo = %+v, %d, %v", info, n, err)
+	}
 }
 
 func TestReadBibleErrors(t *testing.T) {
@@ -236,6 +240,9 @@ func TestReadBibleErrors(t *testing.T) {
 	db.Close()
 	if _, _, err := ReadBible(bad); err == nil {
 		t.Error("bad schema: no error")
+	}
+	if _, _, err := ReadBibleInfo(bad); err == nil {
+		t.Error("ReadBibleInfo, bad schema: no error")
 	}
 	files, warnings, err := findBibles(dir)
 	if err != nil || len(files) != 0 || len(warnings) != 1 {

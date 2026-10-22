@@ -12,8 +12,7 @@ import (
 
 	"freebeams/internal/app/core"
 	"freebeams/internal/control"
-	"freebeams/internal/importers/bibletext"
-	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/bibles/biblefolder"
 	"freebeams/internal/models"
 	"freebeams/internal/store"
 )
@@ -29,7 +28,8 @@ type bibleFileImport struct {
 
 // bibleFileFilters are the native dialog filters for Import Bible File….
 var bibleFileFilters = []string{
-	"*.json, *.ewb ; Bible files",
+	"*.fbbible, *.json, *.ewb ; Bible files",
+	"*.fbbible ; FreeBeams Bible package",
 	"*.json ; Bible JSON (a bible-translations folder or chapter, a single file, or an en_kjv.json array)",
 	"*.ewb ; EasyWorship Bible",
 }
@@ -49,25 +49,15 @@ func (a *App) importBibleFileDialog() {
 	}
 }
 
-// readBibleFile parses a Bible file or folder: .ewb through the EasyWorship
-// reader, everything else through bibletext (a translation folder, a chapter
-// file inside one, or a single-file Bible JSON).
+// readBibleFile parses a Bible file or folder (biblefolder.Read): a Bible
+// package, an .ewb file, a translation folder, a chapter file inside one, or
+// a single-file Bible JSON.
 func readBibleFile(path string) (*bibleFileImport, error) {
-	if strings.EqualFold(filepath.Ext(path), ".ewb") {
-		b, verses, err := easyworship.ReadBible(path)
-		if err != nil {
-			return nil, err
-		}
-		if len(verses) == 0 {
-			return nil, fmt.Errorf("read bible %s: no verses", filepath.Base(path))
-		}
-		return &bibleFileImport{path: path, bible: b, verses: verses}, nil
-	}
-	res, err := bibletext.Read(path)
+	l, err := biblefolder.Read(path)
 	if err != nil {
 		return nil, err
 	}
-	return &bibleFileImport{path: path, bible: res.Bible, verses: res.Verses, warnings: res.Warnings}, nil
+	return &bibleFileImport{path: path, bible: l.Bible, verses: l.Verses, warnings: l.Warnings}, nil
 }
 
 // importBibleFile imports the translation in a file or folder the operator
