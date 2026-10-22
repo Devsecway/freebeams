@@ -153,7 +153,8 @@ func saveThemeTx(ctx context.Context, tx *sql.Tx, t *models.Theme, now time.Time
 
 // DeleteTheme removes a theme. A missing id returns ErrNotFound. Schedule
 // items keep their snapshot of the theme; a default-theme setting that
-// pointed at it is cleared, so GetDefaultTheme falls back to the built-in.
+// pointed at it is cleared, so GetDefaultTheme falls back to the built-in,
+// and so is the theme of every song that used it (Song.ThemeID 0).
 func (s *Store) DeleteTheme(ctx context.Context, id int64) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `DELETE FROM themes WHERE id = ?`, id)
@@ -166,6 +167,11 @@ func (s *Store) DeleteTheme(ctx context.Context, id int64) error {
 		}
 		if n == 0 {
 			return fmt.Errorf("delete theme %d: %w", id, ErrNotFound)
+		}
+		// Songs that used the theme go back to the default song theme, so no
+		// song keeps a dangling id.
+		if _, err := tx.ExecContext(ctx, `UPDATE songs SET theme_id = 0 WHERE theme_id = ?`, id); err != nil {
+			return fmt.Errorf("delete theme %d: clear songs: %w", id, err)
 		}
 		for _, kind := range DefaultThemeKinds {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ? AND value = ?`,

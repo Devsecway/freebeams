@@ -55,6 +55,10 @@ type SongSummary struct {
 	// the lyric excerpt around the match when Matched is MatchedLyrics.
 	Matched string `json:"matched,omitempty"`
 	Snippet string `json:"snippet,omitempty"`
+
+	// ThemeID is the song's own theme (Song.ThemeID): 0 = the default song
+	// theme. The Songs list's Theme ▸ submenu checks it.
+	ThemeID int64 `json:"themeId,omitempty"`
 }
 
 // Where a song search matched (SongSummary.Matched).
