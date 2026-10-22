@@ -98,7 +98,7 @@ func TestScan(t *testing.T) {
 }
 
 func TestCachePaths(t *testing.T) {
-	cache := "/cache"
+	cache := filepath.FromSlash("/cache") // filepath.Join gives \cache on Windows
 	a := ThumbPath(cache, "/media/My Clip #1.mp4")
 	if filepath.Dir(a) != cache || filepath.Ext(a) != ".jpg" || !strings.Contains(a, "My_Clip_1") {
 		t.Fatalf("ThumbPath = %q", a)
