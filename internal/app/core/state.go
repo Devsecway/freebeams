@@ -254,6 +254,10 @@ type State struct {
 	// TransitionProgress is the output's running transition, 0..1 (0 when
 	// none; the live monitor when the output is closed).
 	TransitionProgress float64 `json:"transitionProgress"`
+
+	// BibleManager is the Bible Manager: every translation it can add or
+	// remove, the Bibles folder and the running task (biblemanager.go).
+	BibleManager BibleManagerState `json:"bibleManager"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -302,6 +306,8 @@ type StateInput struct {
 	Options OptionsState
 
 	TransitionProgress float64
+
+	BibleManager BibleManagerState
 }
 
 // deckState summarises deck d with slide i selected.
@@ -387,6 +393,13 @@ func BuildState(in StateInput) State {
 		st.Alerts.Saved = []models.Alert{}
 	}
 	st.Bundled = in.Bundled
+	st.BibleManager = in.BibleManager
+	if st.BibleManager.Entries == nil {
+		st.BibleManager.Entries = []BibleEntry{}
+	}
+	if st.BibleManager.Problems == nil {
+		st.BibleManager.Problems = []string{}
+	}
 	if st.Bundled.Installed == nil {
 		st.Bundled.Installed = []string{}
 	}

@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 
+	"freebeams/internal/bibles/bundled"
 	"freebeams/internal/models"
 )
 
@@ -288,10 +289,15 @@ func FindBible(bibles []models.Bible, abbrev string) int {
 	return -1
 }
 
-// DefaultBible picks the initial translation: KJV when installed, else the first.
+// DefaultBible picks the translation to fall back on, at startup and when
+// the selected one was removed in the Bible Manager: the first built-in that
+// is installed, in bundle order (KJV, then ASV, then RVA), else the first
+// translation of the list (sorted by abbreviation), else -1.
 func DefaultBible(bibles []models.Bible) int {
-	if i := FindBible(bibles, "KJV"); i >= 0 {
-		return i
+	for _, abbrev := range bundled.Abbrevs() {
+		if i := FindBible(bibles, abbrev); i >= 0 {
+			return i
+		}
 	}
 	if len(bibles) > 0 {
 		return 0
