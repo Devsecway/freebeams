@@ -129,6 +129,7 @@ func (a *App) wireThemes() {
 	p.OnApply = func(i int) { a.event(func() { a.applyThemeToItem(i, a.schedSel, nil) }) }
 
 	a.win.Schedule.OnSetTheme = func(row, theme int) { a.event(func() { a.applyThemeToItem(theme, row, nil) }) }
+	a.wireSongThemes()
 
 	e := a.win.ThemeEditor
 	a.th.editView = render.NewSlideView()
@@ -155,9 +156,10 @@ func (a *App) defaultTheme(kind models.ItemKind) models.Theme {
 	return store.BuiltinTheme(kind)
 }
 
-// newSongDeck builds a song's deck with the default song theme.
+// newSongDeck builds a song's deck with the song's own theme, or the default
+// song theme when it has none (or its theme is gone): core.SongTheme.
 func (a *App) newSongDeck(song models.Song) models.Deck {
-	return core.SongDeckWith(song, a.defaultTheme(models.ItemSong))
+	return core.SongDeckWith(song, core.SongTheme(song, a.th.list, a.defaultTheme(models.ItemSong)))
 }
 
 // newScriptureDeck builds a passage's deck with the default scripture theme.
@@ -407,6 +409,7 @@ func (a *App) doDeleteTheme(t models.Theme, cmd *control.Command) {
 		return nil
 	}, func() {
 		log.Printf("[freebeams] deleted theme %d %q", t.ID, t.Name)
+		a.forgetSongTheme(t.ID)
 		if a.th.selID == t.ID {
 			a.th.selID = 0
 		}
@@ -552,7 +555,7 @@ func (a *App) handleThemeCommand(cmd *control.Command, args actionArgs) bool {
 		}
 		a.applyThemeToItem(i, row, cmd)
 	default:
-		return false
+		return a.handleSongThemeCommand(cmd, args)
 	}
 	return true
 }
