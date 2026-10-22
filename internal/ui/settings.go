@@ -59,13 +59,19 @@ const (
 	SettingsPageLogo
 	SettingsPageLibrary
 	SettingsPageHotkeys
+
+	// SettingsPageStage is the Stage Display (Foldback) section (settings_stage.go).
+	SettingsPageStage
 	SettingsPageRemote
 )
 
-var settingsPageNames = []string{"Output", "Transition", "Logo", "Library", "Hotkeys", "Remote"}
+var settingsPageNames = []string{"Output", "Transition", "Logo", "Library", "Hotkeys", "Stage Display", "Remote"}
 
 // ParseSettingsPage finds a section by its (case-insensitive) name.
 func ParseSettingsPage(name string) (int, bool) {
+	if isStagePage(name) {
+		return SettingsPageStage, true
+	}
 	for i, n := range settingsPageNames {
 		if strings.EqualFold(n, name) {
 			return i, true
@@ -88,6 +94,9 @@ type SettingsDialog struct {
 	OnImportCopyrighted func() // "Import Copyrighted EasyWorship Bibles…"
 	OnOK                func()
 	OnCancel            func()
+
+	// OnStage reports a change in the Stage Display section (all its values).
+	OnStage func(StageValues)
 
 	// The Remote page: the switch, the port and "Show Pairing Code…".
 	OnRemoteEnabled func(bool)
@@ -120,6 +129,8 @@ type SettingsDialog struct {
 	importAvail bool
 	kinds       []models.TransitionKind
 	rendering   bool
+
+	stage *stagePage // the Stage Display section (settings_stage.go)
 }
 
 // NewSettingsDialog builds the dialog. MainWindow adds AsWindow() to the tree.
@@ -161,7 +172,7 @@ func NewSettingsDialog() *SettingsDialog {
 	host := Control.New()
 	host.SetClipContents(true)
 	expand(host)
-	d.pages = []Control.Instance{d.buildOutputPage(), d.buildTransitionPage(), d.buildLogoPage(), d.buildLibraryPage(), d.buildHotkeysPage(), d.buildRemotePage()}
+	d.pages = []Control.Instance{d.buildOutputPage(), d.buildTransitionPage(), d.buildLogoPage(), d.buildLibraryPage(), d.buildHotkeysPage(), d.buildStagePage(), d.buildRemotePage()}
 	for _, p := range d.pages {
 		p.SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
 		host.AsNode().AddChild(p.AsNode())
@@ -499,6 +510,8 @@ func (d *SettingsDialog) render() {
 		it.SetSelectable(0, false)
 		it.SetSelectable(1, false)
 	}
+
+	d.renderStage()
 }
 
 // msToDuration converts a spin box value in milliseconds to a Duration.

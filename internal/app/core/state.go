@@ -146,6 +146,9 @@ type DialogState struct {
 	// operator window, else the dialog under it ("editor", …). It is never the
 	// output window. "" when no dialog is open.
 	Host string `json:"host,omitempty"`
+
+	// StageMessage reports Live ▸ Stage Message… being open.
+	StageMessage bool `json:"stageMessage,omitempty"`
 }
 
 // ResourceState is what the resource preview (right of the resource tabs) shows.
@@ -198,6 +201,9 @@ type State struct {
 	// monitors (playback.go).
 	Playback PlaybackStates `json:"playback"`
 
+	// Stage is the stage display / Foldback output (stage.go).
+	Stage StageState `json:"stage"`
+
 	// Remote is the LAN remote control (remote.go).
 	Remote RemoteState `json:"remote"`
 }
@@ -237,6 +243,8 @@ type StateInput struct {
 	Bundled BundledState
 
 	Playback PlaybackStates
+
+	Stage StageState
 
 	Remote RemoteState
 }
@@ -300,6 +308,7 @@ func BuildState(in StateInput) State {
 		st.Scripture.CopyrightedAvailable = []string{}
 	}
 	st.Playback = in.Playback
+	st.Stage = in.Stage
 	st.Remote = in.Remote.normalized()
 	st.Bundled = in.Bundled
 	if st.Bundled.Installed == nil {

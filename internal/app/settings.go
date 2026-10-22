@@ -104,6 +104,9 @@ func (a *App) setOutputScreen(i int) error {
 	if a.settings.OutputScreen == i {
 		return nil
 	}
+	if err := a.stageAllowsOutputScreen(i); err != nil { // never the stage display's screen (stage.go)
+		return err
+	}
 	a.settings.OutputScreen = i
 	a.settingsVer++
 	a.saveSetting(core.SettingOutputScreen, i)
@@ -149,6 +152,7 @@ func (a *App) openSettings(page int) {
 		return
 	}
 	a.settingsSnap = a.settings
+	a.stage.snap, a.stage.warning = a.stage.settings, "" // stage.go
 	a.rm.snapEnabled, a.rm.snapPort = a.rm.enabled, a.rm.port
 	a.settingsOpen = true
 	a.settingsVer++ // the displays may have changed since the last time
@@ -170,6 +174,7 @@ func (a *App) closeSettings(cancel bool) {
 	if err := a.setInterfaceColor(s.InterfaceColor); err != nil {
 		a.fail("restore interface color", err)
 	}
+	a.fail("restore stage display", a.setStageSettings(a.stage.snap)) // stage.go
 	if a.rm.srv != nil && (a.rm.port != a.rm.snapPort || a.rm.enabled != a.rm.snapEnabled) {
 		a.fail("restore remote port", a.setRemotePort(a.rm.snapPort))
 		a.setRemoteEnabled(a.rm.snapEnabled)
@@ -234,6 +239,8 @@ func (a *App) onMenu(act ui.MenuAction) {
 		a.fail("interface color", a.setInterfaceColor(core.ColorLight))
 	case ui.MenuAbout:
 		a.notify("About FreeBeams", aboutText())
+	default:
+		a.onLiveMenu(act) // the Live menu (stage.go)
 	}
 }
 
@@ -452,8 +459,10 @@ func (a *App) applySetting(key string, raw json.RawMessage) error {
 			return fmt.Errorf("set-setting %s: %w", key, err)
 		}
 		return a.setInterfaceColor(c)
+	case core.SettingStage, "stage":
+		return a.applyStageSetting(raw) // stage.go
 	default:
-		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, remote.enabled, remote.port)", key)
+		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, stage, remote.enabled, remote.port)", key)
 	}
 	return nil
 }

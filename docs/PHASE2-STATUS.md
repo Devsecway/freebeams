@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 688 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, remote-control and tile-menu blocks)
+test/smoke.sh          # 786 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -377,6 +377,51 @@ Recorded 2026-10-22 on the same machine. "smoke: X" names a check in the `# ----
   `internal/ui/songs.go` (`songMenuTheme`, the panel fields in their own block, one line each in the constructor and
   `showMenu`).
 - `test/smoke.sh`: the `# ---- song themes` block before `# ---- item menus`.
+
+## Stage display (PLAN §4 v0.2 item 1)
+
+Recorded 2026-10-22 on the same machine, with the TV unplugged (one display: the output and the stage display were
+both windows on the built-in display). "smoke: X" names a check in the `# ---- stage display (v0.2)` section of
+`test/smoke.sh` (before `# ---- item menus`, 98 checks; the full run passed with 786 after merging the remote control). The stage display is EasyWorship's **Foldback output**: the decoded
+forms give its names (Options ▸ Foldback, "Enable support for Foldback Output", the Live Output monitor's
+`ToolButton_LiveFoldBackOuputSelect` with Live Output · Alternate Output · FoldBack Output, Action_FoldBackAlert) but
+not its layout, which is ours.
+
+| Criterion | Status | Verification |
+|---|---|---|
+| A text-only confidence monitor: the live slide's text (white, large, auto-fitted with every lyric line kept whole when it can), the next slide (amber `#ffd15c`), item title · slide label, wall clock and service timer, white on black, never the slide's background or video | **pass** | `models.StageFrame` (comparable, so an unchanged frame costs a compare), `core.BuildStageFrame`, `layout.StageLayout` (canvas units on a canvas with the screen's aspect ratio, `TestStageLayout`: no overlaps, everything inside, 4:3, 200 %), `render.StageView` (`fitStageText` prefers the largest size with no wrapped line). Screenshot `stage-display.png`. Smoke: `the stage shows the live slide and the next one`, `the stage is black`, `the stage shows the live text in white`, `the stage shows the next slide in amber`. |
+| Next slide across the item boundary: the next schedule item's first slide, headed "NEXT ITEM · How Great Thou Art · Verse 1"; "LAST SLIDE" at the end | **pass** | `core.NextStageSlide` skips items without slides (`TestNextStageSlide`), `StageFrame.NextHeader` (`TestStageFrameHeaders`). Smoke: `End on the stage item (last slide)`, `the stage announces the next item`. |
+| Output modes: the musicians keep the text during Black / Clear / Logo and see a badge (BLACK `#d32f2f`, CLEAR, LOGO) | **pass** | `core.StageBadge`. Screenshot `stage-black.png`. Smoke: `black (stage)`, `the stage shows the BLACK badge`, `the stage keeps the text during Black`, `logo (stage)`. |
+| Service timer: start, stop (holds), reset, toggle; green while running | **pass** | `core.StageTimer` takes the time as an argument (`TestStageTimer`), `FormatTimer` (`MM:SS`, `H:MM:SS` from an hour). `App.tickStage` re-projects every frame; the view skips equal frames. Smoke: `start the service timer`, `the timer runs`, `stop the timer`, `a stopped timer holds`, `reset the timer`, `toggle starts it`, `toggle stops it`, `an unknown timer action is refused`. |
+| Notes: the operator's stage message (EasyWorship's FoldBack alert), a white-on-teal (`#00796b`) band along the bottom that only the stage display shows | **pass** | Live ▸ Stage Message… (`ui.StageMessageDialog`: Show / Enter, Clear, Cancel / Esc; 200 characters, one paragraph: `core.NormalizeStageNote`, `TestStageNote`). The body gives the band its room (`StageBoxes.NoteBand`). Not persisted. Screenshots `stage-note.png`, `stage-message.png`. Smoke: `a stage message`, `the stage shows the message band`, `the message is white on the band`, `the live text stays above the band`, `the message never reaches the output`, `the band is gone`, `Live ▸ Stage Message… opens the dialog`, `typing in the dialog` (real key events into the dialog's window), `Enter shows the typed message`, `Cancel changes nothing`, `Show (OK) puts it up`, `Clear takes it down`. |
+| Its own output: a second display is covered like the projector (borderless, unfocusable, above the menu bar, `hidesOnDeactivate` off); on the primary display it is a 16:9 window that gives the keyboard back to the operator window; it never vsyncs (the output or the operator window paces the frame loop) | **pass** (window) / **untested** (a third display) | `render.Stage`, `core.StageScreenFor` (Automatic = the first non-primary display the output does not use, `TestStageScreenFor`). With the TV as the only extra display the output keeps it, so the stage is a window on the built-in display. Smoke: `Live ▸ Stage Display turns it on` (`open`, a display, no conflict, windowed unless there are three displays), `the windowed stage gives the keyboard back to the operator window`. The covered (fullscreen) path is the projector's code and is unexercised here: no third display. |
+| The stage display and the output never share a display | **pass** (logic) | `core.StageConflict` refuses a stage display the output covers (and `setOutputScreen` refuses the stage's display while it is on); the Options page shows why and snaps back. `TestStageScreenFor`. Smoke: `an unconnected stage display is refused`, `the stage keeps its display`. |
+| Hotkeys in the stage window | **pass** | `Stage.OnInput` is the output's handler. Smoke: `Left in the stage window is Prev`, `Right in the stage window is Next`. |
+| The Live Output monitor previews the Foldback output (EasyWorship's output selector) | **pass** | `ui.MainWindow.wireOutputSelect`: the swap button opens Live Output · Alternate Output (disabled) · FoldBack Output; the caption follows. A `StageView` over the live view, which keeps its player. Screenshot `stage-monitor.png`. Smoke: `the Live Output monitor shows Foldback`, `the live monitor shows the stage's amber next slide`, `back to the Live Output`, `the live monitor no longer shows the stage`. |
+| Options ▸ Stage Display: enable, display, next slide, clock, 24-hour clock, timer, text size 50–200 %; persisted as one JSON setting; Cancel restores | **pass** | `ui.SettingsDialog` `buildStagePage` (dumb: `SetStage(StageValues)` / `OnStage`), `core.StageSettings.Normalized` (`TestStageSettingsNormalized`), setting `stage.settings`. Screenshots `stage-options.png`, `stage-big.png`, `stage-plain.png`. Smoke: `the Stage Display options page`, `a 24-hour clock and bigger text`, `the stage settings are persisted` (the stored JSON), `the bigger stage text still has its next slide`, `no next slide, no timer`, `without the next slide there is no amber`, `the clock stays inside the right margin`, `Cancel restores the stage settings`. |
+| Live menu: Go Live, Go Back, Show Logo, Black Output, Clear Output, Show Live, Stage Display (checked while on), Stage Message… | **pass** | `ui.Menus.buildLive` (no accelerators: the app's hotkeys own the keys). The native menu cannot be clicked by automation; `menu {item}` runs the same handlers. Smoke: `Live ▸ Stage Display turns it on` / `turns it off`, `Live ▸ Black Output turns it off`, `Live ▸ Stage Message… opens the dialog`. |
+| Control actions and `/state` | **pass** | `stage {on?, screen?}` (toggle without `on`), `stage-timer {action}`, `stage-monitor {on?}`, `stage-note {text}` / `{mode: "open"\|"clear"}`, `stage-native` (the OS window state, macOS), `set-setting {key: "stage", value: {…}}` (fields merge), `options {page: "stage"}`, `native-key {window: "stage"\|"stage-message"}`, `screenshot?window=stage\|stage-message`. `/state.stage`: `settings, open, fullscreen, screen, focused, conflict, monitor, title, label, current, next, nextLabel, nextTitle, nextHeader, badge, clock, timer, timerRunning, timerSeconds, note`; `/state.dialog.stageMessage`. |
+
+Known limits: no per-item stage layout or EasyWorship-style layout editor; slide notes do not exist in the data
+model yet (the stage message is the only "notes"); the phone remote (v0.2 item 2, "Remote control") does not show
+the stage frame yet (it could push the same `StageFrame`); the timer counts up only (countdowns are v0.2 item 4).
+
+### Shared files touched (stage display)
+
+- New: `internal/models/stage.go` (+ test), `internal/app/core/stage.go` (+ test), `internal/app/stage.go`,
+  `internal/render/layout/stage.go` (+ test), `internal/render/stage.go`, `internal/render/stage_view.go`,
+  `internal/ui/settings_stage.go`, `internal/ui/menus_live.go`, `internal/ui/output_select.go`,
+  `internal/ui/stage_message.go`.
+- `internal/app/app.go` (`stage` field, `loadStageSettings`, `tickStage`, `closeStage`), `view.go`
+  (`liveMonitorContent`, `wireStage`, `renderStage`), `settings.go` (Options snapshot / Cancel, `stage` setting key,
+  `onLiveMenu` as `onMenu`'s default, `stageAllowsOutputScreen`), `control.go` (`/state.stage`,
+  `dialog.stageMessage`, `actionArgs.Screen` / `Action` in their own block, `handleStageCommand`, the two screenshot
+  windows), `hooks.go` (`native-key` windows `stage` and `stage-message`), `core/state.go` (`State.Stage`,
+  `DialogState.StageMessage`, own blocks).
+- `internal/render/output.go` (`classdb.Register[StageView]`), `internal/ui/menus.go` (the Live menu's actions in
+  their own block), `internal/ui/mainwindow.go` (`OnMonitorOutput`, `StageMessage` in their own blocks, the dialog
+  list), `internal/ui/settings.go` (the Stage Display page).
+- `test/smoke.sh`: the `# ---- stage display (v0.2)` block before `# ---- item menus`.
 
 ## Remote control (PLAN v0.2 item 2)
 
