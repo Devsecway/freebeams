@@ -646,6 +646,43 @@ the merge failed outside this work, `screenshot song-menu is not a PNG: {"ok":fa
   (`onEdit`, caret at the end), `monitor.go` (`OnDoubleClick`), `register.go`, `demo.go`.
 - `test/smoke.sh` (scripture block), `docs/UI-SPEC.md` §3.6, `CLAUDE.md` (gotchas appended).
 
+## Editable hotkeys, default themes per item type and the Zoom transition (Options)
+
+Recorded 2026-10-22 on the same machine (HDMI TV as the projector).
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Hotkeys are data: a `core.Keymap` (action id → key chords) with EasyWorship's keys as the defaults, applied live to `core.Hotkeys` | **pass** | `internal/app/core/keymap.go`: 20 bindable actions (`HotkeyActions`: next, prev, first, last, golive, schedule-next/prev, golive-next/prev, black, clear, logo, the seven section jumps and jump-slide), each with any number of `Chord`s (key + Ctrl/⌘, Alt, Shift; Ctrl and ⌘ are one chord, as before). `Hotkeys.SetKeymap` builds the lookup; the zero value still uses the defaults. Section jumps and the slide-number jump work from whatever key they are bound to, with the same 1 s digit window; navigation keys a focused list or grid keeps are still passed through. `TestHotkeys` (unchanged, defaults), `TestHotkeysCustom` (rebound Next, Verse on Q then 2 then 1 = Verse 21, slide jump on G and on Alt+J with digits, F-keys, Shift chords, a moved Ctrl+C, an unbound Backspace in `Unhandled`). |
+| Parsing and the stored form | **pass** | `ParseChord` reads `ctrl+b`, `Cmd+B`, `⌘+L`, `→`, `Page Down`, `F12`; `String` is the stored form, `Label` the table text (`TestParseChord`, both round-trip). Persisted under `settings.hotkeys` as `{"next":["right","space","n"],…}`; loading is lenient (unknown actions and keys dropped, missing actions get their defaults: `TestKeymapJSON`). |
+| Several keys per action, conflicts and reserved keys | **pass** | `Keymap.WithKey` / `WithoutKey` / `WithKeys` never change the receiver; a key another action has is a `*ConflictError` ("Ctrl+B is already assigned to Black") unless `reassign`; `Reserved` refuses digits (the numbers after a jump key), Esc, Tab and Ctrl/⌘ Q, W, H, M, N, O, S, ⇧S, V, X, A, Z (`TestReserved`, `TestKeymapEditing`). Ctrl+C stays EasyWorship's Clear: hotkeys are off in text fields, so ⌘C still copies there. |
+| Options ▸ Hotkeys is editable: Add Key… (captures the next key press with its modifiers), Remove ▾ (one of the action's keys), Reset to Defaults, Import from EasyWorship | **pass** | `ui.HotkeysPage` (`internal/ui/settings_hotkeys.go`, a dumb view: `SetRows` / `SetCapturing` / `SetStatus`, `On…` callbacks). While a capture runs the dialog window's input hook (`dialogWindow.keyHook`) hands every key press to the app and marks it handled, so Space / Enter never press a button and Esc cancels the capture rather than closing Options. A key another action has opens the Reassign Key question (OK moves it, Cancel keeps it); a refusal shows in red under the table. Cancel in Options restores the hotkeys from when it opened. Screenshots `settings-hotkeys-capture.png`, `settings-hotkeys-refused.png`, `settings-hotkeys-conflict.png`. |
+| Import from EasyWorship (`HotKeys.2.ini`: Windows virtual-key codes, `C-` = Ctrl) | **pass** | `core.ParseEWHotkeys` maps letters, digits, keypad digits, F1–F12 and the named keys, the `C-`/`S-`/`A-` prefixes; Go Live (not in EasyWorship) keeps its keys; unreadable and reserved keys are skipped and counted. EasyWorship 8's own file is exactly our defaults (`TestParseEWHotkeys`). The button is enabled when `/Users/Shared/Softouch/Easyworship.v8/Settings/HotKeys.2.ini` exists; `import-hotkeys {path}`. |
+| Default theme per item type in Options (Songs, Scriptures: what `store.DefaultThemeKinds` covers) | **pass** | `ui.DefaultThemesPage` (`internal/ui/settings_themes.go`, section "Themes"), one dropdown per kind, projected from `a.th.defaults` and calling the same `setDefaultTheme` as the Themes tab's Set as Default (applied at once, not undone by Cancel, like Set as Default). On a change, `followDefaultTheme` re-themes the library deck behind the resource preview and Preview when it shows that song (without a theme of its own) or passage with the old default (`core.FollowsDefault`, `TestFollowsDefault`); schedule items keep their snapshot and Live is left alone. Smoke `# ---- default themes`: `Preview follows the new default`, `Live keeps its theme`, `a new schedule item uses the new default`, `the earlier item keeps its snapshot`, the scripture default, `an item type without a default is refused`; screenshots `settings-themes.png`, `default-theme-main.png`. |
+| Zoom In / Zoom Out transitions | **pass** | `models.TransitionZoomIn` / `ZoomOut` (family `zoom`, `zoom` alone = zoom-in, `TestTransitionKinds`, `TestParseTransitionKind`). `layout.Transition` adds `InScale` / `OutScale`: zoom in grows the new slide from the centre over the old one; zoom out shrinks the old slide into the centre above the new one, with the same duration and smoothstep easing (`TestTransitionEndpoints`, `TestTransitionMidway`, `TestTransitionMonotonic`). `render` scales each layer's `inner` content node about its centre (pivot set in `placeAt`; a 0.001 floor keeps the transform invertible), so text, images and video layers zoom together on the output and the live monitor. Listed in Options ▸ Transition (from `models.TransitionKinds`); FreeBeams has no per-item transitions. |
+| Robust mid-transition screenshots | **pass** | `wait-transition {percent}` answers once the output's transition (the live monitor's when the output is closed) has reached that progress, and fails when none runs; `/state.transitionProgress`. The zoom checks use it instead of `sleep 1`: `mid-zoom-in: the centre shows the new slide`, `… the corners still show the old slide`, `mid-zoom-in on the live monitor …`, `mid-zoom-out: the centre still shows the old slide`, `the zoom-in ends on the new slide`. Screenshots `zoomin-mid.png`, `zoomin-mid-main.png`, `zoomout-mid.png`. |
+| Control and `/state` | **pass** | `set-hotkey {action, keys, reassign}` (the action's whole list; refusals and conflicts are errors), `reset-hotkeys`, `hotkey-capture {action}` / `{on:false}` (Add Key…), `import-hotkeys {path}`, `hotkeys`; `native-key {window:"settings"}` types into Options; `set-default-theme {kind, themeName}` (also `name`; `songs` / `scriptures` accepted); `transition {"kind":"zoom-in"}`. `/state.settings.hotkeys`, `/state.options` (`hotkeyCapture`, `hotkeyStatus`, `hotkeyRefused`), `/state.transitionProgress`. Smoke `# ---- hotkeys editing`: Next rebound to F through a capture and pressed natively in the main window (live index advances, Space no longer does), Cmd+Q held in a capture is refused, Esc cancels a capture, a conflict asks and both answers work, the keymap is persisted, a custom Verse key takes its number, Cancel restores, `reset-hotkeys`. |
+
+Smoke on 2026-10-22: `test/smoke.sh` **1196/1196 PASS** on the first run, log hygiene and the keepalive walk clean
+(the zoom checks add 21 lines, `# ---- hotkeys editing` and `# ---- default themes` 69 checks); `test/splitters.sh`
+PASS. The hotkey editor, refusal, conflict question, Themes page and mid-zoom screenshots were checked by eye.
+
+### Shared files touched (Options: hotkeys, default themes, zoom)
+
+- New: `internal/app/core/keymap.go` (+ test), `internal/app/hotkeys.go`, `internal/ui/settings_hotkeys.go`,
+  `internal/ui/settings_themes.go`.
+- `internal/app/core/hotkeys.go` (the key tables became `Keymap` lookups), `core/settings.go` (`Settings.Hotkeys`
+  in its own block; `Bindings` moved to keymap.go), `core/state.go` (`Options` and `TransitionProgress` blocks),
+  `core/themes.go` (`FollowsDefault` appended).
+- `internal/models/transition.go` (zoom kinds in their own const blocks), `internal/render/layout/transition.go`
+  (`InScale` / `OutScale`), `internal/render/transitions.go`, `slideview.go` (one `layer.scale` field).
+- `internal/app/app.go` (the `opt` field block, `serveProgressWaiters` after `serveWaiters`), `settings.go` (load,
+  restore, `wireOptions`, `renderOptions`, `handleOptionsCommand` as the default), `control.go` (an `actionArgs`
+  block, two `state()` lines), `hooks.go` (`native-key` window `settings`), `themes.go` (`followDefaultTheme` in
+  `setDefaultTheme`, `set-default-theme` kinds and `themeName`).
+- `internal/ui/settings.go` (the Themes section, `Hotkeys` / `DefaultThemes` fields, the key hook), `dialogs.go`
+  (`dialogWindow.keyHook`).
+- `test/smoke.sh`: zoom checks in the transitions block; `# ---- hotkeys editing` and `# ---- default themes` after it.
+
 ## Remaining for Phase 2
 
 - **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the
@@ -659,9 +696,11 @@ the merge failed outside this work, `screenshot song-menu is not a PNG: {"ok":fa
   list grows, importing EasyWorship's per-song themes (needs a library whose songs have them, see "Per-song
   themes"), and EasyWorship's "Apply changes to items in schedule" choice (today a saved theme always
   restyles the schedule items that use it).
-- **Settings**: default themes per item type (the Options dialog has Output, Transition, Logo, Library and a
-  read-only Hotkeys table; editable hotkeys and a Zoom transition are not done). The native menus cannot be
-  driven by automation (the `menu {item}` action covers the handlers).
+- **Settings**: the Options dialog has Output, Transition (with Zoom), Logo, Library, editable Hotkeys and default
+  Themes per item type. Still open: EasyWorship's separate Black / Clear / Logo transitions (one transition serves
+  all), default themes for media and presentations (they have no theme setting yet), per-item transitions, and
+  telling ⌘ and Ctrl apart in a binding (they are one chord). The native menus cannot be driven by automation (the
+  `menu {item}` action covers the handlers).
 - **Packaging** (PLAN §4 M6): the release build, scripts, CI workflows and docs are in place, see
   [RELEASE.md](RELEASE.md). Still open: signing and notarization (needs credentials), and the Windows and Linux
   builds, which are unverified until the release workflow has run.

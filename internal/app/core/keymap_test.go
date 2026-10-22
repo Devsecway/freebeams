@@ -137,8 +137,9 @@ func TestReserved(t *testing.T) {
 		}
 	}
 	km := DefaultKeymap()
-	if _, err := km.WithKey("next", Chord{Key: "q", Ctrl: true}, true); !errors.Is(err, ErrReserved) {
-		t.Errorf("⌘Q accepted: %v", err)
+	_, err := km.WithKey("next", Chord{Key: "q", Ctrl: true}, true)
+	if !errors.Is(err, ErrReserved) || err.Error() != "Ctrl+Q is reserved (Quit)" {
+		t.Errorf("⌘Q: %v", err)
 	}
 }
 

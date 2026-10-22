@@ -871,6 +871,35 @@ shot iris-mid output
 pixel "mid-iris: the centre shows the new slide" "$OUT/iris-mid.png" has 1f3f9f 0.45 0.45 0.55 0.55 200
 pixel "mid-iris: the corners still show the old slide" "$OUT/iris-mid.png" has 2a7f62 0.0 0.0 0.1 0.1 200
 wait_idle
+# Zoom in: the new slide grows from the centre; the corners keep the old one.
+# The screenshots wait on the transition's progress (wait-transition), not on
+# time, so they land mid-way however slow the machine is: at 45 % the eased
+# scale is about 0.43, and the checks hold until it is about 0.8.
+act "transition: zoom-in" transition '{"kind":"Zoom In"}' 's["settings"]["transition"] == {"kind":"zoom-in","duration":4000}'
+act "select green (zoom)" select-media '{"title":"smoke-green"}' 's["preview"]["title"] == "smoke-green"'
+act "zoom-in running" go-live '' 's["live"]["title"] == "smoke-green" and s["transitioning"]'
+act "zoom-in reaches 45 %" wait-transition '{"percent":0.45}' '0.45 <= s["transitionProgress"] < 1'
+shot zoomin-mid output
+shot zoomin-mid-main main
+pixel "mid-zoom-in: the centre shows the new slide" "$OUT/zoomin-mid.png" has 2a7f62 0.45 0.45 0.55 0.55 200
+pixel "mid-zoom-in: the corners still show the old slide" "$OUT/zoomin-mid.png" has 1f3f9f 0.0 0.0 0.08 0.08 200
+pixel "mid-zoom-in: the corners do not show the new slide" "$OUT/zoomin-mid.png" lacks 2a7f62 0.0 0.0 0.08 0.08 50
+pixel "mid-zoom-in on the live monitor: new slide in the centre" "$OUT/zoomin-mid-main.png" has 2a7f62 0.78 0.49 0.82 0.53 100
+pixel "mid-zoom-in on the live monitor: old slide in the corner" "$OUT/zoomin-mid-main.png" has 1f3f9f 0.65 0.375 0.67 0.40 100
+wait_idle
+shot zoomin-end output
+pixel "the zoom-in ends on the new slide" "$OUT/zoomin-end.png" has 2a7f62 0.0 0.0 1.0 1.0 10000
+pixel "the zoom-in leaves nothing of the old slide" "$OUT/zoomin-end.png" lacks 1f3f9f 0.0 0.0 1.0 1.0 50
+# Zoom out: the old slide shrinks into the centre over the new one.
+act "transition: zoom-out" transition '{"kind":"zoom-out"}' 's["settings"]["transition"]["kind"] == "zoom-out"'
+act "select blue (zoom)" select-media '{"title":"smoke-blue"}' 's["preview"]["title"] == "smoke-blue"'
+act "zoom-out running" go-live '' 's["live"]["title"] == "smoke-blue" and s["transitioning"]'
+act "zoom-out reaches 45 %" wait-transition '{"percent":0.45}' '0.45 <= s["transitionProgress"] < 1'
+shot zoomout-mid output
+pixel "mid-zoom-out: the centre still shows the old slide" "$OUT/zoomout-mid.png" has 2a7f62 0.45 0.45 0.55 0.55 200
+pixel "mid-zoom-out: the corners show the new slide" "$OUT/zoomout-mid.png" has 1f3f9f 0.0 0.0 0.08 0.08 200
+wait_idle
+act "wait-transition without a transition fails" wait-transition '{"percent":0.5}' 'not r["ok"] and "no transition" in r["error"]'
 act "unknown transition is rejected" transition '{"kind":"cube"}' 'not r["ok"]'
 # Settings round trip: set-setting persists at once; the stored JSON is the
 # control API's form.
@@ -942,6 +971,101 @@ act "unknown menu item is rejected" menu '{"item":"bogus"}' 'not r["ok"]'
 act "File ▸ New Schedule (clean schedule, no question)" menu '{"item":"new-schedule"}' 's["schedule"]["title"] == "Untitled" and not s["schedule"]["dirty"] and s["focus"] != "dialog"'
 act "open the saved schedule again" open-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["title"] == "smoke-schedule"'
 act "Songs tab again" tab '{"tab":"songs"}' 's["tab"] == 0'
+
+# ---- hotkeys editing -------------------------------------------------------------------------
+# Options ▸ Hotkeys: Add Key… captures the next key press in the dialog
+# (native-key into the settings window), refuses reserved keys, asks before
+# taking another action's key, and the new key works at once in the main
+# window. set-hotkey / reset-hotkeys are the control API's way in.
+act "hotkeys: defaults in /state" hotkeys '' 's["settings"]["hotkeys"]["next"] == ["right","space","n"] and s["settings"]["hotkeys"]["black"] == ["ctrl+b"] and s["options"]["hotkeyCapture"] == ""'
+act "Add Key… for Next" hotkey-capture '{"action":"next"}' 's["dialog"]["settings"] and s["options"]["hotkeyCapture"] == "next" and s["focus"] == "dialog"'
+wait_idle
+shot settings-hotkeys-capture settings
+pixel "the hotkey editor has content" "$OUT/settings-hotkeys-capture.png" notblank
+act "F is captured for Next" native-key '{"name":"f","window":"settings"}' 's["options"]["hotkeyCapture"] == "" and s["settings"]["hotkeys"]["next"] == ["right","space","n","f"] and s["dialog"]["settings"]'
+act "Add Key… again" hotkey-capture '{"action":"next"}' 's["options"]["hotkeyCapture"] == "next"'
+act "Cmd+Q is refused as a reserved key" native-key '{"name":"q","meta":true,"window":"settings"}' 's["options"]["hotkeyRefused"] and "reserved" in s["options"]["hotkeyStatus"] and "ctrl+q" not in str(s["settings"]["hotkeys"]) and s["dialog"]["settings"]'
+wait_idle
+shot settings-hotkeys-refused settings
+act "Add Key… then Esc cancels the capture, not the dialog" hotkey-capture '{"action":"next"}' 's["options"]["hotkeyCapture"] == "next"'
+act "Esc during a capture" native-key '{"name":"escape","window":"settings"}' 's["options"]["hotkeyCapture"] == "" and s["dialog"]["settings"] and s["settings"]["hotkeys"]["next"] == ["right","space","n","f"]'
+act "Add Key… for Next (conflict)" hotkey-capture '{"action":"next"}' 's["options"]["hotkeyCapture"] == "next"'
+act "Ctrl+B belongs to Black: asks first" native-key '{"name":"b","ctrl":true,"window":"settings"}' 's["dialog"]["confirm"] == "Reassign Key" and s["settings"]["hotkeys"]["black"] == ["ctrl+b"]'
+wait_idle
+shot settings-hotkeys-conflict dialog
+act "cancel keeps Ctrl+B on Black" dismiss '' 's["dialog"].get("confirm", "") == "" and s["dialog"]["settings"] and s["settings"]["hotkeys"]["black"] == ["ctrl+b"]'
+act "Add Key… for Logo (conflict)" hotkey-capture '{"action":"logo"}' 's["options"]["hotkeyCapture"] == "logo"'
+act "F belongs to Next: asks first" native-key '{"name":"f","window":"settings"}' 's["dialog"]["confirm"] == "Reassign Key"'
+act "reassign moves F to Logo" accept '' 's["settings"]["hotkeys"]["logo"] == ["ctrl+l","f"] and s["settings"]["hotkeys"]["next"] == ["right","space","n"]'
+act "set-hotkey: Next on F and Right only" set-hotkey '{"action":"next","keys":["F","Right"],"reassign":true}' 's["settings"]["hotkeys"]["next"] == ["f","right"] and s["settings"]["hotkeys"]["logo"] == ["ctrl+l"]'
+act "OK closes Options" options '{"on":false}' 'not s["dialog"]["settings"] and s["settings"]["hotkeys"]["next"] == ["f","right"]'
+wait_idle
+python3 - "$LIB" <<'PY2' || fail "the hotkeys were not persisted"
+import json, sqlite3, sys
+db = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
+row = db.execute("select value from settings where key = 'settings.hotkeys'").fetchone()
+sys.exit(0 if row and json.loads(row[0])["next"] == ["f", "right"] else 1)
+PY2
+log "ok: the hotkeys are persisted"
+act "search amazing (hotkeys)" search-songs '{"q":"amazing"}' 's["songs"]["results"] >= 1'
+act "select Amazing Grace (hotkeys)" select-song '{"title":"Amazing Grace"}' 's["preview"]["title"] == "Amazing Grace"'
+act "Amazing Grace live (hotkeys)" go-live '' 's["live"]["title"] == "Amazing Grace" and s["live"]["index"] == 0'
+act "no focus (hotkeys)" focus '{"target":"none"}' 's["focus"] == "none"'
+act "the new key F is Next (native)" native-key '{"name":"f"}' 's["live"]["index"] == 1'
+act "Space is no longer Next (native)" native-key '{"name":"space"}' 's["live"]["index"] == 1'
+act "set-hotkey refuses Cmd+Q" set-hotkey '{"action":"next","keys":["cmd+q"]}' 'not r["ok"] and "reserved" in r["error"]'
+act "set-hotkey refuses a digit" set-hotkey '{"action":"next","keys":["5"]}' 'not r["ok"] and "reserved" in r["error"]'
+act "set-hotkey reports a conflict" set-hotkey '{"action":"next","keys":["ctrl+l"]}' 'not r["ok"] and "already assigned to Logo" in r["error"]'
+act "set-hotkey rejects an unknown action" set-hotkey '{"action":"spin","keys":["k"]}' 'not r["ok"]'
+# A custom section key still takes its number (the digit window).
+act "Verse on Q" set-hotkey '{"action":"jump-verse","keys":["q"]}' 's["settings"]["hotkeys"]["jump-verse"] == ["q"]'
+act "slide jump on G" set-hotkey '{"action":"jump-slide","keys":["g"]}' 's["settings"]["hotkeys"]["jump-slide"] == ["g"]'
+act "native Q (Verse)" native-key '{"name":"q"}' 's["live"]["label"] == "Verse 1"'
+act "native 2 within 1s (Verse 2)" native-key '{"name":"2"}' 's["live"]["label"] == "Verse 2"'
+act "native G (slide number)" native-key '{"name":"g"}' 's["live"]["label"] == "Verse 2"'
+act "native 1 within 1s (slide 1)" native-key '{"name":"1"}' 's["live"]["index"] == 0'
+# Cancel in Options restores the hotkeys from when it opened.
+act "Options again" options '{"page":"hotkeys"}' 's["dialog"]["settings"]'
+act "a change while Options is open" set-hotkey '{"action":"black","keys":["f2"]}' 's["settings"]["hotkeys"]["black"] == ["f2"]'
+act "Cancel restores the hotkeys" dismiss '' 'not s["dialog"]["settings"] and s["settings"]["hotkeys"]["black"] == ["ctrl+b"]'
+act "reset-hotkeys" reset-hotkeys '' 's["settings"]["hotkeys"]["next"] == ["right","space","n"] and s["settings"]["hotkeys"]["jump-verse"] == ["v"] and s["settings"]["hotkeys"]["jump-slide"] == ["s"]'
+act "no focus (reset)" focus '{"target":"none"}' 's["focus"] == "none"'
+act "Right is Next again (native)" native-key '{"name":"right"}' 's["live"]["index"] == 1'
+act "F is no hotkey again (native)" native-key '{"name":"f"}' 's["live"]["index"] == 1'
+
+# ---- default themes --------------------------------------------------------------------------
+# Options ▸ Themes: a default theme per item type, the same state as the
+# Themes tab's Set as Default. A change re-themes Preview when it shows a
+# library song / passage with the old default, and new schedule items; items
+# already in the schedule keep their snapshot, and Live is left alone.
+act "Amazing Grace in Preview (themes)" select-song '{"title":"Amazing Grace"}' 's["preview"]["title"] == "Amazing Grace" and s["preview"]["theme"] == "Default Song"'
+act "a schedule item before the change" add-to-schedule '{"source":"song"}' 's["schedule"]["items"][-1] == "Amazing Grace"'
+DT_ROW=$(( $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST") - 1 ))
+act "save a second song theme" save-theme "$(recolor "$(post get-theme '{"name":"Default Song"}')" "Smoke Default" 991a80 0)" '"Smoke Default" in s["themes"]["names"]'
+act "Options ▸ Themes" options '{"page":"themes"}' 's["dialog"]["settings"]'
+wait_idle
+shot settings-themes settings
+pixel "the Themes page has content" "$OUT/settings-themes.png" notblank
+act "an item type without a default is refused" set-default-theme '{"kind":"media","themeName":"Smoke Default"}' 'not r["ok"]'
+act "songs default (themeName)" set-default-theme '{"kind":"songs","themeName":"Smoke Default"}' 's["themes"]["songDefault"] == "Smoke Default" and s["themes"]["scriptureDefault"] == "Default Scripture"'
+check "Preview follows the new default" "$LAST" 's["preview"]["title"] == "Amazing Grace" and s["preview"]["theme"] == "Smoke Default"'
+check "Live keeps its theme" "$LAST" 's["live"]["title"] == "Amazing Grace" and s["live"]["theme"] == "Default Song"'
+act "close Options (themes)" options '{"on":false}' 'not s["dialog"]["settings"]'
+wait_idle
+shot default-theme-main main
+pixel "the preview monitor shows the new default" "$OUT/default-theme-main.png" has 991a80 0.24 0.37 0.55 0.66 2000
+act "a new schedule item uses the new default" add-to-schedule '{"source":"song"}' 's["schedule"]["items"][-1] == "Amazing Grace"'
+act "select the new item" select-schedule "{\"index\":$((DT_ROW + 1))}" 's["preview"]["theme"] == "Smoke Default"'
+act "the earlier item keeps its snapshot" select-schedule "{\"index\":$DT_ROW}" 's["preview"]["theme"] == "Default Song"'
+act "a passage in Preview (themes)" reference '{"text":"jn 3:16"}' 's["scripture"]["passage"] == "John 3:16" and s["preview"]["theme"] == "Default Scripture"'
+act "scripture default" set-default-theme '{"kind":"scripture","themeName":"Smoke Default"}' 's["themes"]["scriptureDefault"] == "Smoke Default" and s["preview"]["theme"] == "Smoke Default"'
+act "restore the scripture default" set-default-theme '{"kind":"scripture","themeName":"Default Scripture"}' 's["themes"]["scriptureDefault"] == "Default Scripture" and s["preview"]["theme"] == "Default Scripture"'
+act "restore the songs default" set-default-theme '{"kind":"song","name":"Default Song"}' 's["themes"]["songDefault"] == "Default Song"'
+act "remove the new item (themes)" remove-schedule "{\"index\":$((DT_ROW + 1))}" "len(s[\"schedule\"][\"items\"]) == $DT_ROW + 1"
+act "remove the earlier item (themes)" remove-schedule "{\"index\":$DT_ROW}" "len(s[\"schedule\"][\"items\"]) == $DT_ROW"
+act "delete the smoke default theme" delete-theme '{"name":"Smoke Default","confirm":true}' '"Smoke Default" not in s["themes"]["names"]'
+act "save the schedule (default themes)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+act "Songs tab (default themes)" tab '{"tab":"songs"}' 's["tab"] == 0'
 
 # ---- bundled Bibles and Import Bible File… (Phase 2) -----------------------------------------
 # The KJV and ASV ship inside the app (internal/bibles/bundled, docs/BIBLES.md)

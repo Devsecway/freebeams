@@ -319,7 +319,7 @@ func (e *ConflictError) Error() string {
 }
 
 // ErrReserved wraps the refusal of a reserved key (see Reserved).
-var ErrReserved = errors.New("reserved key")
+var ErrReserved = errors.New("reserved")
 
 // ErrAlreadyBound is returned when the action already has the chord.
 var ErrAlreadyBound = errors.New("already assigned")
@@ -357,7 +357,7 @@ func Reserved(c Chord) (string, bool) {
 			if c.Key == "z" && c.Shift {
 				what = "Redo"
 			}
-			return fmt.Sprintf("%s is %s", c.Label(), what), true
+			return what, true
 		}
 	}
 	return "", false
@@ -374,7 +374,7 @@ func (km Keymap) Check(id string, c Chord) error {
 		return fmt.Errorf("unknown key %q", c.Key)
 	}
 	if why, ok := Reserved(c); ok {
-		return fmt.Errorf("%s cannot be a hotkey: %s: %w", c.Label(), why, ErrReserved)
+		return fmt.Errorf("%s is %w (%s)", c.Label(), ErrReserved, why)
 	}
 	switch owner := km.Owner(c); owner {
 	case "":
