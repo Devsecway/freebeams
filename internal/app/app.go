@@ -115,6 +115,8 @@ type App struct {
 
 	pb playbackState // video / audio transport per monitor (playback.go)
 
+	stage stageState // the stage display / Foldback output (stage.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -182,6 +184,8 @@ func (a *App) Ready() {
 	log.Printf("[freebeams] %s", versionBanner())
 
 	a.loadSettings() // transition, output display, logo, interface color (settings.go)
+
+	a.loadStageSettings() // the stage display (stage.go)
 
 	// The projector output opens by itself only when a second display exists.
 	screens := render.Screens()
@@ -416,6 +420,7 @@ func (a *App) Process(delta Float.X) {
 	} else if render.AnyMediaActive() {
 		a.renderPlayback() // the transport follows the player every frame
 	}
+	a.tickStage() // the stage display's clock and timer (stage.go)
 	a.flushReplies()
 	a.serveWaiters()
 }
@@ -546,6 +551,7 @@ func (a *App) shutdown() {
 	a.out.OnClosed = nil
 	a.out.OnInput = nil
 	a.out.Close()
+	a.closeStage()
 	render.ReleaseCaches()
 	// The jobs see the cancelled context; wait (bounded) for them to stop
 	// using the store, e.g. an import rolling back its write transaction.

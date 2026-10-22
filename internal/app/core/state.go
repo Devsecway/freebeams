@@ -187,6 +187,9 @@ type State struct {
 	// Playback is the video / audio transport of the live and preview
 	// monitors (playback.go).
 	Playback PlaybackStates `json:"playback"`
+
+	// Stage is the stage display / Foldback output (stage.go).
+	Stage StageState `json:"stage"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -224,6 +227,8 @@ type StateInput struct {
 	Bundled BundledState
 
 	Playback PlaybackStates
+
+	Stage StageState
 }
 
 // deckState summarises deck d with slide i selected.
@@ -284,6 +289,7 @@ func BuildState(in StateInput) State {
 		st.Scripture.CopyrightedAvailable = []string{}
 	}
 	st.Playback = in.Playback
+	st.Stage = in.Stage
 	st.Bundled = in.Bundled
 	if st.Bundled.Installed == nil {
 		st.Bundled.Installed = []string{}

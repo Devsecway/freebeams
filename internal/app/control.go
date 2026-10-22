@@ -78,6 +78,7 @@ func (a *App) state() core.State {
 		Import:        a.importDoc(),
 		Bundled:       a.bundled,
 		Playback:      a.playbackStates(),
+		Stage:         a.stageStateDoc(),
 		LastError:     a.lastError,
 		Dialog:        dialog,
 		WindowTitle:   a.win.WindowTitle(),
@@ -154,6 +155,10 @@ type actionArgs struct {
 
 	// Playback (playback.go); volume takes Value, loop takes On, all take Target.
 	Seconds *float64 `json:"seconds"` // seek: the position in seconds
+
+	// Stage display (stage.go).
+	Screen *int   `json:"screen"` // stage: the display (-1 automatic)
+	Action string `json:"action"` // stage-timer: start | stop | reset | toggle
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -484,7 +489,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleStageCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}
@@ -511,8 +516,10 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(a.win.Message.AsWindow())
 	case "output":
 		png, err = a.out.Screenshot()
+	case "stage":
+		png, err = a.stage.win.Screenshot()
 	default:
-		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|settings|dialog|message)", cmd.Query["window"])
+		err = fmt.Errorf("screenshot: unknown window %q (main|output|stage|editor|settings|dialog|message)", cmd.Query["window"])
 	}
 	if err != nil {
 		cmd.RespondErr(err)

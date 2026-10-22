@@ -26,6 +26,7 @@ import (
 // once at startup, before creating any SlideView.
 func RegisterAll() {
 	classdb.Register[SlideView]()
+	classdb.Register[StageView]() // the stage display (stage_view.go)
 }
 
 // OutputTitle is the title of the output window in windowed mode.

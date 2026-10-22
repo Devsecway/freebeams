@@ -84,7 +84,7 @@ func (a *App) buildUI() {
 	a.resView = render.NewSlideView()
 	a.resView.SetTransitionDuration(0) // cut
 	a.win.PreviewMonitor.SetContent(a.previewView.AsControl())
-	a.win.LiveMonitor.SetContent(a.liveView.AsControl())
+	a.win.LiveMonitor.SetContent(a.liveMonitorContent()) // the live view and the Foldback view (stage.go)
 	a.win.ResourcePreview.SetContent(a.resView.AsControl())
 
 	a.out = render.NewOutput(a.AsNode())
@@ -175,6 +175,7 @@ func (a *App) buildUI() {
 	a.wireThemes()
 	a.wireSettings() // the Options dialog and the menus (settings.go)
 	a.wirePlayback() // monitor player roles and the transport bars (playback.go)
+	a.wireStage()    // the stage display (stage.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -399,6 +400,7 @@ func (a *App) render() {
 
 	// Settings: the Options dialog, the menus and the interface theme.
 	a.renderSettings(v)
+	a.renderStage() // the stage display, the output selector and the Live menu (stage.go)
 
 	// Error messages: the first queued alert is on screen.
 	switch {

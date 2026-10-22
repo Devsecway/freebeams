@@ -280,29 +280,6 @@ func TestBuildStageFrame(t *testing.T) {
 	}
 }
 
-func TestStageHeaders(t *testing.T) {
-	tests := []struct {
-		f          models.StageFrame
-		live       bool
-		next, head string
-	}{
-		{models.StageFrame{Title: "Amazing Grace", Label: "Verse 2", Next: "x", NextLabel: "Chorus"}, true, "NEXT · Chorus", "Amazing Grace · Verse 2"},
-		{models.StageFrame{Title: "Amazing Grace", Label: "Verse 3", Next: "x", NextLabel: "Verse 1", NextTitle: "How Great"}, true, "NEXT ITEM · How Great · Verse 1", "Amazing Grace · Verse 3"},
-		{models.StageFrame{Title: "John 3:16", Label: "John 3:16"}, true, "LAST SLIDE", "John 3:16"},
-		{models.StageFrame{Title: "Media", Next: "text only"}, true, "NEXT", "Media"},
-		{models.StageFrame{Label: "Only a label"}, false, "", "Only a label"},
-		{models.StageFrame{}, false, "", ""},
-	}
-	for _, tt := range tests {
-		if got := StageNextHeader(tt.f, tt.live); got != tt.next {
-			t.Errorf("StageNextHeader(%+v) = %q, want %q", tt.f, got, tt.next)
-		}
-		if got := StageHeaderTitle(tt.f); got != tt.head {
-			t.Errorf("StageHeaderTitle(%+v) = %q, want %q", tt.f, got, tt.head)
-		}
-	}
-}
-
 func TestStageStateDoc(t *testing.T) {
 	now := time.Date(2026, 10, 22, 19, 5, 0, 0, time.Local)
 	var tm StageTimer

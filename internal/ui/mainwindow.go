@@ -67,6 +67,11 @@ type MainWindow struct {
 	// OnGoBack is the Live header's Go Back button.
 	OnGoBack func() `gd:"-"`
 
+	// OnMonitorOutput is the Live Output monitor's output selector: Live
+	// Output or Foldback Output (output_select.go).
+	OnMonitorOutput func(foldback bool) `gd:"-"`
+	outSel          *outputSelect
+
 	// palette is plain Go data. The Theme is not kept in a field: a RefCounted
 	// held by an extension struct is never released (leaks at exit); it lives
 	// on the node (AsControl().Theme()).
@@ -369,13 +374,15 @@ func (w *MainWindow) buildPreviewLive() Control.Instance {
 		goBack.AsControl(), withMargins(newDivider(true).AsControl(), 0, 6),
 	}, gridSizer(w.LiveGrid))
 	swap := newMiniButton(miniPlain, "swap", 24, 24, "Output: Live / Foldback")
+	liveCaption := label("Live Output", "")
+	w.wireOutputSelect(swap, liveCaption)
 	w.LiveTransport = NewTransport()
 	w.LiveTransport.AsControl().AsCanvasItem().SetVisible(false)
 	w.LiveSplit = NewSplitter(SplitVertical, SlideGridPercent, 150, 0, 0, 200)
 	w.LiveSplit.SetPanes(
 		column(liveHeader, surface(vGridBk, w.LiveGrid.AsControl())),
 		columnFooter(w.LiveMonitor.AsControl(), w.LiveTransport.AsControl(),
-			outputBar(swap.AsControl(), fixed(4, 0), hexpand(label("Live Output", "").AsControl()))),
+			outputBar(swap.AsControl(), fixed(4, 0), hexpand(liveCaption.AsControl()))),
 	)
 
 	w.PreviewLiveSplit = NewSplitter(SplitHorizontal, PreviewLivePercent, 50, 50, 0, 0)

@@ -43,3 +43,35 @@ const (
 	StageBadgeClear = "CLEAR"
 	StageBadgeLogo  = "LOGO"
 )
+
+// HeaderTitle is the stage header's left-hand text: "Amazing Grace · Verse 2".
+func (f StageFrame) HeaderTitle() string {
+	switch {
+	case f.Title != "" && f.Label != "" && f.Label != f.Title:
+		return f.Title + " · " + f.Label
+	case f.Title != "":
+		return f.Title
+	}
+	return f.Label
+}
+
+// NextHeader is the line above the next slide: "NEXT · Chorus", or
+// "NEXT ITEM · How Great Thou Art · Verse 1" across an item boundary, or
+// "LAST SLIDE" when something is live and nothing follows it.
+func (f StageFrame) NextHeader() string {
+	switch {
+	case f.NextTitle != "":
+		h := "NEXT ITEM · " + f.NextTitle
+		if f.NextLabel != "" {
+			h += " · " + f.NextLabel
+		}
+		return h
+	case f.NextLabel != "":
+		return "NEXT · " + f.NextLabel
+	case f.Next != "":
+		return "NEXT"
+	case f.Title != "" || f.Label != "":
+		return "LAST SLIDE"
+	}
+	return ""
+}

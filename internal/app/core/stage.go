@@ -291,39 +291,6 @@ func BuildStageFrame(in StageInput) models.StageFrame {
 	return f
 }
 
-// StageNextHeader is the line above the next slide: "NEXT · Chorus", or
-// "NEXT ITEM · How Great Thou Art · Verse 1" across an item boundary, or
-// "LAST SLIDE" when nothing follows the live slide.
-func StageNextHeader(f models.StageFrame, live bool) string {
-	switch {
-	case f.NextTitle != "":
-		h := "NEXT ITEM · " + f.NextTitle
-		if f.NextLabel != "" {
-			h += " · " + f.NextLabel
-		}
-		return h
-	case f.NextLabel != "" || f.Next != "":
-		if f.NextLabel == "" {
-			return "NEXT"
-		}
-		return "NEXT · " + f.NextLabel
-	case live:
-		return "LAST SLIDE"
-	}
-	return ""
-}
-
-// StageHeaderTitle is the header's left-hand text: "Amazing Grace · Verse 2".
-func StageHeaderTitle(f models.StageFrame) string {
-	switch {
-	case f.Title != "" && f.Label != "" && f.Label != f.Title:
-		return f.Title + " · " + f.Label
-	case f.Title != "":
-		return f.Title
-	}
-	return f.Label
-}
-
 // StageState is /state.stage.
 type StageState struct {
 	Settings   StageSettings `json:"settings"`
@@ -360,7 +327,7 @@ func StageStateDoc(f models.StageFrame, st StageSettings, timer StageTimer, now 
 		Settings: st, Open: w.Open, Fullscreen: w.Fullscreen, Screen: w.Screen, Focused: w.Focused, Conflict: w.Conflict,
 		Monitor: "live",
 		Title:   f.Title, Label: f.Label, Current: f.Current,
-		Next: f.Next, NextLabel: f.NextLabel, NextTitle: f.NextTitle, NextHeader: StageNextHeader(f, f.Title != ""),
+		Next: f.Next, NextLabel: f.NextLabel, NextTitle: f.NextTitle, NextHeader: f.NextHeader(),
 		Badge: f.Badge, Clock: f.Clock, Timer: f.Timer, TimerRunning: timer.Running,
 		TimerSeconds: math.Floor(timer.Elapsed(now).Seconds()),
 	}

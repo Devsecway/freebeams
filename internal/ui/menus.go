@@ -23,11 +23,22 @@ const (
 	MenuInterfaceDark
 	MenuInterfaceLight
 	MenuAbout
+
+	// The Live menu (menus_live.go).
+	MenuGoLive
+	MenuGoBack
+	MenuLogo
+	MenuBlack
+	MenuClear
+	MenuShowLive
+	MenuStageDisplay
+
 	menuActionCount
 )
 
 var menuActionNames = [...]string{"new-schedule", "new-song", "open-schedule", "save-schedule", "save-schedule-as",
-	"quit", "options", "interface-dark", "interface-light", "about"}
+	"quit", "options", "interface-dark", "interface-light", "about",
+	"go-live", "go-back", "logo", "black", "clear", "show-live", "stage-display"}
 
 // String is the action's control-API name ("open-schedule").
 func (a MenuAction) String() string {
@@ -61,6 +72,9 @@ type Menus struct {
 	color  PopupMenu.Instance // View ▸ Interface Color
 	paths  []string
 	dark   bool
+
+	live      PopupMenu.Instance // the Live menu (menus_live.go)
+	liveState LiveMenuState
 }
 
 // NewMenus builds the menus.
@@ -121,7 +135,9 @@ func NewMenus() *Menus {
 	help.MoreArgs().AddItem("About FreeBeams", int(MenuAbout), 0)
 	help.OnIdPressed(fire)
 
-	for _, p := range []PopupMenu.Instance{file, edit, view, help} {
+	live := m.buildLive(fire)
+
+	for _, p := range []PopupMenu.Instance{file, edit, live, view, help} {
 		m.bar.AsNode().AddChild(p.AsNode())
 	}
 	m.render()
@@ -159,4 +175,5 @@ func (m *Menus) render() {
 	}
 	m.color.SetItemChecked(m.color.GetItemIndex(int(MenuInterfaceDark)), m.dark)
 	m.color.SetItemChecked(m.color.GetItemIndex(int(MenuInterfaceLight)), !m.dark)
+	m.renderLive()
 }
