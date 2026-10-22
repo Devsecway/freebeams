@@ -274,6 +274,18 @@ internal/app               Godot: the App node that wires store + presenter + ui
   the audio playlist sends the title and status only.
 - A new optional key in the `.fbs` schedule: `json:",omitzero"` with an `IsZero()` method (`models.Playlist`)
   keeps files without it byte-identical, old builds ignore it, and `ScheduleVersion` stays 1.
+- The ffmpeg player (`internal/media/ffplayer`, docs/MEDIA.md) runs off macOS and on a Mac with
+  `FREEBEAMS_PLAYER=ffmpeg`: verify any change to the player layer with `FREEBEAMS_PLAYER=ffmpeg test/smoke.sh` too.
+  `exec.Cmd.ExtraFiles` does not work on Windows, so video and audio come from two ffmpeg processes (one stdout
+  each); spawn every helper through `sysproc.CommandContext` (`CREATE_NO_WINDOW` on Windows).
+- `AudioStreamGeneratorPlayback.ClearBuffer` logs `Condition "active" is true` while the playback plays (a log
+  hygiene failure): to drop queued sound, `AudioStreamPlayer.Stop()` then `Play()`, which makes a new, empty
+  playback. `AudioStreamPlayer.Playing()` is false while `stream_paused`, so track "started" yourself.
+- A node-less source (no SlideView) finds the scene root through `Object.As[SceneTree.Instance](Engine.GetMainLoop())`.
+- ffmpeg's `scale` filter shifts a colour by ~3 levels when it resizes unless `flags=…+accurate_rnd+full_chroma_int`.
+  The `mpeg4` encoder drops colour tags: a BT.709-tagged test clip without libx264 is `-c:v ffv1` in `.mkv`.
+- ffmpeg's configure silently ignores an unknown component name: the `f32le` muxer is `--enable-muxer=pcm_f32le`
+  (`bin/build-ffmpeg` checks `ffmpeg -muxers` / `-encoders` after the build for that reason).
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

@@ -42,7 +42,7 @@ test/smoke.sh          # 970 checks (Phase 1: 191; media, presentations, themes,
 |---|---|---|
 | An image item live = full-screen image on the output | **pass** | Smoke: `image live`, `image output has content`; a synthetic solid `#2a7f62` image: `the output shows the image` (exact pixel check on the projector screenshot), `the live monitor shows the image`. Screenshots `media-green-output.png`, `media-green-main.png`. |
 | Media items in the schedule (snapshot, portable) | **pass** | `core.MediaItem` stores the source path and poster; `core.ResolveDeck` substitutes the playable file when the item is selected. Smoke: `add media to schedule`, `select the media schedule item`, `media schedule item live`. `TestMediaDeckAndItem`, `TestResolveDeck`, `TestMediaScheduleItemRoundTrip` (.fbs JSON keeps `mediaId` and `poster`). |
-| Looping motion background (`models.BackgroundVideo`) behind the text, low-processor mode off while playing | **pass** (macOS, native) / **untested** (Theora path) | macOS plays every video and audio file through AVFoundation (`internal/render/avplayer_darwin.go`, `videosource.go`; [MEDIA.md](MEDIA.md)): no transcode, no `Needs libtheora`. Videos loop by default (`Background.Loop`), gapless (`actionAtItemEnd = None` + seek to 0 on the end notification); `AcquireAnimating` is held while a source plays. Smoke (playback block): `the clip goes live and plays (looping, full volume)`, `the live position advances`, `the clip stops at its end with loop off`, `black off brings the clip back`, `the clip plays again from the start`. The Theora path (`video.go`) is unchanged and still unexercised here (no libtheora, no `.ogv`); it is what Windows / Linux use. |
+| Looping motion background (`models.BackgroundVideo`) behind the text, low-processor mode off while playing | **pass** (macOS, native) / **untested** (Theora path) | macOS plays every video and audio file through AVFoundation (`internal/render/avplayer_darwin.go`, `videosource.go`; [MEDIA.md](MEDIA.md)): no transcode, no `Needs libtheora`. Videos loop by default (`Background.Loop`), gapless (`actionAtItemEnd = None` + seek to 0 on the end notification); `AcquireAnimating` is held while a source plays. Smoke (playback block): `the clip goes live and plays (looping, full volume)`, `the live position advances`, `the clip stops at its end with loop off`, `black off brings the clip back`, `the clip plays again from the start`. The Theora path (`video.go`) is unchanged and still unexercised here (no libtheora, no `.ogv`); it is what Windows / Linux use when no ffmpeg is found (with ffmpeg they use the ffmpeg player, see "Video and audio off macOS"). |
 | Thumbnails never play video | **pass** | `App.thumbnail` turns a video or audio background into its poster / black (`core.StillBackground`), so Preview/Live/schedule thumbnails are stills; `RoleNone` views open no player. `TestStillAndThumbBackground`. |
 | Preview / Live monitors and output all play | **pass** (macOS) | One decoder per role: `RoleLive` is shared by the Live Output monitor and the projector window (sound plays once), `RolePreview` has its own, paused at 0 (its first frame shows). Smoke: `the output shows the clip` (exact `#2a7f62` pixel check on the projector screenshot), `the live monitor shows the clip`, `the preview monitor shows the clip's first frame`, `play on the preview target (a second decoder)`, `the preview plays while live plays`. A 720p H.264 EasyWorship loop playing to the live monitor and the output window costs ~44 % of one core (Godot process, `ps`), the operator UI redrawing at full rate included. The resource preview is `RoleNone` (poster still). |
 | Audio items (`models.MediaAudio`: mp3, m4a, aac, wav, aiff, aif, flac, ogg) | **pass** (macOS) | An audio item is a one-slide deck with a `BackgroundAudio` (black, sound only, plays once by default); the library lists an Audio collection (`audio` icon), the footer counts `N audio`, `search-media {kind: "audio"}`, `/state.media.audio`, the EasyWorship `Resources/Audio` folder (`<audio>` rows) is imported. Smoke: `add the test clip and tone`, `the audio collection`, `the tone goes live and plays once`, `the live player plays the tone (audio only)` (`hasAudio` and not `hasVideo`), `audio shows a black output`. Audio goes to the system's default output device. |
@@ -514,8 +514,8 @@ is our own and minimal; the decisions are in [MEDIA.md](MEDIA.md) "Audio playlis
 | Phone remote: play / pause, next and previous track | **pass** | `audio-toggle`, `audio-next`, `audio-prev` in `remote/actions.go` (`TestActionsAreWhitelisted`); `remote.State.audio {title, status, tracks}` (`TestBuildState`); the phone's music bar (`web/index.html`, `app.js`). Smoke: `the phone plays the music and skips a track`, `the phone goes back a track and pauses`. |
 | Control actions and `/state.audio` | **pass** | `audio-play {index}`, `audio-pause`, `audio-toggle`, `audio-stop {fade}`, `audio-next`, `audio-prev`, `audio-seek {seconds}`, `audio-volume {value}`, `audio-repeat {mode}`, `audio-shuffle {on}`, `audio-fade-out {seconds}`, `playlist-add {index \| title \| path \| paths}`, `playlist-remove {index}`, `playlist-move {from, to}`, `playlist-clear {confirm}`, `media-menu {item: "add-to-playlist"}`. `/state.audio`: `status, playing, track, title, next, order, position, duration, volume, gain, fading, repeat, shuffle, fadeOut, tracks [{title, path, seconds, missing}], native, loaded, failed`. Smoke: `an empty playlist cannot play`, `a seek needs a playing track`, `a bad repeat mode is refused`, `a fade-out over 30 s is refused`, `a volume that is not a number is refused (audio)`, `a move out of range is refused`. |
 
-Known limits: macOS only for now (it plays through the same player layer as the monitors, so the ffmpeg-pipe
-backend for Windows / Linux will cover it); no drag-and-drop into the list, no crossfade between tracks, no
+Known limits: it plays through the same player layer as the monitors, so the ffmpeg player covers Windows / Linux
+(verified on macOS with `FREEBEAMS_PLAYER=ffmpeg`, see "Video and audio off macOS" below); no drag-and-drop into the list, no crossfade between tracks, no
 library of saved playlists, and the music goes to the default output device like the monitors' audio.
 
 ### Shared files touched (audio playlists)
@@ -534,12 +534,50 @@ library of saved playlists, and the music goes to the default output device like
 - `test/smoke.sh`: the `# ---- audio playlist` block before `# ---- item menus`. Docs: `MEDIA.md`, `REMOTE.md`,
   `UI-SPEC.md` §3.3, `CLAUDE.md` (gotchas appended).
 
+## Video and audio off macOS: the ffmpeg player (PLAN v0.2 item 3, PLAN §3 option B)
+
+Recorded 2026-10-22 on the same machine (HDMI TV as the projector, no Screen Recording permission). Windows and
+Linux play every video and audio file through ffmpeg processes behind the `nativePlayer` interface, so the
+transport, looping, seeking, volume, the crossfade and the audio playlist work as on macOS; the design is in
+[MEDIA.md](MEDIA.md) "the ffmpeg player". On this Mac it was verified with `FREEBEAMS_PLAYER=ffmpeg`.
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Decoding, clock and pipes in a pure-Go package, unit-tested against clips ffmpeg generates | **pass** (macOS) / **untested** (CI on Windows, Linux) | `internal/media/ffplayer`: `TestOpenPausedShowsFirstFrame` (Loading → Ready, frame 0 shown while paused, position exactly 0), `TestExactColor` (BT.709 `#2a7f62` ±3), `TestScaledToFit` (1080p → 640×360), `TestWallClockPlayback` (no sound: wall clock, pause holds, end reported once, Play after the end restarts at 0), `TestAudioClockAndGaplessLoop` (the audio clock drives the frames; across the loop point the position wraps to 0.3 s; loop off mid-pass ends at exactly 2 × duration samples), `TestOnePassIsExactlyTheDuration`, `TestSeek` / `TestSeekBeforeReady` (position = target at once, the target's frame while paused, a new audio epoch), `TestAudioOnly` (mono upmixed), `TestWallClockWhenAudioIsNotConsumed` (a hitch is not a stall; a stall hands over; the audio clock takes back without going backwards), `TestFailures`, `TestCloseStopsEverything` (Done closes, no goroutines left), `TestParseProbe` (cover art skipped, rotation, SAR, fps cap), `TestFitSize`, `TestRing`; all pass with `-race`, and also against the bundled LGPL build (`FREEBEAMS_FFMPEG_DIR`). CI runs them on `windows-latest` and `ubuntu-latest` (`ci.yml` job `media`), not yet run. |
+| Video, audio and sync: RGBA frames into the source texture, f32le into an `AudioStreamGenerator`, the audio clock as master | **pass** (macOS, `FREEBEAMS_PLAYER=ffmpeg`) | `internal/render/ffplayer.go`. Smoke (playback block with the ffmpeg player): `FREEBEAMS_PLAYER=ffmpeg selects that player`, `the preview player opened the clip (video and audio)`, `the preview is still paused at 0`, `the live player plays the clip`, `the live position advances`, `the output shows the clip` / `the live monitor shows the clip` / `the preview monitor shows the clip's first frame` (exact `#2a7f62` pixel checks), `pause`, `the position holds while paused`, `the position follows the seek`, `the clip stops at its end with loop off`, `black off brings the clip back`, `the clip plays again from the start`, `the preview plays while live plays` (two decoders), `the live player plays the tone (audio only)`, `the tone's position advances in real time` (the audio clock), `seek the tone while it plays` / `the tone plays on from the seek` (the generator is restarted on a new epoch), `the tone stops at its end`, `the ffmpeg player decoded every sound track`. |
+| The audio playlist on the ffmpeg player (`RoleAudio`, no view) | **pass** (macOS, `FREEBEAMS_PLAYER=ffmpeg`) | The adapter finds the scene root through `Engine.GetMainLoop`, so a source no view holds has sound. Smoke: the whole `# ---- audio playlist` block (track ends advance, next / prev, repeat, shuffle, seek, fade-out) plus `the stopped playlist leaves no decoder running` (after the fade), `the ffmpeg player decodes the playing track`, `stop kills the track's decoder`. |
+| Selection: AVFoundation on macOS, ffmpeg on Windows / Linux (bundled copy, then PATH), the Theora fallback without ffmpeg; `FREEBEAMS_PLAYER` override | **pass** | `core.ChoosePlayer` (`TestChoosePlayer`), `media.Locate` (`TestLocate`: `$FREEBEAMS_FFMPEG_DIR`, the executable's folder, PATH), `render.UseMediaPlayer`; logged `[freebeams] media player: ffmpeg (/opt/homebrew/bin/ffmpeg)`; `/state.media.player`, `/state.playback.*.player`. |
+| Badges and footer truthful per backend | **pass** | `MediaCaps.Native` is true for AVFoundation and ffmpeg; on the Theora fallback audio items say `Needs ffmpeg` and the footer `ffmpeg not found: audio cannot play` / `videos and audio cannot play` (`TestMediaBadge`, `TestMediaFooter`). |
+| Every spawned ffmpeg / ffprobe (and pdftoppm / soffice) hides its console on Windows | **pass** (cross-vetted) / **untested** (Windows) | `internal/sysproc` (`HideWindow` + `CREATE_NO_WINDOW`, `TestHideWindow`); `media.Tools`, the player and `presentations` use `sysproc.CommandContext`. `GOOS=windows go vet` is clean. |
+| Bundled LGPL ffmpeg in the Windows zip / installer and the Linux tar.gz / AppImage, pinned and checksummed | **partial** | `bin/build-ffmpeg` (FFmpeg 8.1.3, SHA-256 checked, no GPL / nonfree, static, trimmed encoders / muxers; fails unless configure reports LGPL and the needed muxers / encoders exist), `bin/build-windows`, `bin/build-linux`, `packaging/ffmpeg/NOTICE.txt`, `release.yml` (cache, MSYS2 / apt build deps, the player tests against the bundle), README licensing, [RELEASE.md](RELEASE.md) "Bundled ffmpeg". Built and tested on macOS arm64 only; the Windows (MSYS2) and Linux (static glibc) builds have not run. |
+
+Smoke: SMOKE_COUNTS.
+
+Not verified here: the app on a real Windows or Linux machine (audio devices, the Windows process kill, the static
+ffmpeg builds), the CI jobs, a long-running loop for drift (the unit tests check that a pass is exactly the
+container duration in samples), and CPU cost at 1080p (two decoders per open file plus RGBA conversion in ffmpeg).
+
+### Shared files touched (ffmpeg player)
+
+- New: `internal/media/ffplayer/` (player, decoders, probe, ring, tests), `internal/media/locate.go` (+ test),
+  `internal/sysproc/`, `internal/render/player.go`, `internal/render/ffplayer.go`, `internal/app/player.go`,
+  `internal/app/core/player.go` (+ test), `bin/build-ffmpeg`, `packaging/ffmpeg/NOTICE.txt`.
+- `internal/render/videosource.go` (`ticker` hook in `pump`, ffmpeg's error in the failure log;
+  `NativeVideoSupported` moved to `player.go`, `acquireSource` unchanged), `avplayer_darwin.go` /
+  `avplayer_other.go` (`openAVPlayer`, `avFoundationAvailable`), `video.go` (`NativeVideoSupported()`).
+- `internal/app/playback.go` (+1 in `initPlayback`, `Player` in the state doc), `media.go` (`Player` in caps and
+  state), `core/media.go` (audio badge / footer off the media player, `MediaCaps.Player`), `core/state.go`,
+  `core/playback.go` (`Player` fields in their own blocks).
+- `internal/media/ffmpeg.go` (`Detect` uses `Locate`, `sysproc`), `media_test.go` (a portable cache path),
+  `internal/presentations/tools.go` (`sysproc`).
+- `test/smoke.sh` (playback block: the player check, audio-clock / seek / end checks; playlist block: the ffmpeg
+  process checks), `bin/build-windows`, `bin/build-linux`, `bin/setup-windows.ps1`, `.github/workflows/ci.yml`,
+  `release.yml`. Docs: `MEDIA.md`, `RELEASE.md`, `README.md`, `CLAUDE.md` (gotchas appended).
+
 ## Remaining for Phase 2
 
-- **Video playback off macOS**: the Theora path (`render/video.go`) is unverified on a machine with a Theora-capable
-  ffmpeg; audio does not play there at all; the transport bar is greyed out (`playback.*.native` false). Options:
-  a native player per platform (Media Foundation on Windows, GStreamer on Linux, behind the same `nativePlayer`
-  interface), or PLAN §3 option B (ffmpeg pipe → textures) which would also cover audio.
+- **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the
+  release workflow is the first run); the Theora fallback (`render/video.go`, no ffmpeg) is still unverified.
 - **Media polish**: poster frames through `AVAssetImageGenerator` on macOS (videos still need ffmpeg for a
   thumbnail), a per-item Repeat / Aspect property (`models.Background.Loop` is the hook), keeping a video's
   position across Black (today a Black longer than the fade re-opens the file from 0), a transport in the resource

@@ -75,7 +75,7 @@ Native build on Windows under MSYS2 UCRT64 (`pacman -S mingw-w64-ucrt-x86_64-gcc
 `MSYSTEM=UCRT64 /c/msys64/usr/bin/bash -l bin/build-windows`. On a fresh machine `bin/setup-windows.ps1` (an
 elevated PowerShell) installs Go, Git, MSYS2 with gcc and zip, and Inno Setup through winget, then runs this script. It runs `GOOS=windows bin/gd build` (gcc builds
 `windows_amd64.dll`, Godot exports the `Windows x86_64` preset), copies the DLL beside `FreeBeams.exe`, bundles any
-`lib*.dll` the DLL still needs, brands the exe with `rcedit` (icon, version resource: Godot only does this itself when
+`lib*.dll` the DLL still needs, adds the LGPL `ffmpeg.exe` / `ffprobe.exe` (`bin/build-ffmpeg`, see below), brands the exe with `rcedit` (icon, version resource: Godot only does this itself when
 rcedit is configured in its editor settings), zips the folder, and builds the installer from
 `packaging/windows/freebeams.iss` with Inno Setup (`ISCC`). `SIGNTOOL_CMD="signtool sign ..."` is the Authenticode
 hook; it runs on every PE file when set. Cross-building from macOS or Linux needs `zig` on PATH (gd uses `zig cc`)
@@ -88,15 +88,53 @@ bin/build-linux       # releases/linux/<arch>/, releases/FreeBeams-<v>-linux-<ar
 ```
 
 Linux only, natively (GOARCH must be the host's). Build on an old distro (CI: `ubuntu-22.04`) so the glibc floor
-stays low. The tar.gz holds the binary, `linux_<arch>.so`, a launcher (`freebeams.sh`), the icon and the
+stays low. The tar.gz holds the binary, `linux_<arch>.so`, the LGPL `ffmpeg` / `ffprobe` (below), a launcher (`freebeams.sh`), the icon and the
 `.desktop` file; the AppImage is assembled from `packaging/linux/` (`AppRun` preloads the `.so` for the aarch64
 static-TLS issue) with `appimagetool`, downloaded into `~/.cache/freebeams/` when missing (`APPIMAGETOOL=` to
 point at one, `NO_APPIMAGE=1` to skip).
 
+## Bundled ffmpeg (Windows and Linux)
+
+The Windows zip and installer, the Linux tar.gz and the AppImage (`usr/bin`) carry `ffmpeg` / `ffprobe` next to the
+app, with `FFMPEG-LICENSE.txt` (the LGPL v2.1 text from the source tarball) and `FFMPEG-NOTICE.txt`
+(`packaging/ffmpeg/NOTICE.txt` plus the version, source URL, SHA-256 and configure line). The app finds them there
+first (`media.Locate`; then PATH) and plays every video and audio file through them ([MEDIA.md](MEDIA.md) "the
+ffmpeg player"). macOS ships none: AVFoundation plays, and poster frames use an ffmpeg on PATH when there is one.
+
+`bin/build-ffmpeg` builds them from source:
+
+- the pinned release `FFMPEG_VERSION=8.1.3` from `https://ffmpeg.org/releases/`, checked against
+  `FFMPEG_SHA256` before anything is extracted (a mismatch stops the build);
+- configured without `--enable-gpl` / `--enable-nonfree` and with `--disable-autodetect --enable-zlib` (no other
+  external library can slip in from the build machine), static (`--extra-ldflags=-static` on Windows and Linux:
+  no DLLs / `.so` files), no ffplay, docs, network or devices; every native decoder, demuxer, parser and filter,
+  but only the encoders / muxers the app runs (`mjpeg`, `png`, `rawvideo`, `pcm_f32le`, `pcm_s16le`,
+  `wrapped_avframe`; `image2`, `image2pipe`, `mjpeg`, `rawvideo`, `pcm_f32le`, `pcm_s16le`, `wav`, `null`);
+- the script fails unless configure says `License: LGPL version 2.1 or later` and the built ffmpeg lists the
+  `rawvideo` / `f32le` / `image2` muxers and the `mjpeg` / `rawvideo` / `pcm_f32le` encoders (configure silently
+  ignores an unknown component name: `f32le` is `pcm_f32le` there);
+- it installs into `$FFMPEG_CACHE` (default `~/.cache/freebeams`)`/ffmpeg-<version>-<os>-<arch>/` once;
+  `bin/build-ffmpeg --prefix` prints that folder. Needs make, nasm (x86) and zlib: `apt install nasm
+  zlib1g-dev`, MSYS2 `make diffutils nasm mingw-w64-ucrt-x86_64-{pkgconf,zlib}` (`bin/setup-windows.ps1`
+  installs them). `NO_FFMPEG=1 bin/build-windows` / `bin/build-linux` skip the bundle; a Windows cross build from
+  macOS / Linux ships none.
+
+To bump: set `FFMPEG_VERSION`, download the tarball, put its `shasum -a 256` into `FFMPEG_SHA256`. The release
+workflow caches the build keyed on the script and runs the player tests against the bundled binaries
+(`FREEBEAMS_FFMPEG_DIR=releases/<os>/amd64 go test ./internal/media/ffplayer/`, with the distribution's ffmpeg
+making the test clips).
+
+Licence obligations: the LGPL text and the notice travel with the binaries; the notice names the exact source
+tarball and configure line, and the repository holds the build script. The binaries run as separate programs
+(no linking into FreeBeams), and users may replace them.
+
 ## CI
 
 - `.github/workflows/ci.yml`: on push to `main` and on pull requests: `gofmt -l`, `go build`, `go vet`, `go test`
-  on `macos-15` (the EasyWorship-data tests skip there), plus `shellcheck` over the scripts on Ubuntu.
+  on `macos-15` (the EasyWorship-data tests skip there), plus `shellcheck` over the scripts on Ubuntu, plus the
+  pure-Go media packages (`internal/media/...` with the ffmpeg player, `internal/sysproc`) on `windows-latest`
+  and `ubuntu-latest` with ffmpeg installed (choco / apt; `FREEBEAMS_REQUIRE_FFMPEG=1` makes a missing ffmpeg
+  fail instead of skip), so the process and pipe code runs for real on Windows.
 - `.github/workflows/release.yml`: on a `v*` tag (or by hand, for a dry run without a release): checks the tag
   against `bin/version`, then builds macOS (`macos-15`), Windows (`windows-latest`, MSYS2) and Linux (`ubuntu-22.04`)
   natively, uploads the artifacts, and for a tag creates a **draft** GitHub release with the artifacts and
@@ -126,6 +164,11 @@ git tag v0.1.0 && git push origin v0.1.0
   `Applications`).
 - `bin/sign-notarize` without credentials stops with `set SIGN_IDENTITY ...` before touching the build.
 - `shellcheck` 0.11.0 is clean over `bin/*`, `packaging/linux/AppRun`, `packaging/icons/make-icons.sh`.
+
+On 2026-10-22: `bin/build-ffmpeg` on macOS arm64 (the local check) built FFmpeg 8.1.3 from the verified tarball
+(`License: LGPL version 2.1 or later`, 19 MB per program), and the player tests pass against it
+(`FREEBEAMS_FFMPEG_DIR=<prefix>/bin go test ./internal/media/ffplayer/`). The Windows (MSYS2) and Linux (static
+glibc) builds of it have not run yet.
 
 ## Not verified here (known gaps)
 
