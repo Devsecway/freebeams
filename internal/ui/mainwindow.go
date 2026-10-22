@@ -88,6 +88,11 @@ type MainWindow struct {
 	// AudioPlaylist is the background audio under the schedule (playlist.go).
 	AudioPlaylist *AudioPlaylist `gd:"-"`
 
+	// The Preview Output monitor's context menu and its dialogs (previewmenu.go).
+	PreviewMenu *PreviewMenu `gd:"-"`
+	ColorDialog *ColorDialog `gd:"-"`
+	MediaPicker *MediaPicker `gd:"-"`
+
 	// palette is plain Go data. The Theme is not kept in a field: a RefCounted
 	// held by an extension struct is never released (leaks at exit); it lives
 	// on the node (AsControl().Theme()).
@@ -146,6 +151,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.StageMessage = NewStageMessageDialog()
 	w.Remote = NewRemoteDialog()
 	w.buildAlertDialogs()
+	w.buildPreviewMenu()
 	for _, d := range w.dialogs() {
 		d.host = w.dialogHost
 		d.setTheme(theme)
@@ -158,7 +164,7 @@ func NewMainWindow(p Palette) *MainWindow {
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
 	return append([]*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg, w.Remote.dlg},
-		w.alertDialogs()...)
+		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg)...)
 }
 
 // dialogName names a dialog window node for TopDialogHost.
@@ -182,7 +188,21 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 	if name := w.alertDialogName(n); name != "" {
 		return name
 	}
+	switch n.ID() {
+	case w.ColorDialog.dlg.win.AsNode().ID():
+		return "color"
+	case w.MediaPicker.dlg.win.AsNode().ID():
+		return "media-picker"
+	}
 	return "other"
+}
+
+// buildPreviewMenu attaches the Preview Output monitor's context menu and
+// creates its dialogs (previewmenu.go).
+func (w *MainWindow) buildPreviewMenu() {
+	w.PreviewMenu = NewPreviewMenu(w.PreviewMonitor.AsControl())
+	w.ColorDialog = NewColorDialog()
+	w.MediaPicker = NewMediaPicker()
 }
 
 // TopDialogHost names the window the topmost open dialog is a child of:

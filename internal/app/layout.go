@@ -77,7 +77,7 @@ func (a *App) restoreLayout() {
 		return
 	}
 	var layout core.Layout
-	if _, err := a.st.GetSetting(a.ctx, core.SettingLayout, &layout); err != nil {
+	if _, err := a.st.GetSetting(a.ctx(), core.SettingLayout, &layout); err != nil {
 		a.fail("read layout setting", err)
 		return
 	}

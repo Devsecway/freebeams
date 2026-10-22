@@ -177,6 +177,27 @@ its design-time value. Positions the user drags to are saved in the `ui.layout` 
   (position trackbar using the `gutter` gradients, buttons, message line) underneath for media items.
 - View → *Side by Side Preview* (default) / *Preview & Live Combined* / *No Preview*. These swap between the
   `TabItem_SideBySide`, `TabItem_Stacked` and `TabItem_Contiguous` layouts.
+- **Preview Output context menu** (right-click on the Preview monitor, or Control-click on a Mac): restyles the item in
+  Preview on its own. EasyWorship has no popup on `Frame_LivePreview`; it edits an item's look in the presentation
+  editor's inspector (`Button_PresentationTheme` "Change Theme", `Button_RevertToGlobal` "Revert to Global Theme",
+  the Fill inspector's "Select Media...", `Action_FontSizeInc` / `Dec` "Increase Font" / "Decrease Font"). The menu
+  gathers those under their names:
+  `Change Theme ▸` (radio: the saved themes, the item's own checked) · `Background ▸` (`Select Media…` (the
+  library's images and videos as thumbnails; a video loops behind the text), `Solid Color…`, | `Reset to Theme
+  Background`) · `Text ▸` (`Increase Font`, `Decrease Font` (±8 canvas units, the shrink-to floor scales along) |
+  `Font Color…` | check: `Bold`, `Italic`, `Outline`, `Shadow` | radio: `Align Left`, `Align Center`, `Align Right` |
+  `Reset to Theme Text`) | `Edit Theme for This Item…` (the theme editor on the item's copy: the name is fixed, OK /
+  Apply restyle the item, nothing is saved to the library; font family, margins and the rest live here) |
+  `Revert to Global Theme` (the library's current version of the theme the item is based on, or the default theme
+  for its type when that theme was deleted). The Reset entries and Revert are disabled while the item looks like its
+  saved theme; every entry is disabled when Preview holds media, a presentation or nothing.
+  - Scope: only that item. A schedule item's own theme copy changes (the schedule turns dirty and the `.fbs` keeps
+    it, marked `"custom": true`); library content (a song, a passage) keeps the override in the library deck behind
+    the resource preview, so another verse, re-selecting the song, Go Live and Add to Schedule carry it. Editing the
+    saved theme later no longer restyles a custom copy. The saved theme is never written.
+  - Live is left alone: the output changes when the item is sent live again (the Live monitor's thumbnails and
+    output keep the old look). The Live monitor has **no** such menu: a look is fixed while it is on air, so a
+    change is previewed first and taken live with Go Live (a crossfade).
 
 ### 3.5 Resource tab bar (`SplitterBar_Resources`): height 37
 It is also the drag handle for the main splitter (`Cursor = hand`). Clicking it toggles the library open or closed.

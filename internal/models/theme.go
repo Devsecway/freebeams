@@ -63,6 +63,20 @@ type Theme struct {
 	// FooterSize / FooterColor style Slide.Footer (bottom of the canvas, inside margins).
 	FooterSize  float32 `json:"footerSize"`
 	FooterColor RGBA    `json:"footerColor"`
+
+	// Custom marks an item's own copy that was restyled from the saved theme
+	// it is based on (ID, Name): the Preview Output menu's Background ▸ /
+	// Text ▸ changes. A custom copy keeps its look when the saved theme is
+	// edited; library themes never have it (store.SaveTheme clears it).
+	Custom bool `json:"custom,omitempty"`
+}
+
+// SameLook reports whether a and b draw the same: every field but the ID,
+// the Name and Custom.
+func (t Theme) SameLook(o Theme) bool {
+	t.ID, t.Name, t.Custom = 0, "", false
+	o.ID, o.Name, o.Custom = 0, "", false
+	return t == o
 }
 
 // DefaultSongTheme returns the built-in theme for songs.

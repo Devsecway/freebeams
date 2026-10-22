@@ -286,6 +286,23 @@ internal/app               Godot: the App node that wires store + presenter + ui
   The `mpeg4` encoder drops colour tags: a BT.709-tagged test clip without libx264 is `-c:v ffv1` in `.mkv`.
 - ffmpeg's configure silently ignores an unknown component name: the `f32le` muxer is `--enable-muxer=pcm_f32le`
   (`bin/build-ffmpeg` checks `ffmpeg -muxers` / `-encoders` after the build for that reason).
+- A PopupMenu captured right after `Popup()` has no image yet: `/screenshot` answers "viewport has no image yet"
+  and Godot logs `Parameter "tex" is null` ERRORs (log hygiene fails). `wait-idle` before shooting a menu.
+- `Popup()` on a submenu while a sibling submenu of the same menu is open leaves the new one hidden. Close the
+  whole menu and reopen it before opening another submenu programmatically (`preview-menu {item:"open", sub}`).
+- `Presenter.RestyleDecks` / `RestylePreview` change a deck's theme in place: render's pointer check never saw it,
+  so the grids kept stale thumbnails. `viewCache.previewTheme` / `liveTheme` trigger `RefreshThumbnails`.
+- An item restyled on its own (Preview Output menu) carries `Theme.Custom`; `RestyleSchedule` / `RestyleByThemeID`
+  skip it, so editing the saved theme never overwrites an operator's per-item look. `store.SaveTheme` clears it.
+- `ColorPicker`'s screen sampler needs Screen Recording permission and shows "Screen Recording permission missing!";
+  `SetSamplerVisible(false)` in dialogs.
+- A context menu on a widget another feature also clicks: connect `OnGuiInput` on the instance (a signal) instead of
+  defining `GuiInput` on the extension type, so the handlers coexist (`ui.PreviewMenu` on `MonitorHost`).
+- graphics.gd's per-frame keepalive walk (`keep_reachable_instances_alive`) follows every pointer, interface and map
+  reachable from an extension instance, even unexported plain-Go ones. A map a goroutine writes there is a
+  `fatal error: concurrent map iteration and map write` (the app dies). `App.ctx` was one: a `*cancelCtx` whose
+  `children` map every async job's derived context writes; it is now a `func() context.Context` (func, chan and
+  `unsafe.Pointer` fields are not walked). `App.st` (`*sql.DB`: `dep`, `openStmt` maps) is the same shape.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

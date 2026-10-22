@@ -32,7 +32,7 @@ func (a *App) loadSettings() {
 	a.settings = core.DefaultSettings(a.logoDir)
 	if a.st != nil {
 		get := func(key string, dst any) {
-			if _, err := a.st.GetSetting(a.ctx, key, dst); err != nil {
+			if _, err := a.st.GetSetting(a.ctx(), key, dst); err != nil {
 				a.fail("read setting "+key, err)
 			}
 		}

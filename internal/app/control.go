@@ -54,6 +54,7 @@ func (a *App) state() core.State {
 		dialog.Message = &core.Alert{Title: m.Title(), Message: m.Text()}
 	}
 	dialog.AlertDialog, dialog.AlertsMenu = a.win.AlertDialog(), a.win.Toolbar.AlertsMenuVisible()
+	dialog.PreviewMenu, dialog.PreviewDialog = a.previewDialogState()
 	return core.BuildState(core.StateInput{
 		Presenter:        a.pres.State,
 		Schedule:         a.sched,
@@ -571,6 +572,10 @@ func (a *App) screenshot(cmd *control.Command) {
 	case "alerts-menu":
 		png, err = render.WindowScreenshot(a.win.Toolbar.AlertsMenuWindow())
 	default:
+		if w, ok := a.previewStyleWindow(cmd.Query["window"]); ok { // the Preview Output menu (previewstyle.go)
+			png, err = render.WindowScreenshot(w)
+			break
+		}
 		err = fmt.Errorf("screenshot: unknown window %q (main|output|stage|stage-message|editor|settings|dialog|message)", cmd.Query["window"])
 	}
 	if err != nil {

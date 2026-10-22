@@ -220,8 +220,10 @@ func (a *App) addCurrentToSchedule(cmd *control.Command) {
 	a.selectSong(a.songSel, songSchedule, cmd)
 }
 
+// addSongToSchedule adds song; a restyled preview of it (the Preview Output
+// menu) goes into the schedule with its look (core.CarryStyle).
 func (a *App) addSongToSchedule(song models.Song) {
-	a.addToSchedule(core.SongItem(song, a.newSongDeck(song)))
+	a.addToSchedule(core.SongItem(song, core.CarryStyle(a.songRes.deck, a.newSongDeck(song))))
 }
 
 // addScriptureToSchedule adds the looked-up passage. After a failed or empty
@@ -432,7 +434,7 @@ func (a *App) useSong(song models.Song, purpose songPurpose) {
 		a.win.Editor.Open(song, models.FormatLyrics(song.Sections))
 		return
 	}
-	deck := a.newSongDeck(song)
+	deck := core.CarryStyle(a.songRes.deck, a.newSongDeck(song)) // keeps a restyled preview's look
 	a.songRes = resourcePreview{deck: &deck, index: 0}
 	switch purpose {
 	case songSchedule:

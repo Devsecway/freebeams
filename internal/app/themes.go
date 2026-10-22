@@ -331,7 +331,7 @@ func (a *App) applyThemeChange(t models.Theme) {
 	}
 	a.pres.RestyleDecks(core.RestyleByThemeID(t))
 	for _, d := range []*models.Deck{a.songRes.deck, a.scriptureDeck, a.th.deck} {
-		if d != nil && d.Theme.ID == t.ID {
+		if d != nil && d.Theme.ID == t.ID && !d.Theme.Custom {
 			d.Theme = t
 		}
 	}

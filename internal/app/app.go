@@ -63,8 +63,13 @@ type App struct {
 	inputRec *inputRecorder `gd:"-"` // FREEBEAMS_INPUT_LOG debugging aid
 	st       *store.Store
 	ctrl     *control.Server
-	ctx      context.Context
-	cancel   context.CancelFunc
+	// ctx is behind a func: graphics.gd's per-frame keepalive walk follows
+	// every interface field of an extension instance, and a live
+	// context.Context is a *cancelCtx whose children map the background jobs
+	// write (every query and command derives from it): "concurrent map
+	// iteration and map write" in keep_reachable_instances_alive.
+	ctx    func() context.Context
+	cancel context.CancelFunc
 
 	// results carries main-thread continuations of async work.
 	results chan func()
@@ -123,6 +128,8 @@ type App struct {
 
 	au audioState // the schedule's background audio playlist (audio.go)
 
+	ps previewStyleState // restyling the item in Preview (previewstyle.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -172,7 +179,8 @@ func New() *App { return new(App) }
 
 // Ready builds the UI and starts the services.
 func (a *App) Ready() {
-	a.ctx, a.cancel = context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	a.ctx, a.cancel = func() context.Context { return ctx }, cancel
 	a.results = make(chan func(), 64)
 	a.pres = models.NewPresenter()
 	a.sched = models.NewSchedule()
@@ -251,7 +259,7 @@ func (a *App) startImport() {
 		return
 	}
 	var rec core.ImportRecord
-	done, err := a.st.GetSetting(a.ctx, core.SettingImportDone, &rec)
+	done, err := a.st.GetSetting(a.ctx(), core.SettingImportDone, &rec)
 	if err != nil {
 		a.fail("read import setting", err)
 	}
@@ -309,7 +317,7 @@ func (a *App) startImport() {
 // continuation: with its error, or with the state.
 func (a *App) async(cmd *control.Command, work func(ctx context.Context) func() error) {
 	a.pending++
-	ctx := a.ctx
+	ctx := a.ctx()
 	a.jobs.Add(1)
 	go func() {
 		defer a.jobs.Done()
@@ -341,7 +349,7 @@ func (a *App) async(cmd *control.Command, work func(ctx context.Context) func() 
 func (a *App) post(fn func()) {
 	select {
 	case a.results <- fn:
-	case <-a.ctx.Done():
+	case <-a.ctx().Done():
 	}
 }
 

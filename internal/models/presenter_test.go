@@ -368,3 +368,40 @@ func TestPresenterZeroValue(t *testing.T) {
 		t.Error("next semantics on zero presenter")
 	}
 }
+
+func TestPresenterRestylePreview(t *testing.T) {
+	p := NewPresenter()
+	red := DefaultSongTheme()
+	red.Background = Background{Kind: BackgroundColor, Color: Hex(0xFF0000)}
+	red.Custom = true
+	if p.RestylePreview(red) {
+		t.Fatal("RestylePreview changed something without a preview deck")
+	}
+	d := testDeck("song", "v1", "c", "v2")
+	p.SetPreview(d)
+	p.SelectPreviewSlide(2)
+	p.GoLive()
+	seq := p.State.Seq
+	if !p.RestylePreview(red) {
+		t.Fatal("RestylePreview reported no change")
+	}
+	if p.State.Seq != seq+1 {
+		t.Errorf("Seq %d, want %d", p.State.Seq, seq+1)
+	}
+	if p.State.Preview.Theme != red || p.State.PreviewIndex != 2 || len(p.State.Preview.Slides) != 3 || p.State.Preview.ItemID != d.ItemID {
+		t.Errorf("preview after restyle = %+v (index %d)", p.State.Preview, p.State.PreviewIndex)
+	}
+	if p.State.Live.Theme == red || p.LiveFrame().Theme == red {
+		t.Error("RestylePreview changed Live")
+	}
+	if d.Theme == red {
+		t.Error("RestylePreview changed the caller's deck")
+	}
+	if p.RestylePreview(red) || p.State.Seq != seq+1 {
+		t.Error("restyling with the same theme bumped Seq")
+	}
+	p.GoLive()
+	if p.LiveFrame().Theme != red {
+		t.Error("the restyled preview did not go live with its theme")
+	}
+}

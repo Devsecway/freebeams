@@ -1689,6 +1689,156 @@ else
 	log "audio playlist: playback skipped (ffmpeg=$FFMPEG native=$AU_NATIVE)"
 fi
 
+# ---- preview restyle (the Preview Output monitor's context menu) -----------------------------
+# A right-click (Control-click on a Mac) on the Preview Output monitor restyles the item in
+# Preview on its own (UI-SPEC §3.4): Change Theme ▸, Background ▸, Text ▸, Edit Theme for This
+# Item…, Revert to Global Theme. The saved theme never changes; Live changes only when the item
+# is sent live again. A #1f3f9f solid background, a #5a2a7f library image and #ffd400 text tell
+# the looks apart. Regions: the Preview monitor's top band (x 0.26-0.53, y 0.375-0.41 of the
+# main window) and the Live monitor's (x 0.66-0.94); the output's top-left corner.
+PS_DIR="$OUT/preview-style"
+rm -rf "$PS_DIR"
+mkdir -p "$PS_DIR"
+python3 - "$PS_DIR/smoke-style-bg.png" <<'PY'
+import struct, sys, zlib
+w, h = 320, 180
+raw = b"".join(b"\x00" + bytes([0x5A, 0x2A, 0x7F]) * w for y in range(h))
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+open(sys.argv[1], "wb").write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+PY
+act "Media tab (restyle)" tab '{"tab":"media"}' 's["tab"] == 2'
+PS_MEDIA="$(field "$LAST" media.count)"
+act "add the background image (restyle)" add-media "{\"path\":\"$PS_DIR/smoke-style-bg.png\"}" "s[\"media\"][\"count\"] == $PS_MEDIA + 1"
+act "Songs tab (restyle)" tab '{"tab":"songs"}' 's["tab"] == 0'
+act "search amazing (restyle)" search-songs '{"q":"amazing"}' 's["songs"]["results"] >= 1'
+act "preview Amazing Grace from the library" select-song '{"title":"Amazing Grace"}' 's["preview"]["title"] == "Amazing Grace" and s["schedule"]["selected"] == -1 and not s["preview"]["style"]["custom"] and s["preview"]["style"]["background"] == "gradient" and s["preview"]["style"]["color"] == "#ffffff"'
+PS_SIZE="$(field "$LAST" preview.style.size)"
+PS_SAVED="$(post get-theme '{"name":"Default Song"}')"
+check "the saved theme before" "$PS_SAVED" 'd["theme"]["background"]["kind"] == "gradient" and not d["theme"].get("custom")'
+act "the live item before (restyle)" go-live '' 's["live"]["title"] == "Amazing Grace" and not s["live"]["style"]["custom"]'
+# The menu, through Godot's input pipeline.
+act "a right-click on the Preview monitor opens its menu" monitor-context-click '{"monitor":"preview"}' \
+	's["dialog"]["previewMenu"] and [e["label"] for e in d["menu"]] == ["Change Theme", "Background", "Text", "Edit Theme for This Item…", "Revert to Global Theme"] and not d["menu"][0].get("disabled") and d["menu"][4].get("disabled")'
+wait_idle
+shot preview-menu preview-menu
+pixel "the Preview menu has content" "$OUT/preview-menu.png" notblank
+act "close the Preview menu" preview-menu '{"item":"close"}' 'not s["dialog"].get("previewMenu")'
+if [ "$(uname)" = "Darwin" ]; then
+	act "a Control-click opens it too" monitor-context-click '{"monitor":"preview","ctrl":true}' 's["dialog"]["previewMenu"]'
+	act "close the Preview menu (Control-click)" preview-menu '{"item":"close"}' 'not s["dialog"].get("previewMenu")'
+fi
+act "a right-click on the Live monitor opens no menu" monitor-context-click '{"monitor":"live"}' 'not s["dialog"].get("previewMenu")'
+act "Text ▸ shows the item's text style" preview-menu '{"item":"open","sub":"text"}' \
+	'[e["label"] for e in d["text"]][:3] == ["Increase Font", "Decrease Font", "Font Color…"] and [e["label"] for e in d["text"] if e.get("checked")] == ["Bold", "Outline", "Shadow", "Align Center"] and d["text"][-1].get("disabled")'
+wait_idle
+shot preview-text-menu preview-text-menu
+act "Change Theme ▸ checks the item's theme" preview-menu '{"item":"open","sub":"theme"}' '[e["label"] for e in d["theme"] if e.get("checked")] == ["Default Song"]'
+wait_idle
+shot preview-theme-menu preview-theme-menu
+act "Background ▸" preview-menu '{"item":"open","sub":"background"}' '[e["label"] for e in d["background"]] == ["Select Media…", "Solid Color…", "Reset to Theme Background"]'
+wait_idle
+shot preview-background-menu preview-background-menu
+act "close the Preview menu (submenus)" preview-menu '{"item":"close"}' 'not s["dialog"].get("previewMenu")'
+# Background ▸ Solid Color… through the color dialog.
+act "Solid Color… opens the color dialog" preview-menu '{"item":"background-color"}' 's["dialog"]["previewDialog"] == "color" and s["focus"] == "dialog"'
+act "pick #1f3f9f" preview-color '{"color":"#1f3f9f"}' 's["dialog"]["previewDialog"] == "color"'
+wait_idle
+shot preview-color color
+act "OK restyles the preview" accept '' 's["preview"]["style"]["custom"] and s["preview"]["style"]["background"] == "color" and s["preview"]["style"]["backgroundColor"] == "#1f3f9f" and not s["dialog"].get("previewDialog")'
+check "Live keeps its look until sent live" "$LAST" 'not s["live"]["style"]["custom"] and s["live"]["style"]["background"] == "gradient"'
+wait_idle
+shot preview-solid main
+pixel "the Preview monitor shows the solid background" "$OUT/preview-solid.png" has 1f3f9f 0.26 0.375 0.53 0.41 2000
+pixel "the Live monitor does not" "$OUT/preview-solid.png" lacks 1f3f9f 0.66 0.375 0.94 0.41 50
+# Text ▸ Font Color… and the size.
+act "Font Color… #ffd400" preview-menu '{"item":"text-color","color":"#ffd400"}' 's["preview"]["style"]["color"] == "#ffd400" and s["preview"]["style"]["backgroundColor"] == "#1f3f9f"'
+act "Increase Font" preview-menu '{"item":"font-bigger"}' "s[\"preview\"][\"style\"][\"size\"] == $PS_SIZE + 8"
+act "Decrease Font" preview-menu '{"item":"font-smaller"}' "s[\"preview\"][\"style\"][\"size\"] == $PS_SIZE"
+act "Increase Font again" preview-menu '{"item":"font-bigger"}' "s[\"preview\"][\"style\"][\"size\"] == $PS_SIZE + 8"
+act "Shadow off" preview-menu '{"item":"shadow"}' 'not s["preview"]["style"]["shadow"] and s["preview"]["style"]["outline"]'
+act "Shadow on" preview-menu '{"item":"shadow","on":true}' 's["preview"]["style"]["shadow"]'
+act "the Reset entries are enabled now" preview-menu '{"item":"open","sub":"text"}' 'not d["text"][-1].get("disabled") and not d["background"][-1].get("disabled") and not d["menu"][4].get("disabled")'
+act "close the Preview menu (reset entries)" preview-menu '{"item":"close"}' 'not s["dialog"].get("previewMenu")'
+wait_idle
+shot preview-text main
+pixel "the Preview monitor shows the yellow text" "$OUT/preview-text.png" has ffd400 0.26 0.4 0.53 0.62 200
+# Go Live carries the override.
+act "the restyled library item goes live" go-live '' 's["live"]["style"] == s["preview"]["style"] and s["live"]["style"]["custom"] and s["live"]["title"] == "Amazing Grace"'
+wait_idle
+shot preview-style-output output
+pixel "the output shows the solid background" "$OUT/preview-style-output.png" has 1f3f9f 0.0 0.0 0.2 0.08 5000
+pixel "the output shows the yellow text" "$OUT/preview-style-output.png" has ffd400 0.1 0.25 0.9 0.75 1000
+[ "$(post get-theme '{"name":"Default Song"}')" = "$PS_SAVED" ] || fail "the saved theme changed" "$(post get-theme '{"name":"Default Song"}')"
+log "ok: the saved theme is unchanged"
+act "another verse keeps the override (library deck)" select-song '{"title":"Amazing Grace"}' 's["preview"]["style"]["custom"] and s["preview"]["style"]["backgroundColor"] == "#1f3f9f"'
+# Add to Schedule carries it; then the schedule item's own copy changes.
+act "the restyled song goes into the schedule" add-to-schedule '{"source":"song"}' 's["schedule"]["items"][-1] == "Amazing Grace" and s["schedule"]["dirty"]'
+PS_ROW=$(( $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST") - 1 ))
+act "select the restyled schedule item" select-schedule "{\"index\":$PS_ROW}" "s[\"schedule\"][\"selected\"] == $PS_ROW and s[\"preview\"][\"style\"][\"custom\"] and s[\"preview\"][\"style\"][\"color\"] == \"#ffd400\""
+act "send the schedule item live" go-live '' "s[\"schedule\"][\"live\"] == $PS_ROW"
+act "save the schedule (restyle)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+PS_SCHED="$(field "$LAST" schedule.path)"
+act "Select Media… opens the media picker" preview-menu '{"item":"background-media"}' 's["dialog"]["previewDialog"] == "media"'
+act "choose the image in the picker" preview-media '{"title":"smoke-style-bg"}' 's["dialog"]["previewDialog"] == "media"'
+wait_idle
+shot media-picker media-picker
+pixel "the media picker has content" "$OUT/media-picker.png" notblank
+act "OK sets the item's background" accept '' 's["preview"]["style"]["background"] == "image" and s["preview"]["style"]["backgroundPath"].endswith("smoke-style-bg.png") and s["schedule"]["dirty"] and not s["dialog"].get("previewDialog")'
+check "Live keeps the solid background" "$LAST" 's["live"]["style"]["backgroundColor"] == "#1f3f9f" and s["live"]["style"]["background"] == "color"'
+wait_idle
+shot preview-image main
+shot preview-image-output output
+pixel "the Preview monitor shows the library image" "$OUT/preview-image.png" has 5a2a7f 0.26 0.375 0.53 0.41 2000
+pixel "the schedule thumbnail shows it too" "$OUT/preview-image.png" has 5a2a7f 0.0 0.1 0.2 0.45 50
+pixel "the output keeps the solid background until sent live" "$OUT/preview-image-output.png" lacks 5a2a7f 0.0 0.0 0.2 0.08 50
+act "send it live again" go-live '' 's["live"]["style"]["background"] == "image"'
+wait_idle
+shot preview-image-live output
+pixel "now the output shows the image" "$OUT/preview-image-live.png" has 5a2a7f 0.0 0.0 0.2 0.08 5000
+# The .fbs keeps the override.
+act "save the restyled schedule" save-schedule '{}' 'not s["schedule"]["dirty"]'
+python3 - "$PS_SCHED" "$PS_ROW" <<'PY' || fail "the schedule file does not keep the override"
+import json, sys
+t = json.load(open(sys.argv[1]))["items"][int(sys.argv[2])]["theme"]
+assert t["custom"] and t["name"] == "Default Song", t
+assert t["background"]["kind"] == "image" and t["background"]["path"].endswith("smoke-style-bg.png"), t["background"]
+assert abs(t["font"]["color"]["G"] - 0xd4 / 255) < 0.01 and t["font"]["color"]["B"] == 0, t["font"]
+PY
+log "ok: the schedule file keeps the override"
+act "reopen the schedule (restyle)" open-schedule "{\"path\":\"$PS_SCHED\"}" 'not s["schedule"]["dirty"]'
+act "the reopened item keeps its look" select-schedule "{\"index\":$PS_ROW}" 's["preview"]["style"]["custom"] and s["preview"]["style"]["background"] == "image" and s["preview"]["style"]["color"] == "#ffd400"'
+# Edit Theme for This Item…: the editor on the item's copy; OK writes no theme.
+PS_THEMES="$(field "$LAST" themes.count)"
+act "Edit Theme for This Item… opens the editor" preview-menu '{"item":"edit-theme"}' 's["dialog"]["themeEditor"] and s["dialog"]["previewDialog"] == "item-theme" and s["themes"]["editing"] == "Default Song"'
+wait_idle
+shot preview-item-editor theme-editor
+pixel "the item theme editor has content" "$OUT/preview-item-editor.png" notblank
+pixel "its live preview shows the item's image" "$OUT/preview-item-editor.png" has 5a2a7f 0.6 0.1 0.95 0.4 2000
+act "OK keeps the item's look and saves no theme" accept '' "not s[\"dialog\"].get(\"themeEditor\") and s[\"themes\"][\"count\"] == $PS_THEMES and s[\"preview\"][\"style\"][\"background\"] == \"image\""
+# preview-theme and the per-part resets.
+act "preview-theme sets a size and the alignment" preview-theme '{"size":120,"align":"left"}' 's["preview"]["style"]["size"] == 120 and s["preview"]["style"]["align"] == "left"'
+act "Reset to Theme Text keeps the background" preview-menu '{"item":"text-reset"}' "s[\"preview\"][\"style\"][\"size\"] == $PS_SIZE and s[\"preview\"][\"style\"][\"color\"] == \"#ffffff\" and s[\"preview\"][\"style\"][\"background\"] == \"image\" and s[\"preview\"][\"style\"][\"custom\"]"
+act "Change Theme ▸ Default Scripture" preview-menu '{"item":"theme","name":"Default Scripture"}' 's["preview"]["theme"] == "Default Scripture" and not s["preview"]["style"]["custom"] and s["preview"]["style"]["align"] == "left"'
+act "Change Theme ▸ Default Song" preview-menu '{"item":"theme","name":"Default Song"}' 's["preview"]["theme"] == "Default Song" and not s["preview"]["style"]["custom"]'
+act "restyle once more" preview-theme '{"backgroundColor":"#1f3f9f"}' 's["preview"]["style"]["custom"]'
+act "Revert to Global Theme" preview-menu '{"item":"revert"}' 'not s["preview"]["style"]["custom"] and s["preview"]["style"]["background"] == "gradient" and s["preview"]["style"]["color"] == "#ffffff" and s["schedule"]["dirty"]'
+wait_idle
+shot preview-reverted main
+pixel "the reverted Preview has no solid background" "$OUT/preview-reverted.png" lacks 1f3f9f 0.26 0.375 0.53 0.41 50
+pixel "nor the image" "$OUT/preview-reverted.png" lacks 5a2a7f 0.26 0.375 0.53 0.41 50
+[ "$(post get-theme '{"name":"Default Song"}')" = "$PS_SAVED" ] || fail "the saved theme changed (end)"
+log "ok: the saved theme is still unchanged"
+# Media items bring their own look: the menu is disabled.
+act "preview the image item" select-media '{"title":"smoke-style-bg"}' 's["preview"]["title"] == "smoke-style-bg"'
+act "the menu is disabled for media" preview-menu '{"item":"open"}' 'all(e.get("disabled") for e in d["menu"])'
+act "restyling a media item is refused" preview-menu '{"item":"font-bigger"}' 'not r["ok"]'
+act "close the Preview menu (media)" preview-menu '{"item":"close"}' 'not s["dialog"].get("previewMenu")'
+act "Songs tab (restyle end)" tab '{"tab":"songs"}' 's["tab"] == 0'
+act "remove the restyled item" remove-schedule "{\"index\":$PS_ROW}" "len(s[\"schedule\"][\"items\"]) == $PS_ROW"
+act "remove the background image" remove-media '{"title":"smoke-style-bg","confirm":true}' "s[\"media\"][\"count\"] == $PS_MEDIA"
+act "save the schedule (restyle end)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+
 # ---- item menus (media and presentation tile menus) --------------------------------------------
 # The right-click / gear menus of the media and presentation tiles (UI-SPEC §3.6), driven
 # through `media-menu {item}` / `presentation-menu {item}`. A square image whose top quarter

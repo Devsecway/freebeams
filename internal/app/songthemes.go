@@ -204,7 +204,7 @@ func (a *App) handleSongThemeCommand(cmd *control.Command, args actionArgs) bool
 			Checked int      `json:"checked"`
 		}{entries, checked})
 	default:
-		return false
+		return a.handlePreviewStyleCommand(cmd) // the Preview Output menu (previewstyle.go)
 	}
 	return true
 }

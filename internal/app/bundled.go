@@ -24,7 +24,7 @@ func (a *App) startBundledInstall() {
 	if a.st == nil {
 		return
 	}
-	needed, err := bundled.Needed(a.ctx, a.st)
+	needed, err := bundled.Needed(a.ctx(), a.st)
 	if err != nil {
 		a.fail("read bundled Bibles setting", err)
 	}
