@@ -7,6 +7,7 @@ import (
 	"freebeams/internal/models"
 
 	"graphics.gd/classdb/Button"
+	"graphics.gd/classdb/CheckBox"
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/GUI"
 	"graphics.gd/classdb/Label"
@@ -31,6 +32,12 @@ type SettingsValues struct {
 	OutputScreen int    // ScreenAuto or a display index
 	Logo         string // description of the logo image ("logo.png", "Default (FreeBeams logo)", "Default gradient")
 	LibraryPath  string
+
+	// The Remote page: the remote control's setting, its port and a status
+	// line ("On: http://192.168.1.20:8765/", "Off", an error).
+	RemoteEnabled bool
+	RemotePort    int
+	RemoteStatus  string
 }
 
 // ScreenRow is one display in the output picker.
@@ -52,9 +59,10 @@ const (
 	SettingsPageLogo
 	SettingsPageLibrary
 	SettingsPageHotkeys
+	SettingsPageRemote
 )
 
-var settingsPageNames = []string{"Output", "Transition", "Logo", "Library", "Hotkeys"}
+var settingsPageNames = []string{"Output", "Transition", "Logo", "Library", "Hotkeys", "Remote"}
 
 // ParseSettingsPage finds a section by its (case-insensitive) name.
 func ParseSettingsPage(name string) (int, bool) {
@@ -81,6 +89,11 @@ type SettingsDialog struct {
 	OnOK                func()
 	OnCancel            func()
 
+	// The Remote page: the switch, the port and "Show Pairing Code…".
+	OnRemoteEnabled func(bool)
+	OnRemotePort    func(int)
+	OnShowRemote    func()
+
 	// LogoPreview hosts the app's render of the logo screen (a SlideView).
 	LogoPreview *MonitorHost
 
@@ -96,6 +109,10 @@ type SettingsDialog struct {
 	libLbl    Label.Instance
 	importBtn Button.Instance
 	hotkeys   Tree.Instance
+
+	remoteOn     CheckBox.Instance
+	remotePort   SpinBox.Instance
+	remoteStatus Label.Instance
 
 	values      SettingsValues
 	screens     []ScreenRow
@@ -144,7 +161,7 @@ func NewSettingsDialog() *SettingsDialog {
 	host := Control.New()
 	host.SetClipContents(true)
 	expand(host)
-	d.pages = []Control.Instance{d.buildOutputPage(), d.buildTransitionPage(), d.buildLogoPage(), d.buildLibraryPage(), d.buildHotkeysPage()}
+	d.pages = []Control.Instance{d.buildOutputPage(), d.buildTransitionPage(), d.buildLogoPage(), d.buildLibraryPage(), d.buildHotkeysPage(), d.buildRemotePage()}
 	for _, p := range d.pages {
 		p.SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
 		host.AsNode().AddChild(p.AsNode())
@@ -331,6 +348,46 @@ func (d *SettingsDialog) buildHotkeysPage() Control.Instance {
 	return col.AsControl()
 }
 
+func (d *SettingsDialog) buildRemotePage() Control.Instance {
+	d.remoteOn = CheckBox.New()
+	d.remoteOn.AsButton().SetText("Allow phones and tablets on this network to control FreeBeams")
+	d.remoteOn.AsBaseButton().OnToggled(func(on bool) {
+		if !d.rendering && d.OnRemoteEnabled != nil {
+			d.OnRemoteEnabled(on)
+		}
+	})
+	d.remotePort = SpinBox.New()
+	rg := d.remotePort.AsRange()
+	rg.SetMinValue(1024)
+	rg.SetMaxValue(65535)
+	rg.SetStep(1)
+	d.remotePort.AsControl().SetCustomMinimumSize(Vector2.New(120, 0))
+	rg.OnValueChanged(func(v Float.X) {
+		if !d.rendering && d.OnRemotePort != nil {
+			d.OnRemotePort(int(v))
+		}
+	})
+	d.remoteStatus = label("", "")
+	d.remoteStatus.AsControl().SetSizeFlagsHorizontal(Control.SizeExpandFill)
+	show := Button.New()
+	show.SetText("Show Pairing Code…")
+	show.AsBaseButton().OnPressed(func() {
+		if d.OnShowRemote != nil {
+			d.OnShowRemote()
+		}
+	})
+	row := hbox(0)
+	add(row, show.AsControl(), spacer())
+	return page(card("Remote Control",
+		d.remoteOn.AsControl(),
+		settingRow("Port", d.remotePort.AsControl()),
+		settingRow("Status", d.remoteStatus.AsControl()),
+		row.AsControl(),
+		hint("A phone opens the address shown with the pairing code and asks to pair; you approve it by name. Paired "+
+			"devices can move through the slides, go live with schedule items, and use Black, Clear and Logo."),
+	))
+}
+
 // AsWindow returns the dialog window node.
 func (d *SettingsDialog) AsWindow() Window.Instance { return d.dlg.win }
 
@@ -425,6 +482,12 @@ func (d *SettingsDialog) render() {
 	d.logoLbl.SetText(d.values.Logo)
 	d.libLbl.SetText(d.values.LibraryPath)
 	d.importBtn.AsBaseButton().SetDisabled(!d.importAvail)
+
+	// Remote.
+	d.remoteOn.AsBaseButton().SetPressedNoSignal(d.values.RemoteEnabled)
+	d.remotePort.AsRange().SetValueNoSignal(Float.X(d.values.RemotePort))
+	d.remoteStatus.SetText(d.values.RemoteStatus)
+	flushCalls(d.remoteOn.AsControl())
 
 	// Hotkeys.
 	d.hotkeys.Clear()

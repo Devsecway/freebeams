@@ -50,6 +50,9 @@ type MainWindow struct {
 	// Phase 2 resource tabs (their own block keeps gofmt from realigning the one above).
 	Presentations *PresentationPanel `gd:"-"`
 
+	// Remote is the remote control's pairing dialog (remote.go).
+	Remote *RemoteDialog `gd:"-"`
+
 	// Transport bars under the output monitors, shown while the monitor's
 	// slide is a video or an audio file (transport.go).
 	PreviewTransport *Transport `gd:"-"`
@@ -122,6 +125,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.Settings = NewSettingsDialog()
 	w.Confirm = NewConfirmDialog()
 	w.Message = NewMessageDialog()
+	w.Remote = NewRemoteDialog()
 	for _, d := range w.dialogs() {
 		d.host = w.dialogHost
 		d.setTheme(theme)
@@ -133,7 +137,7 @@ func NewMainWindow(p Palette) *MainWindow {
 
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
-	return []*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg}
+	return []*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.Remote.dlg}
 }
 
 // dialogName names a dialog window node for TopDialogHost.
@@ -149,6 +153,8 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 		return "confirm"
 	case w.Message.dlg.win.AsNode().ID():
 		return "message"
+	case w.Remote.dlg.win.AsNode().ID():
+		return "remote"
 	}
 	return "other"
 }

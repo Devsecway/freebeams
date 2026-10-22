@@ -82,6 +82,7 @@ func (a *App) state() core.State {
 		Import:        a.importDoc(),
 		Bundled:       a.bundled,
 		Playback:      a.playbackStates(),
+		Remote:        a.remoteStateDoc(),
 		LastError:     a.lastError,
 		Dialog:        dialog,
 		WindowTitle:   a.win.WindowTitle(),
@@ -162,6 +163,11 @@ type actionArgs struct {
 
 	// Playback (playback.go); volume takes Value, loop takes On, all take Target.
 	Seconds *float64 `json:"seconds"` // seek: the position in seconds
+
+	// The remote control (remote.go): the server's port and a pairing
+	// request's or a paired device's id (Name matches by name).
+	Port   *int   `json:"port"`
+	Device string `json:"device"`
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -288,14 +294,14 @@ func (a *App) handleCommand(cmd *control.Command) {
 			return
 		}
 		ok()
-	case "black":
-		p.ToggleBlack()
+	case "black": // {on} sets the mode instead of toggling it (phones, remote.go)
+		a.setMode(models.ModeBlack, args.On, p.ToggleBlack)
 		ok()
 	case "clear":
-		p.ToggleClear()
+		a.setMode(models.ModeClear, args.On, p.ToggleClear)
 		ok()
 	case "logo":
-		p.ToggleLogo()
+		a.setMode(models.ModeLogo, args.On, p.ToggleLogo)
 		ok()
 	case "output":
 		on := !p.State.OutputEnabled
@@ -492,7 +498,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}
@@ -517,6 +523,8 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(a.win.Confirm.AsWindow())
 	case "message":
 		png, err = render.WindowScreenshot(a.win.Message.AsWindow())
+	case "remote": // the remote control's pairing dialog
+		png, err = render.WindowScreenshot(a.win.Remote.AsWindow())
 	case "song-menu", "song-theme-menu": // the Songs list's context menu / its Theme ▸ submenu
 		w := a.win.Songs.MenuWindow()
 		if cmd.Query["window"] == "song-theme-menu" {
