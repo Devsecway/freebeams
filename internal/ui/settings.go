@@ -38,6 +38,9 @@ type SettingsValues struct {
 	RemoteEnabled bool
 	RemotePort    int
 	RemoteStatus  string
+
+	// Alerts is Options ▸ Alerts (alertsettings.go).
+	Alerts models.AlertStyles
 }
 
 // ScreenRow is one display in the output picker.
@@ -60,9 +63,10 @@ const (
 	SettingsPageLibrary
 	SettingsPageHotkeys
 	SettingsPageRemote
+	SettingsPageAlerts
 )
 
-var settingsPageNames = []string{"Output", "Transition", "Logo", "Library", "Hotkeys", "Remote"}
+var settingsPageNames = []string{"Output", "Transition", "Logo", "Library", "Hotkeys", "Remote", "Alerts"}
 
 // ParseSettingsPage finds a section by its (case-insensitive) name.
 func ParseSettingsPage(name string) (int, bool) {
@@ -94,6 +98,9 @@ type SettingsDialog struct {
 	OnRemotePort    func(int)
 	OnShowRemote    func()
 
+	// OnAlertStyles reports a change on the Alerts page.
+	OnAlertStyles func(models.AlertStyles)
+
 	// LogoPreview hosts the app's render of the logo screen (a SlideView).
 	LogoPreview *MonitorHost
 
@@ -113,6 +120,8 @@ type SettingsDialog struct {
 	remoteOn     CheckBox.Instance
 	remotePort   SpinBox.Instance
 	remoteStatus Label.Instance
+
+	alertCtl alertControls // the Alerts page (alertsettings.go)
 
 	values      SettingsValues
 	screens     []ScreenRow
@@ -161,7 +170,8 @@ func NewSettingsDialog() *SettingsDialog {
 	host := Control.New()
 	host.SetClipContents(true)
 	expand(host)
-	d.pages = []Control.Instance{d.buildOutputPage(), d.buildTransitionPage(), d.buildLogoPage(), d.buildLibraryPage(), d.buildHotkeysPage(), d.buildRemotePage()}
+	d.pages = []Control.Instance{d.buildOutputPage(), d.buildTransitionPage(), d.buildLogoPage(), d.buildLibraryPage(), d.buildHotkeysPage(), d.buildRemotePage(),
+		d.buildAlertsPage()}
 	for _, p := range d.pages {
 		p.SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
 		host.AsNode().AddChild(p.AsNode())
@@ -488,6 +498,8 @@ func (d *SettingsDialog) render() {
 	d.remotePort.AsRange().SetValueNoSignal(Float.X(d.values.RemotePort))
 	d.remoteStatus.SetText(d.values.RemoteStatus)
 	flushCalls(d.remoteOn.AsControl())
+
+	d.renderAlerts()
 
 	// Hotkeys.
 	d.hotkeys.Clear()

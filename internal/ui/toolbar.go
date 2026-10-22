@@ -39,6 +39,9 @@ type MainToolbar struct {
 	// OnAction reports a button press. Toggle buttons report the click; the app
 	// owns the toggled state and reflects it back with SetToggled.
 	OnAction func(ToolbarAction)
+	// OnAlertsMenu reports an Alerts ▾ entry; i is the saved alert's index
+	// for AlertsMenuAlert (alerts.go).
+	OnAlertsMenu func(k AlertsMenuKind, i int)
 
 	root    PanelContainer.Instance
 	buttons map[ToolbarAction]*toolButton
@@ -47,6 +50,8 @@ type MainToolbar struct {
 	// Remote ▾: Show Pairing Code…, Remote Control On (remoteOn checks it).
 	remoteMenu PopupMenu.Instance
 	remoteOn   bool
+
+	alertsMenu PopupMenu.Instance // built by SetAlertsMenu
 
 	toggled   map[ToolbarAction]bool
 	disabled  map[ToolbarAction]bool
@@ -181,6 +186,9 @@ func (t *MainToolbar) pressed(a ToolbarAction) {
 	}
 	if a == ActionRemote {
 		popupBelow(t.remoteMenu, t.buttons[ActionRemote].AsControl())
+		return
+	}
+	if a == ActionAlerts && t.popupAlerts() {
 		return
 	}
 	if t.OnAction != nil {
