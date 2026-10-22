@@ -97,6 +97,9 @@ type MediaState struct {
 	// (AVFoundation) so that no transcode is needed (playback.go).
 	Audio  int  `json:"audio"`
 	Native bool `json:"native"`
+
+	// Player is the media player backend: avfoundation, ffmpeg or theora.
+	Player string `json:"player"`
 }
 
 // PresentationsState summarises the Presentations tab.

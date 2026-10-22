@@ -181,8 +181,10 @@ func TestMediaBadge(t *testing.T) {
 		// A native player (macOS) plays every video as it is: never a complaint.
 		{"native plays an unconverted video", video, false, MediaCaps{Native: true}, 0, false, "0:30"},
 		{"native without duration", models.Media{Kind: models.MediaVideo}, false, MediaCaps{Native: true}, 0, true, "Video"},
-		{"audio shows its duration", models.Media{Kind: models.MediaAudio, Duration: 3 * time.Second}, false, MediaCaps{}, 0, false, "0:03"},
-		{"audio without duration", models.Media{Kind: models.MediaAudio}, false, MediaCaps{}, 0, true, "Audio"},
+		{"audio shows its duration", models.Media{Kind: models.MediaAudio, Duration: 3 * time.Second}, false, MediaCaps{Native: true}, 0, false, "0:03"},
+		{"audio without duration", models.Media{Kind: models.MediaAudio}, false, MediaCaps{Native: true}, 0, true, "Audio"},
+		// The Theora fallback (no ffmpeg) has no audio player.
+		{"audio without a media player", models.Media{Kind: models.MediaAudio, Duration: 3 * time.Second}, false, all, 0, false, "Needs ffmpeg"},
 	}
 	for _, tc := range tests {
 		if got := MediaBadge(tc.m, tc.playable, tc.caps, tc.progress, tc.failed); got != tc.want {
@@ -218,9 +220,12 @@ func TestMediaFooter(t *testing.T) {
 		{"native never complains", MediaCounts{8, 15, 0}, "", native, false, "23 items · 8 videos · 15 images"},
 		{"native without ffmpeg", MediaCounts{8, 15, 0}, models.MediaVideo, MediaCaps{Native: true}, false, "8 videos"},
 		{"audio counted", MediaCounts{8, 15, 2}, "", native, false, "25 items · 8 videos · 15 images · 2 audio"},
-		{"audio collection", MediaCounts{8, 15, 2}, models.MediaAudio, MediaCaps{}, false, "2 audio files"},
-		{"one audio file", MediaCounts{0, 0, 1}, models.MediaAudio, MediaCaps{}, false, "1 audio file"},
-		{"audio collection ignores ffmpeg", MediaCounts{8, 0, 1}, models.MediaAudio, MediaCaps{}, false, "1 audio file"},
+		{"audio collection", MediaCounts{8, 15, 2}, models.MediaAudio, native, false, "2 audio files"},
+		{"one audio file", MediaCounts{0, 0, 1}, models.MediaAudio, native, false, "1 audio file"},
+		{"audio without ffmpeg", MediaCounts{8, 0, 1}, models.MediaAudio, MediaCaps{}, false, "1 audio file · ffmpeg not found: audio cannot play"},
+		{"videos and audio without ffmpeg", MediaCounts{8, 0, 1}, "", MediaCaps{}, false, "9 items · 8 videos · 0 images · 1 audio · ffmpeg not found: videos and audio cannot play"},
+		{"the videos collection ignores audio", MediaCounts{8, 0, 1}, models.MediaVideo, MediaCaps{}, false, "8 videos · ffmpeg not found: videos cannot play"},
+		{"the ffmpeg player never complains", MediaCounts{8, 15, 2}, "", MediaCaps{FFmpeg: true, Native: true, Player: PlayerFFmpeg}, false, "25 items · 8 videos · 15 images · 2 audio"},
 	}
 	for _, tc := range tests {
 		if got := MediaFooter(tc.counts, tc.kind, tc.caps, tc.working); got != tc.want {

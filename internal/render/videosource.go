@@ -12,7 +12,8 @@ import (
 	"graphics.gd/classdb/TextureRect"
 )
 
-// Native media playback (macOS: AVFoundation, avplayer_darwin.go).
+// Media playback through a player behind nativePlayer (player.go: AVFoundation
+// on macOS, avplayer_darwin.go; ffmpeg processes elsewhere, ffplayer.go).
 //
 // A SlideView that shows a video or audio background opens the file through
 // a shared MediaSource keyed by (role, path). The live monitor and the
@@ -75,6 +76,11 @@ type nativePlayer interface {
 	Close()
 }
 
+// ticker is a nativePlayer that needs a call every frame once ready (the
+// ffmpeg player: its clock, frame choice and audio feed), before TakeEnded
+// and CopyFrame.
+type ticker interface{ Tick() }
+
 // Playback is what a source's player reports (read-only, every frame).
 type Playback struct {
 	Path     string
@@ -134,12 +140,9 @@ var (
 // one). nil when the role shows no video or audio.
 func Current(role VideoRole) *MediaSource { return current[role] }
 
-// NativeVideoSupported reports whether this platform plays videos and audio
-// natively (every format the OS plays, no transcode).
-func NativeVideoSupported() bool { return nativeVideoSupported }
-
-// acquireSource opens (or shares) the player for (role, path).
-func acquireSource(role VideoRole, path string) *MediaSource {
+// acquireSource opens (or shares) the player for (role, path). host is a
+// node in the scene tree (see openNativePlayer).
+func acquireSource(role VideoRole, path string, host Node.Instance) *MediaSource {
 	k := sourceKey{role, path}
 	if s, ok := sources[k]; ok {
 		s.refs++
@@ -147,7 +150,7 @@ func acquireSource(role VideoRole, path string) *MediaSource {
 		return s
 	}
 	s := &MediaSource{role: role, path: path, refs: 1, volume: 1}
-	p, err := openNativePlayer(path)
+	p, err := openNativePlayer(path, host)
 	if err != nil {
 		log.Printf("[render] open %s: %v", path, err)
 		s.status = statusFailed
@@ -334,7 +337,11 @@ func (s *MediaSource) pump() {
 			s.updateAnimating()
 		case statusFailed:
 			s.status = statusFailed
-			log.Printf("[render] %s: the media player could not play the file", s.path)
+			why := ""
+			if e, ok := s.player.(interface{ Err() error }); ok && e.Err() != nil {
+				why = " (" + e.Err().Error() + ")"
+			}
+			log.Printf("[render] %s: the media player could not play the file%s", s.path, why)
 			s.player.Close()
 			s.player = nil
 			s.updateAnimating()
@@ -342,6 +349,9 @@ func (s *MediaSource) pump() {
 		default:
 			return
 		}
+	}
+	if t, ok := s.player.(ticker); ok {
+		t.Tick()
 	}
 	if s.player.TakeEnded() {
 		s.ended = true
@@ -473,7 +483,7 @@ func (n *nativeLayer) sync() {
 	want := n.path != "" && n.role != RoleNone && n.visible
 	switch {
 	case want && n.src == nil:
-		n.src = acquireSource(n.role, n.path)
+		n.src = acquireSource(n.role, n.path, n.rect.AsNode())
 		n.src.layers = append(n.src.layers, n)
 		if n.src.hasFrame {
 			n.showTexture(n.src.tex)

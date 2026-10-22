@@ -108,7 +108,8 @@ func (a *App) initMedia() {
 
 // mediaCaps is what the machine can do with videos and audio.
 func (a *App) mediaCaps() core.MediaCaps {
-	return core.MediaCaps{FFmpeg: a.md.tools.Available(), Theora: a.md.tools.CanTranscode(), Native: render.NativeVideoSupported()}
+	return core.MediaCaps{FFmpeg: a.md.tools.Available(), Theora: a.md.tools.CanTranscode(), Native: render.NativeVideoSupported(),
+		Player: render.MediaPlayer()}
 }
 
 func (a *App) mediaFooter() string {
@@ -177,7 +178,7 @@ func (a *App) mediaStateDoc() core.MediaState {
 		Query: a.md.query, Kind: string(a.md.kind), Results: len(a.md.list), Selected: a.md.sel,
 		CountText: a.md.status, Working: a.md.working,
 		FFmpeg: a.md.tools.Available(), Theora: a.md.tools.CanTranscode(), Tools: a.md.tools.Status(),
-		Audio: a.md.audio, Native: native,
+		Audio: a.md.audio, Native: native, Player: render.MediaPlayer(),
 	}
 	if a.md.item != nil {
 		st.Current = a.md.item.Title
