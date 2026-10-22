@@ -203,12 +203,12 @@ func (a *App) mediaStateDoc() core.MediaState {
 func (a *App) loadMedia(q string, kind models.MediaKind, cmd *control.Command) {
 	a.md.query, a.md.kind = q, kind
 	a.md.status = a.mediaFooter()
-	if a.st == nil {
+	if a.st() == nil {
 		a.answer(cmd, errNoLibrary)
 		return
 	}
 	ticket := a.md.gen.Next()
-	st := a.st
+	st := a.st()
 	a.async(cmd, func(ctx context.Context) func() error {
 		rows, err := st.SearchMedia(ctx, q, kind, 0)
 		videos, verr := st.CountMedia(ctx, models.MediaVideo)
@@ -288,7 +288,7 @@ func (a *App) mediaGoLive() {
 
 // removeMedia asks for confirmation, then removes tile i from the library.
 func (a *App) removeMedia(i int) {
-	if i < 0 || i >= len(a.md.list) || a.st == nil {
+	if i < 0 || i >= len(a.md.list) || a.st() == nil {
 		return
 	}
 	m := a.md.list[i]
@@ -299,7 +299,7 @@ func (a *App) removeMedia(i int) {
 
 // doRemoveMedia removes an item from the library (after confirmation).
 func (a *App) doRemoveMedia(m models.Media, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -330,7 +330,7 @@ func (a *App) addMediaPaths(paths []string, cmd *control.Command) {
 		a.answer(cmd, errArgs)
 		return
 	}
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -411,16 +411,16 @@ func (a *App) addMediaFolderDialog() {
 // startMediaImport registers EasyWorship's media once on libraries that
 // finished the Phase 1 import before the media library existed.
 func (a *App) startMediaImport() {
-	if a.st == nil || !easyworship.Installed() {
+	if a.st() == nil || !easyworship.Installed() {
 		return
 	}
 	var done bool
-	if ok, err := a.st.GetSetting(a.ctx(), core.SettingMediaImportDone, &done); err != nil {
+	if ok, err := a.st().GetSetting(a.ctx(), core.SettingMediaImportDone, &done); err != nil {
 		a.fail("read media import setting", err)
 	} else if ok && done {
 		return
 	}
-	st := a.st
+	st := a.st()
 	a.async(nil, func(ctx context.Context) func() error {
 		rep, err := easyworship.ImportMedia(ctx, st, easyworship.Options{})
 		if err == nil {
@@ -464,7 +464,7 @@ func (a *App) mediaNeedsWork() bool {
 // pass runs queues another pass. The job is tracked for shutdown but not
 // counted as pending work: a transcode can take minutes.
 func (a *App) startMediaWork() {
-	if a.st == nil || a.md.cache == "" || !a.md.toolsKnown {
+	if a.st() == nil || a.md.cache == "" || !a.md.toolsKnown {
 		return
 	}
 	if a.md.working {
@@ -473,7 +473,7 @@ func (a *App) startMediaWork() {
 	}
 	a.md.working = true
 	a.md.status = a.mediaFooter()
-	st, ctx := a.st, a.ctx()
+	st, ctx := a.st(), a.ctx()
 	proc := media.NewProcessor(a.md.tools, a.md.cache)
 	proc.Native = render.NativeVideoSupported() // no transcodes: the sources play as they are
 	skip := make(map[int64]bool, len(a.md.failed))

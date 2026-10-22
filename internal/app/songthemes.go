@@ -54,7 +54,7 @@ func (a *App) setSongTheme(i int, themeID int64, cmd *control.Command) {
 		a.answer(cmd, fmt.Errorf("no theme with id %d", themeID))
 		return
 	}
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return

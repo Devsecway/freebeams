@@ -273,7 +273,7 @@ func (a *App) addAudioFilesDialog() {
 // name order) to the playlist. A playlist plays library media, so files the
 // library does not have yet are registered first (like Add Media Files…).
 func (a *App) addAudioPaths(paths []string, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return

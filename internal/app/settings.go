@@ -30,9 +30,9 @@ import (
 func (a *App) loadSettings() {
 	a.logoDir = a.defaultLogoDir()
 	a.settings = core.DefaultSettings(a.logoDir)
-	if a.st != nil {
+	if a.st() != nil {
 		get := func(key string, dst any) {
-			if _, err := a.st.GetSetting(a.ctx(), key, dst); err != nil {
+			if _, err := a.st().GetSetting(a.ctx(), key, dst); err != nil {
 				a.fail("read setting "+key, err)
 			}
 		}
@@ -55,7 +55,7 @@ func (a *App) loadSettings() {
 
 // saveSetting persists one setting off the main thread.
 func (a *App) saveSetting(key string, v any) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		return
 	}
@@ -176,7 +176,7 @@ func (a *App) closeSettings(cancel bool) {
 		a.fail("restore interface color", err)
 	}
 	a.fail("restore stage display", a.setStageSettings(a.stage.snap)) // stage.go
-	if a.rm.srv != nil && (a.rm.port != a.rm.snapPort || a.rm.enabled != a.rm.snapEnabled) {
+	if a.rm.srv.Get() != nil && (a.rm.port != a.rm.snapPort || a.rm.enabled != a.rm.snapEnabled) {
 		a.fail("restore remote port", a.setRemotePort(a.rm.snapPort))
 		a.setRemoteEnabled(a.rm.snapEnabled)
 	}
@@ -282,8 +282,8 @@ func (a *App) settingsValues() ui.SettingsValues {
 		LibraryPath:  "Library unavailable",
 		Alerts:       a.settings.Alerts,
 	}
-	if a.st != nil {
-		v.LibraryPath = a.st.Path()
+	if a.st() != nil {
+		v.LibraryPath = a.st().Path()
 	}
 	v.RemoteEnabled, v.RemotePort = a.rm.enabled, a.rm.port
 	v.RemoteStatus, _ = a.remoteStatusText()

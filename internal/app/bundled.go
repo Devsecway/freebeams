@@ -21,10 +21,10 @@ const bundledStatus = "Installing bundled Bibles…"
 // it. Abbreviations already present (an EasyWorship KJV in an older library)
 // are skipped.
 func (a *App) startBundledInstall() {
-	if a.st == nil {
+	if a.st() == nil {
 		return
 	}
-	needed, err := bundled.Needed(a.ctx(), a.st)
+	needed, err := bundled.Needed(a.ctx(), a.st())
 	if err != nil {
 		a.fail("read bundled Bibles setting", err)
 	}
@@ -34,7 +34,7 @@ func (a *App) startBundledInstall() {
 	}
 	a.bundled = core.BundledState{Running: true}
 	a.setScriptStatus(bundledStatus, false)
-	st := a.st
+	st := a.st()
 	log.Printf("[freebeams] installing bundled Bibles %v (%d bytes embedded)", bundled.Abbrevs(), bundled.Size())
 	a.async(nil, func(ctx context.Context) func() error {
 		rep, err := bundled.Install(ctx, st)

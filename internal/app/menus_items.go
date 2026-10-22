@@ -60,11 +60,11 @@ func (a *App) wirePresentationMenu() {
 // at startup: they decide how the first list is shown).
 func (a *App) loadItemPrefs(viewKey, sortKey string) (core.ItemView, core.ItemSort) {
 	var view, sort string
-	if a.st != nil {
-		if _, err := a.st.GetSetting(a.ctx(), viewKey, &view); err != nil {
+	if a.st() != nil {
+		if _, err := a.st().GetSetting(a.ctx(), viewKey, &view); err != nil {
 			a.fail("read setting "+viewKey, err)
 		}
-		if _, err := a.st.GetSetting(a.ctx(), sortKey, &sort); err != nil {
+		if _, err := a.st().GetSetting(a.ctx(), sortKey, &sort); err != nil {
 			a.fail("read setting "+sortKey, err)
 		}
 	}
@@ -111,7 +111,7 @@ func (a *App) setMediaOptions(i int, aspect models.MediaAspect, repeat models.Me
 		}
 	}
 	log.Printf("[freebeams] media %d %q: aspect %s, repeat %s", m.ID, m.Title, aspect, repeat)
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -143,7 +143,7 @@ func (a *App) useMediaAsLogo(i int, cmd *control.Command) {
 // deleteMediaFile asks, then moves media item i's file to the Trash and
 // removes the item from the library.
 func (a *App) deleteMediaFile(i int) {
-	if i < 0 || i >= len(a.md.list) || a.st == nil {
+	if i < 0 || i >= len(a.md.list) || a.st() == nil {
 		return
 	}
 	m := a.md.list[i]
@@ -156,7 +156,7 @@ func (a *App) deleteMediaFile(i int) {
 // confirmation). A file that is already gone is only removed from the
 // library; any other failure to trash it keeps the item.
 func (a *App) doDeleteMediaFile(m models.Media, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -247,7 +247,7 @@ func (a *App) setMediaSort(s core.ItemSort) error {
 // are removed after a question (confirm skips it), failed derivations are
 // retried and the list reloads.
 func (a *App) refreshMedia(cmd *control.Command, confirm bool) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -280,7 +280,7 @@ func (a *App) refreshMedia(cmd *control.Command, confirm bool) {
 // doRefreshMedia removes the missing items, forgets this session's failed
 // derivations, reloads the list and runs the pipeline again.
 func (a *App) doRefreshMedia(missing []models.Media, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -337,7 +337,7 @@ func (a *App) usePresentationAsLogo(i int, cmd *control.Command) {
 // deletePresentationFile asks, then moves presentation i's document to the
 // Trash and removes the item from the library.
 func (a *App) deletePresentationFile(i int) {
-	if i < 0 || i >= len(a.pr.list) || a.st == nil {
+	if i < 0 || i >= len(a.pr.list) || a.st() == nil {
 		return
 	}
 	p := a.pr.list[i]
@@ -349,7 +349,7 @@ func (a *App) deletePresentationFile(i int) {
 // doDeletePresentationFile trashes the document and removes the item
 // (after confirmation), as doDeleteMediaFile.
 func (a *App) doDeletePresentationFile(p models.Presentation, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -419,7 +419,7 @@ func (a *App) setPresentationsSort(s core.ItemSort) error {
 
 // refreshPresentations re-checks the library's documents, as refreshMedia.
 func (a *App) refreshPresentations(cmd *control.Command, confirm bool) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -452,7 +452,7 @@ func (a *App) refreshPresentations(cmd *control.Command, confirm bool) {
 // doRefreshPresentations removes the missing items, forgets this session's
 // failed renders, reloads the list and runs the render job again.
 func (a *App) doRefreshPresentations(missing []models.Presentation, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return

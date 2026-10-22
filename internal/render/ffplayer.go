@@ -1,6 +1,7 @@
 package render
 
 import (
+	"freebeams/internal/keepalive"
 	"freebeams/internal/media/ffplayer"
 
 	"graphics.gd/classdb/AudioServer"
@@ -26,7 +27,9 @@ import (
 const audioBufferSecs = 0.25
 
 type ffPlayer struct {
-	p *ffplayer.Player
+	// pl is the decoder: its goroutines write its state, so it is hidden
+	// from graphics.gd's keepalive walk (internal/keepalive). Read it with p().
+	pl keepalive.Hidden[ffplayer.Player]
 
 	// Audio (files with sound, created once the player is ready).
 	audio    AudioStreamPlayer.Instance
@@ -43,13 +46,16 @@ type ffPlayer struct {
 	haveFrame bool
 }
 
+// p is the decoder.
+func (f *ffPlayer) p() *ffplayer.Player { return f.pl.Get() }
+
 // openFFPlayer starts the ffmpeg player on path.
 func openFFPlayer(path string) (nativePlayer, error) {
 	cfg := ffConfig
 	if rate := int(AudioServer.GetMixRate()); rate > 0 {
 		cfg.SampleRate = rate
 	}
-	return &ffPlayer{p: ffplayer.Open(cfg, path), volume: 1, epoch: -1}, nil
+	return &ffPlayer{pl: keepalive.Hide(ffplayer.Open(cfg, path)), volume: 1, epoch: -1}, nil
 }
 
 // sceneRoot is the root window, where the AudioStreamPlayers go: sources
@@ -63,10 +69,10 @@ func sceneRoot() (Node.Instance, bool) {
 	return tree.Root().AsNode(), true
 }
 
-func (f *ffPlayer) Play()           { f.p.Play() }
-func (f *ffPlayer) Pause()          { f.p.Pause() }
-func (f *ffPlayer) Seek(s float64)  { f.p.Seek(s) }
-func (f *ffPlayer) SetLoop(on bool) { f.p.SetLoop(on) }
+func (f *ffPlayer) Play()           { f.p().Play() }
+func (f *ffPlayer) Pause()          { f.p().Pause() }
+func (f *ffPlayer) Seek(s float64)  { f.p().Seek(s) }
+func (f *ffPlayer) SetLoop(on bool) { f.p().SetLoop(on) }
 
 func (f *ffPlayer) SetVolume(v float64) {
 	if v == f.volume {
@@ -79,7 +85,7 @@ func (f *ffPlayer) SetVolume(v float64) {
 }
 
 func (f *ffPlayer) Status() playerStatus {
-	switch f.p.Status() {
+	switch f.p().Status() {
 	case ffplayer.Ready:
 		return statusReady
 	case ffplayer.Failed:
@@ -88,30 +94,30 @@ func (f *ffPlayer) Status() playerStatus {
 	return statusLoading
 }
 
-func (f *ffPlayer) Position() float64 { return f.p.Position() }
-func (f *ffPlayer) Duration() float64 { return f.p.Duration() }
-func (f *ffPlayer) Playing() bool     { return f.p.Playing() }
-func (f *ffPlayer) TakeEnded() bool   { return f.p.TakeEnded() }
+func (f *ffPlayer) Position() float64 { return f.p().Position() }
+func (f *ffPlayer) Duration() float64 { return f.p().Duration() }
+func (f *ffPlayer) Playing() bool     { return f.p().Playing() }
+func (f *ffPlayer) TakeEnded() bool   { return f.p().TakeEnded() }
 
 // Err is why the player failed (for the log).
-func (f *ffPlayer) Err() error { return f.p.Err() }
+func (f *ffPlayer) Err() error { return f.p().Err() }
 
 func (f *ffPlayer) Tracks() (hasVideo, hasAudio bool, w, h int) {
-	i := f.p.Info()
+	i := f.p().Info()
 	return i.HasVideo, i.HasAudio, i.Width, i.Height
 }
 
 // Tick advances the player's clock, picks the due frame and feeds the
 // sound (pumpSources, once per frame, before TakeEnded and CopyFrame).
 func (f *ffPlayer) Tick() {
-	f.p.Update()
+	f.p().Update()
 	f.feedAudio()
 }
 
 // CopyFrame copies the frame Tick picked into dst (see nativePlayer).
 func (f *ffPlayer) CopyFrame(dst []byte) (w, h int, result frameResult) {
 	if !f.haveFrame {
-		fr, ok := f.p.Frame()
+		fr, ok := f.p().Frame()
 		if !ok {
 			return 0, 0, frameNone
 		}
@@ -129,16 +135,16 @@ func (f *ffPlayer) CopyFrame(dst []byte) (w, h int, result frameResult) {
 // feedAudio keeps the generator filled while playing and tells the player
 // how much of what it handed out is still queued (its audio clock).
 func (f *ffPlayer) feedAudio() {
-	if !f.p.Info().HasAudio {
+	if !f.p().Info().HasAudio {
 		return
 	}
 	if !f.hasNode {
 		root, ok := sceneRoot()
-		if !ok || f.p.Status() != ffplayer.Ready {
+		if !ok || f.p().Status() != ffplayer.Ready {
 			return
 		}
 		gen := AudioStreamGenerator.New()
-		gen.SetMixRate(Float.X(f.p.SampleRate()))
+		gen.SetMixRate(Float.X(f.p().SampleRate()))
 		gen.SetBufferLength(audioBufferSecs)
 		f.audio = AudioStreamPlayer.New()
 		f.audio.SetStream(gen.AsAudioStream())
@@ -146,8 +152,8 @@ func (f *ffPlayer) feedAudio() {
 		root.AddChild(f.audio.AsNode())
 		f.hasNode = true
 	}
-	playing := f.p.Playing()
-	epoch := f.p.AudioEpoch()
+	playing := f.p().Playing()
+	epoch := f.p().AudioEpoch()
 	if f.started && epoch != f.epoch {
 		// A seek or a restart: drop what the generator still holds. Its
 		// clear_buffer refuses while the playback is active, so stop it; the
@@ -180,7 +186,7 @@ func (f *ffPlayer) feedAudio() {
 			f.pcm = make([]float32, 2*avail)
 			f.xy = make([]Vector2.XY, avail)
 		}
-		if n := f.p.ReadAudio(f.pcm[:2*avail]); n > 0 {
+		if n := f.p().ReadAudio(f.pcm[:2*avail]); n > 0 {
 			for i := range n {
 				f.xy[i] = Vector2.XY{X: Float.X(f.pcm[2*i]), Y: Float.X(f.pcm[2*i+1])}
 			}
@@ -188,11 +194,11 @@ func (f *ffPlayer) feedAudio() {
 		}
 		avail = pb.GetFramesAvailable()
 	}
-	f.p.SetAudioBacklog(epoch, f.capacity-avail)
+	f.p().SetAudioBacklog(epoch, f.capacity-avail)
 }
 
 func (f *ffPlayer) Close() {
-	f.p.Close()
+	f.p().Close()
 	if f.hasNode {
 		f.audio.Stop()
 		f.audio.AsNode().QueueFree()

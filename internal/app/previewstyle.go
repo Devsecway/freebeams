@@ -311,7 +311,7 @@ func (a *App) previewColorPicked(c models.RGBA) error {
 // picker in the background, then runs then (main thread). cmd, when not
 // nil, gets preview-menu's reply (or the error).
 func (a *App) loadBackgroundMedia(cmd *control.Command, then func() error) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return

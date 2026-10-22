@@ -48,7 +48,7 @@ func (a *App) layoutChanged(name string, sp *ui.Splitter) {
 		a.layout.Splitters = map[string]core.SplitPos{}
 	}
 	a.layout.Splitters[name] = core.SplitPos{Percent: sp.Percent, Collapsed: sp.Collapsed()}
-	if a.layoutSaveQueued || a.st == nil {
+	if a.layoutSaveQueued || a.st() == nil {
 		return
 	}
 	a.layoutSaveQueued = true
@@ -58,10 +58,10 @@ func (a *App) layoutChanged(name string, sp *ui.Splitter) {
 // saveLayout writes the layout setting, off the main thread.
 func (a *App) saveLayout() {
 	a.layoutSaveQueued = false
-	if a.st == nil {
+	if a.st() == nil {
 		return
 	}
-	st, layout := a.st, core.Layout{Splitters: maps.Clone(a.layout.Splitters)}
+	st, layout := a.st(), core.Layout{Splitters: maps.Clone(a.layout.Splitters)}
 	a.async(nil, func(ctx context.Context) func() error {
 		err := st.SetSetting(ctx, core.SettingLayout, layout)
 		return func() error {
@@ -73,11 +73,11 @@ func (a *App) saveLayout() {
 
 // restoreLayout puts the splitters where the operator left them (startup).
 func (a *App) restoreLayout() {
-	if a.st == nil {
+	if a.st() == nil {
 		return
 	}
 	var layout core.Layout
-	if _, err := a.st.GetSetting(a.ctx(), core.SettingLayout, &layout); err != nil {
+	if _, err := a.st().GetSetting(a.ctx(), core.SettingLayout, &layout); err != nil {
 		a.fail("read layout setting", err)
 		return
 	}
