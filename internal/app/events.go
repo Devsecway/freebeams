@@ -57,6 +57,14 @@ func (a *App) syncScheduleSelection() {
 	a.schedSel = core.ScheduleSelection(a.sched, a.pres.State.Preview)
 }
 
+// setMode switches Black / Clear / Logo: toggles it, or with on sets it (a
+// phone sends the state it wants, so two phones pressing Black agree).
+func (a *App) setMode(mode models.OutputMode, on *bool, toggle func()) {
+	if on == nil || *on != (a.pres.State.Mode == mode) {
+		toggle()
+	}
+}
+
 // setOutput turns the projector output on or off (the Live toggle).
 func (a *App) setOutput(on bool) { a.pres.SetOutputEnabled(on) }
 
@@ -80,6 +88,10 @@ func (a *App) onToolbar(act ui.ToolbarAction) {
 		a.pres.ToggleClear()
 	case ui.ActionLive:
 		a.setOutput(!a.pres.State.OutputEnabled)
+	case ui.ActionRemotePair:
+		a.openRemoteDialog()
+	case ui.ActionRemoteToggle:
+		a.setRemoteEnabled(!a.rm.enabled)
 	default:
 		log.Printf("[freebeams] toolbar %s: not available in Phase 1", act)
 	}

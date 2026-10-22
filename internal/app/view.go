@@ -65,6 +65,9 @@ type viewCache struct {
 
 	// Playback (playback.go): the seek request last applied per monitor (live, preview).
 	seekApplied [2]int
+
+	// The remote control's dialog and toolbar menu (remote.go).
+	remote remoteView
 }
 
 func newViewCache() viewCache {
@@ -105,7 +108,6 @@ func (a *App) buildUI() {
 
 	tb := a.win.Toolbar
 	tb.SetEnabled(ui.ActionWeb, false)
-	tb.SetEnabled(ui.ActionRemote, false)
 	tb.SetEnabled(ui.ActionAlerts, false)
 	tb.OnAction = func(act ui.ToolbarAction) { a.event(func() { a.onToolbar(act) }) }
 
@@ -176,6 +178,7 @@ func (a *App) buildUI() {
 	a.wireSettings() // the Options dialog and the menus (settings.go)
 	a.wirePlayback() // monitor player roles and the transport bars (playback.go)
 	a.wireStage()    // the stage display (stage.go)
+	a.wireRemote()   // the remote control's pairing dialog and Options page (remote.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -403,6 +406,9 @@ func (a *App) render() {
 	// Settings: the Options dialog, the menus and the interface theme.
 	a.renderSettings(v)
 	a.renderStage() // the stage display, the output selector and the Live menu (stage.go)
+
+	// The remote control: its dialog, the toolbar menu and the phones' view.
+	a.renderRemote(&v.remote)
 
 	// Error messages: the first queued alert is on screen.
 	switch {

@@ -223,3 +223,24 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
 }
+
+// NewCommand makes a command for the main thread outside this server (the
+// LAN remote, internal/remote, feeds the app's command path with these).
+// Wait collects the reply.
+func NewCommand(action string, data json.RawMessage) *Command {
+	return &Command{Action: action, Data: data, Query: map[string]string{}, result: make(chan Result, 1)}
+}
+
+// Wait blocks until the command was answered, done is closed or timeout passes.
+func (c *Command) Wait(done <-chan struct{}, timeout time.Duration) (Result, error) {
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+	select {
+	case res := <-c.result:
+		return res, nil
+	case <-done:
+		return Result{}, fmt.Errorf("%s: cancelled", c.Action)
+	case <-t.C:
+		return Result{}, fmt.Errorf("%s: timed out waiting for the app", c.Action)
+	}
+}

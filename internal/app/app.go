@@ -117,6 +117,8 @@ type App struct {
 
 	stage stageState // the stage display / Foldback output (stage.go)
 
+	rm remoteApp // the LAN remote control (remote.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -184,6 +186,7 @@ func (a *App) Ready() {
 	log.Printf("[freebeams] %s", versionBanner())
 
 	a.loadSettings() // transition, output display, logo, interface color (settings.go)
+	a.initRemote()   // the LAN remote control, when it is enabled (remote.go)
 
 	a.loadStageSettings() // the stage display (stage.go)
 
@@ -406,6 +409,7 @@ func (a *App) Process(delta Float.X) {
 			}
 		}
 	}
+	a.processRemote() // phone actions and pairing changes (remote.go)
 	a.runTimers()
 	if a.quitNext {
 		a.shutdown()
@@ -548,6 +552,7 @@ func (a *App) shutdown() {
 		w.RespondErr(errors.New("app is quitting"))
 	}
 	a.waiters = nil
+	a.stopRemote() // phones disconnect; the devices are saved before the library closes
 	a.out.OnClosed = nil
 	a.out.OnInput = nil
 	a.out.Close()

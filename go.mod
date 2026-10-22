@@ -4,9 +4,11 @@ go 1.27
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
 	golang.org/x/text v0.40.0
 	graphics.gd v0.0.0-20261014193348-f9563e0035a9
 	modernc.org/sqlite v1.60.1
+	rsc.io/qr v0.2.0
 )
 
 require (
@@ -32,7 +34,6 @@ require (
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
-	rsc.io/qr v0.2.0 // indirect
 	runtime.link v0.0.0-20260715222822-244f867873e6 // indirect
 )
 

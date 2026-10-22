@@ -24,11 +24,13 @@ const (
 	ActionLive  // toggle: output on / off
 	ActionNewSchedule
 	ActionNewSong
+	ActionRemotePair   // Remote ▾ ▸ Show Pairing Code…
+	ActionRemoteToggle // Remote ▾ ▸ Remote Control On (check item)
 	actionCount
 )
 
 func (a ToolbarAction) String() string {
-	return [...]string{"New", "Open", "Save", "Web", "Remote", "Go Live", "Alerts", "Logo", "Black", "Clear", "Live", "New Schedule", "New Song"}[a]
+	return [...]string{"New", "Open", "Save", "Web", "Remote", "Go Live", "Alerts", "Logo", "Black", "Clear", "Live", "New Schedule", "New Song", "Show Pairing Code", "Remote Control On"}[a]
 }
 
 // MainToolbar is the 58px main toolbar: 56 x 54 icon-over-label buttons and
@@ -41,6 +43,10 @@ type MainToolbar struct {
 	root    PanelContainer.Instance
 	buttons map[ToolbarAction]*toolButton
 	newMenu PopupMenu.Instance
+
+	// Remote ▾: Show Pairing Code…, Remote Control On (remoteOn checks it).
+	remoteMenu PopupMenu.Instance
+	remoteOn   bool
 
 	toggled   map[ToolbarAction]bool
 	disabled  map[ToolbarAction]bool
@@ -112,6 +118,18 @@ func NewMainToolbar() *MainToolbar {
 		}
 	})
 	t.root.AsNode().AddChild(t.newMenu.AsNode())
+
+	// Remote ▾ menu.
+	t.remoteMenu = PopupMenu.New()
+	t.remoteMenu.MoreArgs().AddItem("Show Pairing Code…", int(ActionRemotePair), 0)
+	t.remoteMenu.AddSeparator()
+	t.remoteMenu.MoreArgs().AddCheckItem("Remote Control On", int(ActionRemoteToggle), 0)
+	t.remoteMenu.OnIdPressed(func(id int) {
+		if id < int(actionCount) && t.OnAction != nil {
+			t.OnAction(ToolbarAction(id))
+		}
+	})
+	t.root.AsNode().AddChild(t.remoteMenu.AsNode())
 	t.render()
 	return t
 }
@@ -122,6 +140,12 @@ func (t *MainToolbar) AsControl() Control.Instance { return t.root.AsControl() }
 // SetToggled sets a toggle button's selected state (Logo, Black, Clear, Live).
 func (t *MainToolbar) SetToggled(a ToolbarAction, on bool) {
 	t.toggled[a] = on
+	t.render()
+}
+
+// SetRemoteOn checks Remote ▾ ▸ Remote Control On.
+func (t *MainToolbar) SetRemoteOn(on bool) {
+	t.remoteOn = on
 	t.render()
 }
 
@@ -142,6 +166,7 @@ func (t *MainToolbar) render() {
 		}
 		b.AsCanvasItem().QueueRedraw()
 	}
+	t.remoteMenu.SetItemChecked(t.remoteMenu.GetItemIndex(int(ActionRemoteToggle)), t.remoteOn)
 }
 
 func (t *MainToolbar) pressed(a ToolbarAction) {
@@ -152,6 +177,10 @@ func (t *MainToolbar) pressed(a ToolbarAction) {
 	t.render()
 	if a == ActionNew {
 		t.popupNew()
+		return
+	}
+	if a == ActionRemote {
+		popupBelow(t.remoteMenu, t.buttons[ActionRemote].AsControl())
 		return
 	}
 	if t.OnAction != nil {

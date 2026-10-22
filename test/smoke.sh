@@ -1288,6 +1288,94 @@ act "delete the other stage song" delete-song '{"index":0,"confirm":true}' 'r["o
 wait_idle
 act "clear the song search (stage)" search-songs '{"q":""}' 's["songs"]["results"] == s["songs"]["count"]'
 
+# ---- remote control (v0.2) -------------------------------------------------------------------
+# The LAN remote (internal/remote, docs/REMOTE.md) on a free port, driven by a fake phone
+# (test/remoteclient: the phone app's own pairing calls and WebSocket): a wrong code is refused,
+# the right one waits for the operator's approval, the approved phone gets a token, and its taps
+# (add a song, go live with it, next / prev, black on / off) take the operator's event path:
+# /state and the projector show them. Revoking the phone closes its socket at once.
+RC="$OUT/remoteclient"
+(cd "$ROOT" && go build -o "$RC" ./test/remoteclient) || fail "build test/remoteclient"
+RPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
+RBASE="http://127.0.0.1:$RPORT"
+act "the remote is off by default" state '' 'not s["remote"]["enabled"] and not s["remote"]["running"] and s["remote"]["devices"] == []'
+act "a port below 1024 is refused" remote '{"port":80}' 'not r["ok"] and "between 1024 and 65535" in r["error"]'
+act "turn the remote on" remote "{\"on\":true,\"port\":$RPORT}" "s[\"remote\"][\"enabled\"] and s[\"remote\"][\"running\"] and s[\"remote\"][\"port\"] == $RPORT and s[\"remote\"][\"configuredPort\"] == $RPORT and s[\"remote\"][\"url\"].endswith(\":$RPORT/\") and len(s[\"remote\"][\"code\"]) == 6"
+RCODE="$(field "$LAST" remote.code)"
+curl -sS --max-time 10 "$RBASE/" | grep -q 'FreeBeams' || fail "the remote does not serve the phone app"
+log "ok: the remote serves the phone app"
+RRESP="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$RBASE/api/state")"
+[ "$RRESP" = "401" ] || fail "an unpaired /api/state answered $RRESP, not 401"
+log "ok: an unpaired phone gets no state (401)"
+act "Remote ▸ Show Pairing Code…" remote-dialog '' 's["remote"]["dialog"] == "pairing" and s["focus"] == "dialog"'
+wait_idle
+shot remote-dialog remote
+pixel "the pairing dialog shows the QR code" "$OUT/remote-dialog.png" has ffffff 0.0 0.0 0.5 0.6 20000
+pixel "the QR code has dark modules" "$OUT/remote-dialog.png" has 000000 0.0 0.0 0.5 0.6 5000
+WRONG="$(python3 -c 'import sys; c=sys.argv[1]; print("%06d" % ((int(c) + 1) % 1000000))' "$RCODE")"
+LAST="$("$RC" pair -base "$RBASE" -code "$WRONG" -name "Smoke Phone")"
+check "a wrong pairing code is refused" "$LAST" 'r["httpStatus"] == 403 and not r["ok"] and r["remaining"] == 4'
+LAST="$("$RC" pair -base "$RBASE" -code "$RCODE" -name "Smoke Phone")"
+check "the right code asks the operator" "$LAST" 'r["ok"] and r["id"] and r["secret"]'
+PAIR_ID="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["id"])' "$LAST")"
+PAIR_SECRET="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["secret"])' "$LAST")"
+act "the phone waits for approval" state '' 'len(s["remote"]["pending"]) == 1 and s["remote"]["pending"][0]["name"] == "Smoke Phone" and s["remote"]["pending"][0]["kind"] == "phone"'
+wait_idle
+shot remote-dialog-pending remote
+act "approve the phone" remote-approve '{"name":"Smoke Phone"}' "s[\"remote\"][\"pending\"] == [] and len(s[\"remote\"][\"devices\"]) == 1 and s[\"remote\"][\"devices\"][0][\"name\"] == \"Smoke Phone\" and s[\"remote\"][\"code\"] != \"$RCODE\""
+LAST="$("$RC" wait -base "$RBASE" -id "$PAIR_ID" -secret "$PAIR_SECRET")"
+check "the approved phone collects its token" "$LAST" 'r["ok"] and r["status"] == "approved" and len(r["token"]) == 43 and r["device"]["name"] == "Smoke Phone"'
+RTOKEN="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["token"])' "$LAST")"
+act "close the pairing dialog" dismiss '' 's["remote"].get("dialog", "") == "" and s["focus"] != "dialog"'
+LAST="$(curl -sS --max-time 10 -H "Authorization: Bearer $RTOKEN" "$RBASE/api/songs?q=amazing%20grace")"
+check "the phone searches the song library" "$LAST" 'r["ok"] and any(x["title"] == "Amazing Grace" for x in r["songs"])'
+RSONG="$(python3 -c 'import json,sys; print([x["id"] for x in json.loads(sys.argv[1])["songs"] if x["title"] == "Amazing Grace"][0])' "$LAST")"
+LAST="$(state)"
+RITEMS="$(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST")"
+LAST="$("$RC" ws -base "$RBASE" -token "$RTOKEN" -do "add-song {\"id\":$RSONG}" -do "live-item {\"index\":$RITEMS}")"
+check "the phone adds a song and sends it live" "$LAST" "r[\"ok\"] and r[\"hello\"][\"device\"][\"name\"] == \"Smoke Phone\" and len(r[\"state\"][\"schedule\"]) == $RITEMS + 1 and r[\"state\"][\"liveItem\"] == $RITEMS and r[\"state\"][\"live\"][\"title\"] == \"Amazing Grace\" and r[\"state\"][\"live\"][\"index\"] == 0"
+act "the song is live in the app" state '' "s[\"schedule\"][\"live\"] == $RITEMS and s[\"live\"][\"title\"] == \"Amazing Grace\" and s[\"live\"][\"index\"] == 0 and s[\"mode\"] == \"normal\""
+LAST="$("$RC" ws -base "$RBASE" -token "$RTOKEN" -do next -do next -do prev)"
+check "next, next, prev from the phone" "$LAST" 'r["ok"] and [x["action"] for x in r["replies"]] == ["next", "next", "prev"] and r["state"]["live"]["index"] == 1 and r["state"]["live"]["label"]'
+act "the app follows the phone (slide 2)" state '' 's["live"]["index"] == 1'
+wait_idle
+shot remote-slide2-output output
+pixel "the output shows the live slide" "$OUT/remote-slide2-output.png" notblank
+LAST="$("$RC" ws -base "$RBASE" -token "$RTOKEN" -do 'black {"on":true}' -do 'black {"on":true}')"
+check "black from the phone (set, not toggled)" "$LAST" 'r["ok"] and r["state"]["mode"] == "black"'
+act "the app is black" state '' 's["mode"] == "black" and s["live"]["index"] == 1'
+wait_idle
+shot remote-black-output output
+pixel "the output is black (phone)" "$OUT/remote-black-output.png" black
+LAST="$("$RC" ws -base "$RBASE" -token "$RTOKEN" -do 'black {"on":false}' -do quit -do 'open-schedule {"path":"/etc/passwd"}')"
+check "black off from the phone; control-only actions are unknown to it" "$LAST" 'not r["ok"] and r["state"]["mode"] == "normal" and [x["ok"] for x in r["replies"]] == [True, False, False] and "unknown action" in r["replies"][1]["error"]'
+act "the app is back to normal and still running" state '' 's["mode"] == "normal" and s["remote"]["running"]'
+wait_idle
+shot remote-normal-output output
+pixel "the output shows the slide again" "$OUT/remote-normal-output.png" notblank
+act "the Options dialog has a Remote page" options '{"page":"remote"}' 's["dialog"]["settings"] and s["remote"]["enabled"]'
+wait_idle
+shot remote-options settings
+pixel "the Remote page has content" "$OUT/remote-options.png" notblank
+act "close the Options dialog (remote)" dismiss '' 'not s["dialog"]["settings"] and s["remote"]["running"]'
+# Revoking closes the phone's socket at once and its token stops working.
+"$RC" watch -base "$RBASE" -token "$RTOKEN" -for 15s >"$OUT/remote-watch.json" 2>"$OUT/remote-watch.err" &
+WATCH_PID=$!
+for _ in $(seq 1 40); do
+	grep -q connected "$OUT/remote-watch.err" 2>/dev/null && break
+	sleep 0.25
+done
+act "the phone is connected" state '' 's["remote"]["clients"] == 1 and s["remote"]["devices"][0]["online"]'
+act "remove the phone" remote-revoke '{"name":"Smoke Phone"}' 's["remote"]["devices"] == []'
+wait "$WATCH_PID"
+check "the phone is told it was removed and disconnected" "$(cat "$OUT/remote-watch.json")" 'r["revoked"] and r["closed"] and not r["timedOut"]'
+RRESP="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $RTOKEN" "$RBASE/api/session")"
+[ "$RRESP" = "401" ] || fail "a revoked token answered $RRESP, not 401"
+log "ok: the revoked token no longer works (401)"
+act "turn the remote off" remote '{"on":false}' 'not s["remote"]["enabled"] and not s["remote"]["running"]'
+curl -sS --max-time 5 -o /dev/null "$RBASE/" 2>/dev/null && fail "the remote still answers after it was turned off"
+log "ok: nothing listens on the remote port any more"
+
 # ---- item menus (media and presentation tile menus) --------------------------------------------
 # The right-click / gear menus of the media and presentation tiles (UI-SPEC §3.6), driven
 # through `media-menu {item}` / `presentation-menu {item}`. A square image whose top quarter

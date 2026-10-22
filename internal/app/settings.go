@@ -153,6 +153,7 @@ func (a *App) openSettings(page int) {
 	}
 	a.settingsSnap = a.settings
 	a.stage.snap, a.stage.warning = a.stage.settings, "" // stage.go
+	a.rm.snapEnabled, a.rm.snapPort = a.rm.enabled, a.rm.port
 	a.settingsOpen = true
 	a.settingsVer++ // the displays may have changed since the last time
 }
@@ -174,6 +175,10 @@ func (a *App) closeSettings(cancel bool) {
 		a.fail("restore interface color", err)
 	}
 	a.fail("restore stage display", a.setStageSettings(a.stage.snap)) // stage.go
+	if a.rm.srv != nil && (a.rm.port != a.rm.snapPort || a.rm.enabled != a.rm.snapEnabled) {
+		a.fail("restore remote port", a.setRemotePort(a.rm.snapPort))
+		a.setRemoteEnabled(a.rm.snapEnabled)
+	}
 }
 
 // logoFilters are the native dialog filters for Choose Image….
@@ -277,6 +282,8 @@ func (a *App) settingsValues() ui.SettingsValues {
 	if a.st != nil {
 		v.LibraryPath = a.st.Path()
 	}
+	v.RemoteEnabled, v.RemotePort = a.rm.enabled, a.rm.port
+	v.RemoteStatus, _ = a.remoteStatusText()
 	return v
 }
 
@@ -433,6 +440,19 @@ func (a *App) applySetting(key string, raw json.RawMessage) error {
 			return fmt.Errorf("set-setting %s: want an image path or a background object: %w", key, err)
 		}
 		a.setLogo(bg)
+	case core.SettingRemoteEnabled, "remoteEnabled":
+		var on bool
+		if err := json.Unmarshal(raw, &on); err != nil {
+			return fmt.Errorf("set-setting %s: %w", key, err)
+		}
+		a.setRemoteEnabled(on)
+		return nil
+	case core.SettingRemotePort, "remotePort":
+		var p int
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return fmt.Errorf("set-setting %s: %w", key, err)
+		}
+		return a.setRemotePort(p)
 	case core.SettingInterfaceColor, "interfaceColor":
 		var c string
 		if err := json.Unmarshal(raw, &c); err != nil {
@@ -442,7 +462,7 @@ func (a *App) applySetting(key string, raw json.RawMessage) error {
 	case core.SettingStage, "stage":
 		return a.applyStageSetting(raw) // stage.go
 	default:
-		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, stage)", key)
+		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, stage, remote.enabled, remote.port)", key)
 	}
 	return nil
 }

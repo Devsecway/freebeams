@@ -37,9 +37,10 @@ internal/media             pure Go: media folder scan, thumbnails, ffmpeg probe/
 internal/render            Godot: SlideView (draws a models.Slide with a models.Theme), transitions, output window
 internal/ui                Godot: operator UI widgets matching docs/UI-SPEC.md (dumb views)
 internal/control           HTTP control server (bearer key) for tests/automation
+internal/remote            pure Go: LAN remote (pairing, device tokens, WebSocket, embedded phone web app), docs/REMOTE.md
 internal/app               Godot: the App node that wires store + presenter + ui + render + control
 ```
-- `models`, `store`, `importers` and `media` **must not import graphics.gd**. They are unit-tested with plain `go test`.
+- `models`, `store`, `importers`, `media` and `remote` **must not import graphics.gd**. They are unit-tested with plain `go test`.
 - `ui` widgets are **dumb views**. They receive data through setters (`SetItems(...)`) and report user intent through
   exported callback fields (`OnSelect func(i int)`). They never touch the store, the presenter or the render package.
   Slide thumbnails come from an injected factory func.
@@ -243,6 +244,20 @@ internal/app               Godot: the App node that wires store + presenter + ui
   minimum size is still the old, bigger text's, so a `SetSize` smaller than that is clamped and the label grows past
   its box (down, or right for a right-aligned `OverrunNoTrimming` clock). A getter does not help. Place it again
   one `Callable.Defer` later, after a flush (`render.StageView.deferReplace`).
+- gorilla/websocket: once a read deadline passes the connection is unusable ("all future reads return an error").
+  Wait with a timeout on a channel fed by a reader goroutine instead (`test/remoteclient`), never with
+  `SetReadDeadline` between messages.
+- A `select` over several ready channels picks one at random: a hello queued on one channel and a state push on
+  another reached the socket in either order (a flaky test). Write the message that must come first before
+  starting the write loop (`remote/ws.go handleWS`).
+- The remote's phone actions are `control.Command`s drained in `App.Process` (`processRemote`) and answered after
+  render like the control API's. A phone may only send what `remote/actions.go` maps; a new phone action needs an
+  entry there and an app action. Black / Clear / Logo take `{on}` (set, not toggle) so two phones agree.
+- Pick the remote's smoke port with `socket.bind(("127.0.0.1", 0))` and pass it to `remote {on, port}`: concurrent
+  smoke runs in other worktrees would collide on the default 8765. A pairing code pairs once (approval makes a new
+  one), so re-read `remote.code` from `/state` before every pairing.
+- The Playwright MCP browser saves screenshots only under the main checkout's `.playwright-mcp/` (git-ignored),
+  even from a worktree. It is how the phone web app was checked at phone size (390 × 844).
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

@@ -203,6 +203,9 @@ type State struct {
 
 	// Stage is the stage display / Foldback output (stage.go).
 	Stage StageState `json:"stage"`
+
+	// Remote is the LAN remote control (remote.go).
+	Remote RemoteState `json:"remote"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -242,6 +245,8 @@ type StateInput struct {
 	Playback PlaybackStates
 
 	Stage StageState
+
+	Remote RemoteState
 }
 
 // deckState summarises deck d with slide i selected.
@@ -304,6 +309,7 @@ func BuildState(in StateInput) State {
 	}
 	st.Playback = in.Playback
 	st.Stage = in.Stage
+	st.Remote = in.Remote.normalized()
 	st.Bundled = in.Bundled
 	if st.Bundled.Installed == nil {
 		st.Bundled.Installed = []string{}
