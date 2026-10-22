@@ -217,3 +217,18 @@ func TestDefaultThemeSettings(t *testing.T) {
 		t.Fatalf("CountThemes after re-seed = %d, want 2", n)
 	}
 }
+
+func TestSaveThemeClearsCustom(t *testing.T) {
+	ctx := context.Background()
+	st := openTemp(t)
+	th := models.DefaultSongTheme()
+	th.Name = "From an item"
+	th.Custom = true // an item's restyled copy saved as a theme
+	if err := st.SaveTheme(ctx, &th); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetTheme(ctx, th.ID)
+	if err != nil || got.Custom || th.Custom {
+		t.Fatalf("saved theme custom = %v / %v, %v", got.Custom, th.Custom, err)
+	}
+}

@@ -256,6 +256,21 @@ func (p *Presenter) RestyleDecks(restyle func(d *Deck) (Theme, bool)) bool {
 	return changed
 }
 
+// RestylePreview gives the Preview deck theme t (an item restyled on its own,
+// the Preview Output menu). Live is left alone, even when it shows the same
+// item: the change reaches the output when the item is sent live again. The
+// slides and the selection are kept. It reports whether anything changed;
+// Seq is bumped then.
+func (p *Presenter) RestylePreview(t Theme) bool {
+	d := p.State.Preview
+	if d == nil || d.Theme == t {
+		return false
+	}
+	d.Theme = t
+	p.bump()
+	return true
+}
+
 // LiveSlide returns the current live slide, or nil.
 // The result is a copy; changing it does not affect the presenter.
 func (p *Presenter) LiveSlide() *Slide {

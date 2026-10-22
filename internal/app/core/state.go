@@ -14,6 +14,10 @@ type DeckState struct {
 
 	// Theme is the name of the theme the deck is drawn with.
 	Theme string `json:"theme"`
+
+	// Style is the deck's look (the fields the Preview Output menu changes);
+	// nil without a deck.
+	Style *DeckStyle `json:"style,omitempty"`
 }
 
 // ScheduleState summarises the schedule.
@@ -158,6 +162,11 @@ type DialogState struct {
 	AlertDialog string `json:"alertDialog,omitempty"`
 	// AlertsMenu reports the toolbar's Alerts ▾ menu being open.
 	AlertsMenu bool `json:"alertsMenu,omitempty"`
+
+	// PreviewMenu reports the Preview Output monitor's context menu being
+	// open; PreviewDialog names its open dialog: color, media or item-theme.
+	PreviewMenu   bool   `json:"previewMenu,omitempty"`
+	PreviewDialog string `json:"previewDialog,omitempty"`
 }
 
 // ResourceState is what the resource preview (right of the resource tabs) shows.
@@ -276,6 +285,8 @@ func deckState(d *models.Deck, i int) DeckState {
 	}
 	ds.Title, ds.ItemID, ds.Count = d.Title, d.ItemID, len(d.Slides)
 	ds.Theme = d.Theme.Name
+	style := StyleOf(d.Theme)
+	ds.Style = &style
 	if i >= 0 && i < len(d.Slides) {
 		s := d.Slides[i]
 		ds.Label, ds.Text, ds.Footer = s.Label, s.Text, s.Footer

@@ -104,6 +104,7 @@ func (s *Store) SaveTheme(ctx context.Context, t *models.Theme) error {
 	}
 	cp := *t
 	cp.Name = strings.TrimSpace(cp.Name)
+	cp.Custom = false // a saved theme is never an item's restyled copy
 	if cp.Name == "" {
 		return errors.New("save theme: name is required")
 	}

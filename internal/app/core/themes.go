@@ -121,15 +121,17 @@ func IsDefaultTheme(t models.Theme, defaults map[models.ItemKind]int64) bool {
 func ThemeCountText(n int) string { return plural(n, "theme", "themes") }
 
 // RestyleSchedule gives every schedule item that uses theme t (matched by
-// ID) the new look, keeping the item's own slides. It returns the number of
-// items changed; the schedule is marked dirty when that is more than zero.
+// ID) the new look, keeping the item's own slides. An item restyled on its
+// own (Theme.Custom, the Preview Output menu) keeps its copy. It returns the
+// number of items changed; the schedule is marked dirty when that is more
+// than zero.
 func RestyleSchedule(s *models.Schedule, t models.Theme) int {
 	if s == nil || t.ID == 0 {
 		return 0
 	}
 	n := 0
 	for i := range s.Items {
-		if s.Items[i].Theme.ID == t.ID && s.Items[i].Theme != t {
+		if s.Items[i].Theme.ID == t.ID && !s.Items[i].Theme.Custom && s.Items[i].Theme != t {
 			s.Items[i].Theme = t
 			n++
 		}
@@ -154,10 +156,10 @@ func ApplyItemTheme(s *models.Schedule, i int, t models.Theme) bool {
 }
 
 // RestyleByThemeID is a Presenter.RestyleDecks callback: decks drawn with
-// theme t.ID get t.
+// theme t.ID get t, except a deck restyled on its own (Theme.Custom).
 func RestyleByThemeID(t models.Theme) func(*models.Deck) (models.Theme, bool) {
 	return func(d *models.Deck) (models.Theme, bool) {
-		if t.ID != 0 && d.Theme.ID == t.ID {
+		if t.ID != 0 && d.Theme.ID == t.ID && !d.Theme.Custom {
 			return t, true
 		}
 		return models.Theme{}, false

@@ -428,3 +428,61 @@ func TestScheduleJSONShape(t *testing.T) {
 		}
 	}
 }
+
+func TestScheduleKeepsCustomTheme(t *testing.T) {
+	s := NewSchedule()
+	th := DefaultSongTheme()
+	th.ID = 7
+	th.Background = Background{Kind: BackgroundColor, Color: Hex(0x1F3F9F)}
+	th.Font.Color = Hex(0xFFD400)
+	th.Custom = true
+	s.Add(ScheduleItem{Kind: ItemSong, Title: "Amazing Grace", Theme: th, Slides: []Slide{{Kind: SlideSong, Text: "x"}}})
+	path := filepath.Join(t.TempDir(), "custom"+ScheduleFileExt)
+	if err := s.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"custom": true`) {
+		t.Errorf("the file does not mark the custom theme:\n%s", data)
+	}
+	loaded, err := LoadSchedule(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.Items[0].Theme; got != th {
+		t.Errorf("round trip theme = %+v\nwant %+v", got, th)
+	}
+	// A saved (library) theme leaves the field out.
+	plain := DefaultSongTheme()
+	js, _ := json.Marshal(plain)
+	if strings.Contains(string(js), "custom") {
+		t.Errorf("a library theme serialises custom: %s", js)
+	}
+}
+
+func TestThemeSameLook(t *testing.T) {
+	base := DefaultSongTheme()
+	base.ID, base.Name = 3, "Sunday"
+	cases := []struct {
+		name string
+		edit func(t *Theme)
+		same bool
+	}{
+		{"identical", func(*Theme) {}, true},
+		{"other id, name and custom flag", func(t *Theme) { t.ID, t.Name, t.Custom = 9, "Copy", true }, true},
+		{"background", func(t *Theme) { t.Background.Color = Hex(0x123456) }, false},
+		{"font size", func(t *Theme) { t.Font.Size++ }, false},
+		{"outline", func(t *Theme) { t.Outline.Enabled = false }, false},
+		{"alignment", func(t *Theme) { t.HAlign = AlignLeft }, false},
+	}
+	for _, tc := range cases {
+		th := base
+		tc.edit(&th)
+		if got := th.SameLook(base); got != tc.same {
+			t.Errorf("%s: SameLook = %v, want %v", tc.name, got, tc.same)
+		}
+	}
+}
