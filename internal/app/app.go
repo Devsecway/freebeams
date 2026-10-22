@@ -121,6 +121,8 @@ type App struct {
 
 	al alertsState // the alert overlay and the saved alerts (alerts.go)
 
+	au audioState // the schedule's background audio playlist (audio.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -208,6 +210,7 @@ func (a *App) Ready() {
 	a.initMedia()
 	a.initPresentations()
 	a.initAlerts()
+	a.initAudio()
 	a.dirty = true
 }
 
@@ -422,11 +425,17 @@ func (a *App) Process(delta Float.X) {
 		a.dirty = true
 	}
 	a.tickAlerts() // a finished alert gives way to the next (alerts.go)
+
+	// The audio playlist: a track ended or failed, a fade-out finished (audio.go).
+	if a.audioEvents() {
+		a.dirty = true
+	}
 	if a.dirty || a.pres.State.Seq != a.view.seq {
 		a.render()
 		a.dirty = false
 	} else if render.AnyMediaActive() {
 		a.renderPlayback() // the transport follows the player every frame
+		a.renderAudio()    // the playlist's position and fade-out too (audio.go)
 	}
 	a.tickStage() // the stage display's clock and timer (stage.go)
 
