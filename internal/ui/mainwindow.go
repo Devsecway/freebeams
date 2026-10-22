@@ -88,6 +88,9 @@ type MainWindow struct {
 	// AudioPlaylist is the background audio under the schedule (playlist.go).
 	AudioPlaylist *AudioPlaylist `gd:"-"`
 
+	// BibleManager is Scriptures ▸ + / Manage Bibles… (biblemanager.go).
+	BibleManager *BibleManager `gd:"-"`
+
 	// The Preview Output monitor's context menu and its dialogs (previewmenu.go).
 	PreviewMenu *PreviewMenu `gd:"-"`
 	ColorDialog *ColorDialog `gd:"-"`
@@ -152,6 +155,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.Remote = NewRemoteDialog()
 	w.buildAlertDialogs()
 	w.buildPreviewMenu()
+	w.BibleManager = NewBibleManager()
 	for _, d := range w.dialogs() {
 		d.host = w.dialogHost
 		d.setTheme(theme)
@@ -164,7 +168,7 @@ func NewMainWindow(p Palette) *MainWindow {
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
 	return append([]*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg, w.Remote.dlg},
-		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg, w.Editor.sp.dlg.dlg)...)
+		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg, w.Editor.sp.dlg.dlg, w.BibleManager.dlg)...)
 }
 
 // dialogName names a dialog window node for TopDialogHost.
@@ -196,6 +200,9 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 	}
 	if n.ID() == w.Editor.sp.dlg.dlg.win.AsNode().ID() {
 		return "spelling"
+	}
+	if n.ID() == w.BibleManager.dlg.win.AsNode().ID() {
+		return "bible-manager"
 	}
 	return "other"
 }

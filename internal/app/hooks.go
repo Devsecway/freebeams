@@ -332,6 +332,10 @@ func (a *App) focusTarget(target string) error {
 		c = findControl(a.win.Songs.AsControl().AsNode(), isSongTable)
 	case "verse-list":
 		c = findControl(a.win.Scriptures.AsControl().AsNode(), isRowTree)
+	case "bible-list":
+		c = a.win.Scriptures.BibleListControl()
+	case "bible-manager-list":
+		c = a.win.BibleManager.ListControl()
 	case "schedule":
 		c = a.win.Schedule.AsControl()
 	case "preview-grid":

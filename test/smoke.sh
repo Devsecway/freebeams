@@ -17,6 +17,10 @@ LOG="$OUT/app.log"
 : >"$LOG"
 
 LIB="$(mktemp -t freebeams-smoke)"
+# The Bible Manager's Bibles folder (FREEBEAMS_BIBLES_DIR), emptied per run.
+BIBLES_DIR="$OUT/bibles-folder"
+rm -rf "$BIBLES_DIR"
+mkdir -p "$BIBLES_DIR"
 SCHED="$OUT/smoke-schedule.fbs"
 KEEPALIVE_TYPES="$OUT/keepalive-types.txt"
 rm -f "$KEEPALIVE_TYPES"
@@ -130,7 +134,7 @@ shot() { # NAME WINDOW
 log "launching: FREEBEAMS_LIBRARY=$LIB bin/gd run"
 (
 	cd "$ROOT" || exit 1
-	export FREEBEAMS_LIBRARY="$LIB" FREEBEAMS_CONTROL_KEY="$KEY"
+	export FREEBEAMS_LIBRARY="$LIB" FREEBEAMS_CONTROL_KEY="$KEY" FREEBEAMS_BIBLES_DIR="$BIBLES_DIR"
 	# The keepalive check (internal/app/keepalivecheck.go) logs every type
 	# graphics.gd's per-frame walk reaches that goroutines mutate, and lists
 	# the walked types in $KEEPALIVE_TYPES at shutdown (see "keepalive walk").
@@ -1073,8 +1077,8 @@ act "Songs tab (default themes)" tab '{"tab":"songs"}' 's["tab"] == 0'
 # them too; the startup wait above covered the install (/state.import.running
 # stays true while it runs).
 LAST="$(state)"
-check "bundled KJV and ASV are installed" "$LAST" '"KJV" in s["bibles"] and "ASV" in s["bibles"] and s["bundled"]["done"] and not s["bundled"]["running"] and not s["bundled"].get("error") and s["bundled"]["version"] >= 1'
-check "the bundled install accounted for both" "$LAST" 'sorted(s["bundled"]["installed"] + [x.split(" ")[0] for x in s["bundled"]["skipped"]]) == ["ASV", "KJV"]'
+check "bundled KJV, ASV and RVA are installed" "$LAST" '"KJV" in s["bibles"] and "ASV" in s["bibles"] and "RVA" in s["bibles"] and s["bundled"]["done"] and not s["bundled"]["running"] and not s["bundled"].get("error") and s["bundled"]["version"] >= 1'
+check "the bundled install accounted for all three" "$LAST" 'sorted(s["bundled"]["installed"] + [x.split(" ")[0] for x in s["bundled"]["skipped"]]) == ["ASV", "KJV", "RVA"]'
 act "ASV wording" reference '{"text":"jn 3:16","bible":"ASV"}' 's["scripture"]["bible"] == "ASV" and "believeth on him" in s["preview"]["text"] and "eternal life" in s["preview"]["text"] and s["preview"]["footer"] == "John 3:16 (ASV)"'
 act "KJV wording differs" reference '{"text":"jn 3:16","bible":"KJV"}' 's["scripture"]["bible"] == "KJV" and "believeth in him" in s["preview"]["text"] and s["preview"]["footer"] == "John 3:16 (KJV)"'
 act "ASV Psalm 36:1 carries no leaked heading" reference '{"text":"ps 36:1","bible":"ASV"}' 's["preview"]["text"].startswith("The transgression of the wicked")'
@@ -1128,6 +1132,108 @@ act "dismiss the read error" dismiss '' 'not s["dialog"].get("message")'
 act "import-bible-file needs a path" import-bible-file '{}' 'not r["ok"]'
 act "back to KJV (bibles)" reference '{"text":"jn 3:16","bible":"KJV"}' 's["scripture"]["bible"] == "KJV"'
 act "Songs tab again (bibles)" tab '{"tab":"songs"}' 's["tab"] == 0'
+# ---- bible manager ----------------------------------------------------------------------------
+# The Bible Manager (Scriptures ▸ +) lists the built-ins (KJV, ASV, RVA), the
+# Bibles folder (FREEBEAMS_BIBLES_DIR, $BIBLES_DIR here) and the library. The
+# fixtures are made-up wordings: a Bible package written by Python (the
+# .fbbible format is gzip of a header line plus the single-file Bible JSON),
+# a Bible JSON file, and a damaged package the list reports.
+python3 - "$BIBLES_DIR" <<'PY'
+import gzip, json, os, sys
+d = sys.argv[1]
+hdr = {"format": "freebeams-bible", "version": 1, "abbrev": "SMKP", "name": "Smoke Package", "language": "en",
+       "copyright": "© 2026 Smoke Fixture", "verses": 3}
+books = {"John": {"3": {"16": "Smoke package, John three sixteen.", "17": "Smoke package, John three seventeen."}},
+         "Psalms": {"23": {"1": "Smoke package, the shepherd psalm."}}}
+body = json.dumps(hdr, ensure_ascii=False)[:-1] + ",\n\"books\":" + json.dumps(books, ensure_ascii=False) + "}\n"
+with gzip.open(os.path.join(d, "SMKP.fbbible"), "wb") as f:
+    f.write(body.encode("utf-8"))
+json.dump({"abbrev": "SMKJ", "name": "Biblia de Humo", "language": "es", "copyright": "© Humo",
+           "books": {"John": {"3": {"16": "Porque de tal manera amó Dios al humo, ¿sí? ¡Él!"}}}},
+          open(os.path.join(d, "smoke-json.json"), "w", encoding="utf-8"), ensure_ascii=False)
+open(os.path.join(d, "broken.fbbible"), "wb").write(b"not a package")
+open(os.path.join(d, "notes.txt"), "w").write("ignored")
+PY
+# E(abbrev) is a row of /state.bibleManager.entries in the checks below.
+EN='(lambda m: (lambda a: m.get(a, {})))({e["abbrev"]: e for e in s["bibleManager"]["entries"]})'
+act "bibles-available lists the folder" bibles-available '' "s[\"bibleManager\"][\"folder\"] == \"$BIBLES_DIR\" and s[\"bibleManager\"][\"scanned\"]"
+check "the package and the JSON file are listed, not installed" "$LAST" "(lambda E: E('SMKP')['source'] == 'folder' and not E('SMKP')['installed'] and E('SMKP')['verses'] == 3 and E('SMKP')['size'] > 0 and E('SMKP')['hasPackage'] and E('SMKJ')['source'] == 'folder' and E('SMKJ')['language'] == 'es' and not E('SMKJ')['hasPackage'])($EN)"
+check "the built-ins are listed and installed" "$LAST" "(lambda E: all(E(a)['source'] == 'builtin' and E(a)['installed'] and E(a)['builtin'] and E(a)['verses'] > 31000 for a in ('KJV', 'ASV', 'RVA')))($EN)"
+check "library-only translations are listed" "$LAST" "(lambda E: E('SMK2')['source'] == 'library' and E('SMK2')['installed'] and not E('SMK2')['hasPackage'])($EN)"
+check "the damaged package is reported, the text file ignored" "$LAST" 'len(s["bibleManager"]["problems"]) == 1 and s["bibleManager"]["problems"][0].startswith("broken.fbbible:") and "notes" not in str(s["bibleManager"]["entries"])'
+act "open the Bible Manager" bible-manager '{"action":"open"}' 's["bibleManager"]["open"]'
+wait_idle
+check "the manager has the focus" "$LAST" 's["focus"] == "dialog"'
+act "select the package row" bible-select '{"abbrev":"SMKP"}' 's["bibleManager"]["selected"] == "SMKP"'
+wait_idle
+shot bible-manager bible-manager
+# Add: a copyrighted package asks the licence question first.
+act "adding the copyrighted package asks first" bible-add '{"abbrev":"SMKP"}' 's["dialog"]["confirm"] == "Add Bible" and "SMKP" not in s["bibles"]'
+shot bible-manager-add-question dialog
+act "OK adds it" accept '' 'r["ok"]'
+wait_idle
+check "SMKP is installed" "$LAST" "\"SMKP\" in s[\"bibles\"] and (lambda E: E('SMKP')['installed'] and E('SMKP')['verses'] == 3)($EN) and s[\"bibleManager\"][\"task\"] == \"\" and s[\"bibleManager\"][\"status\"] == \"Added SMKP: 3 verses\""
+act "adding it twice is refused" bible-add '{"abbrev":"SMKP","confirm":true}' 'not r["ok"] and "already installed" in r["error"]'
+act "close the manager" bible-manager '{"action":"close"}' 'not s["bibleManager"]["open"]'
+act "Scriptures tab (manager)" tab '{"tab":"scriptures"}' 's["tab"] == 1'
+act "preview a verse from the package" reference '{"text":"jn 3:16","bible":"SMKP"}' 's["scripture"]["bible"] == "SMKP" and s["preview"]["text"] == "Smoke package, John three sixteen." and s["preview"]["footer"] == "John 3:16 (SMKP)"'
+SCHED_N="$(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST")"
+act "add the SMKP verse to the schedule" add-to-schedule '{"source":"scripture"}' "len(s[\"schedule\"][\"items\"]) == $SCHED_N + 1 and s[\"schedule\"][\"items\"][-1] == \"John 3:16\""
+# Remove: asks first; the selected translation falls back to the default.
+act "removing asks first" bible-remove '{"abbrev":"SMKP"}' 's["dialog"]["confirm"] == "Remove Bible" and "SMKP" in s["bibles"]'
+shot bible-manager-remove-question dialog
+act "cancel keeps it" dismiss '' '"SMKP" in s["bibles"]'
+act "remove SMKP" bible-remove '{"abbrev":"SMKP"}' 's["dialog"]["confirm"] == "Remove Bible"'
+act "OK removes it" accept '' 'r["ok"]'
+wait_idle
+check "SMKP is gone from the library, still offered from the folder" "$LAST" "\"SMKP\" not in s[\"bibles\"] and (lambda E: not E('SMKP')['installed'] and E('SMKP')['source'] == 'folder')($EN) and s[\"bibleManager\"][\"status\"] == \"Removed SMKP\""
+check "the Scriptures tab fell back to the KJV and looked the verse up there" "$LAST" 's["scripture"]["bible"] == "KJV" and not s["scripture"]["error"] and s["scripture"]["passage"] == "John 3:16" and s["preview"]["footer"] == "John 3:16 (KJV)" and "For God so loved" in s["preview"]["text"]'
+act "the Scriptures tab still works" reference '{"text":"ps 23:1"}' 's["scripture"]["bible"] == "KJV" and "my shepherd" in s["preview"]["text"]'
+act "the schedule item keeps its slides" select-schedule "{\"index\":$SCHED_N}" 's["preview"]["title"] == "John 3:16" and s["preview"]["text"] == "Smoke package, John three sixteen." and s["preview"]["footer"] == "John 3:16 (SMKP)"'
+act "removing it again is refused" bible-remove '{"abbrev":"SMKP","confirm":true}' 'not r["ok"] and "not installed" in r["error"]'
+act "remove the schedule item again" remove-schedule "{\"index\":$SCHED_N}" "len(s[\"schedule\"][\"items\"]) == $SCHED_N"
+# The Delete key on the focused translations list asks the same question.
+act "select SMK3 in the list" reference '{"text":"gen 1:1","bible":"SMK3"}' 's["scripture"]["bible"] == "SMK3"'
+act "focus the translations list" focus '{"target":"bible-list"}' 's["focus"] == "list"'
+act "Delete asks to remove the selected Bible" native-key '{"name":"delete"}' 's["dialog"]["confirm"] == "Remove Bible" and "SMK3" in s["bibles"]'
+shot bible-delete-key-question dialog
+act "cancel the Delete question" dismiss '' '"SMK3" in s["bibles"] and s["focus"] != "dialog"'
+act "release focus (bible list)" focus '{"target":"none"}' 's["focus"] == "none"'
+# A built-in: remove and add again (no licence question, it is public domain).
+act "select ASV" reference '{"text":"jn 3:16","bible":"ASV"}' 's["scripture"]["bible"] == "ASV"'
+act "remove the built-in ASV" bible-remove '{"abbrev":"ASV","confirm":true}' 'r["ok"]'
+wait_idle
+check "ASV is removed, offered as a built-in, the tab is on KJV" "$LAST" "\"ASV\" not in s[\"bibles\"] and (lambda E: E('ASV')['source'] == 'builtin' and not E('ASV')['installed'] and E('ASV')['verses'] == 31086)($EN) and s[\"scripture\"][\"bible\"] == \"KJV\""
+act "add ASV again" bible-add '{"abbrev":"ASV"}' 'r["ok"]'
+wait_idle
+check "ASV is back" "$LAST" "\"ASV\" in s[\"bibles\"] and (lambda E: E('ASV')['installed'] and E('ASV')['verses'] == 31086)($EN) and s[\"bibleManager\"][\"status\"] == \"Added ASV: 31,086 verses\""
+act "the re-added ASV works" reference '{"text":"jn 3:16","bible":"ASV"}' 's["scripture"]["bible"] == "ASV" and "believeth on him" in s["preview"]["text"]'
+act "the bundled RVA keeps its accents" reference '{"text":"jn 3:16","bible":"RVA"}' 's["scripture"]["bible"] == "RVA" and "amó Dios al mundo" in s["preview"]["text"] and "unigénito" in s["preview"]["text"]'
+# Save as Package: SMK2 (imported earlier from a file) is in the library only.
+act "save SMK2 as a package" bible-save-package '{"abbrev":"SMK2"}' 'r["ok"]'
+wait_idle
+check "SMK2.fbbible is in the Bibles folder" "$LAST" "(lambda E: E('SMK2')['hasPackage'] and E('SMK2')['source'] == 'folder' and E('SMK2')['installed'] and E('SMK2')['path'].endswith('/SMK2.fbbible'))($EN) and s[\"bibleManager\"][\"status\"] == \"Saved SMK2 as SMK2.fbbible\""
+[ -s "$BIBLES_DIR/SMK2.fbbible" ] || fail "no $BIBLES_DIR/SMK2.fbbible"
+act "saving it again is refused" bible-save-package '{"abbrev":"SMK2"}' 'not r["ok"] and "already has a package" in r["error"]'
+act "a built-in is a package already" bible-save-package '{"abbrev":"KJV"}' 'not r["ok"] and "ships with FreeBeams" in r["error"]'
+act "remove SMK2" bible-remove '{"abbrev":"SMK2","confirm":true}' 'r["ok"]'
+wait_idle
+check "SMK2 is removed but offered from its package" "$LAST" "\"SMK2\" not in s[\"bibles\"] and (lambda E: not E('SMK2')['installed'] and E('SMK2')['hasPackage'])($EN)"
+act "add SMK2 back from its package" bible-add "{\"path\":\"$BIBLES_DIR/SMK2.fbbible\",\"confirm\":true}" 'r["ok"]'
+wait_idle
+check "SMK2 is installed again" "$LAST" "\"SMK2\" in s[\"bibles\"] and (lambda E: E('SMK2')['installed'] and E('SMK2')['verses'] == 2)($EN)"
+act "the round-tripped SMK2 reads the same" reference '{"text":"jude 3","bible":"SMK2"}' 's["preview"]["text"] == "Smoke fixture, Jude verse three." and s["preview"]["footer"] == "Jude 1:3 (SMK2)"'
+# The JSON file, added through the manager with its accents.
+act "add the JSON Bible (confirmed)" bible-add '{"abbrev":"SMKJ","confirm":true}' 'r["ok"]'
+wait_idle
+act "the JSON Bible keeps its accents" reference '{"text":"jn 3:16","bible":"SMKJ"}' 's["preview"]["text"] == "Porque de tal manera amó Dios al humo, ¿sí? ¡Él!"'
+act "open the manager again" bible-manager '{"action":"open"}' 's["bibleManager"]["open"]'
+act "select SMKJ" bible-select '{"abbrev":"SMKJ"}' 's["bibleManager"]["selected"] == "SMKJ"'
+wait_idle
+shot bible-manager-after bible-manager
+act "close the manager (end)" bible-manager '{"action":"close"}' 'not s["bibleManager"]["open"]'
+act "back to KJV (manager)" reference '{"text":"jn 3:16","bible":"KJV"}' 's["scripture"]["bible"] == "KJV"'
+act "Songs tab again (manager)" tab '{"tab":"songs"}' 's["tab"] == 0'
 # ---- search: ranking, lyrics hint, harmless punctuation, consistent libraries ------------
 # In the real library "Alas And Did My Savior Bleed" has "amazing" in its lyrics and sorted
 # above "Amazing Grace" while results were in title order.

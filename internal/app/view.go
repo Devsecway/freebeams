@@ -97,6 +97,9 @@ type viewCache struct {
 	// the themes the Preview / Live grids' thumbnails were drawn with.
 	ps                      previewStyleView
 	previewTheme, liveTheme models.Theme
+
+	// The Bible Manager (biblemanager.go).
+	bibleMgr bibleManagerView
 }
 
 func newViewCache() viewCache {
@@ -222,6 +225,8 @@ func (a *App) buildUI() {
 	a.wirePreviewStyle() // the Preview Output monitor's context menu (previewstyle.go)
 
 	a.wireDragDrop() // drag and drop into and within the schedule (dragdrop.go)
+
+	a.wireBibleManager() // the Bible Manager and Remove Bible… (biblemanager.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -491,6 +496,9 @@ func (a *App) render() {
 
 	// The Preview Output menu and its media picker (previewstyle.go).
 	a.renderPreviewStyle()
+
+	// The Bible Manager (biblemanager.go).
+	a.renderBibleManager(&v.bibleMgr)
 
 	// Error messages: the first queued alert is on screen.
 	switch {

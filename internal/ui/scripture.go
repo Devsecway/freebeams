@@ -25,6 +25,8 @@ const (
 	scriptMenuGoLive
 	scriptMenuImportCopyrighted
 	scriptMenuImportFile
+	scriptMenuManageBibles
+	scriptMenuRemoveBible
 )
 
 // verseCollapseDelay is how long a plain click on a row of a multi-verse
@@ -67,6 +69,14 @@ type ScripturePanel struct {
 	// OnImportFile is the gear menu's "Import Bible File…" (a Bible JSON
 	// file or folder, or an .ewb file, chosen in the native dialog).
 	OnImportFile func()
+
+	// OnManageBibles opens the Bible Manager (the translations footer's +
+	// and "Manage Bibles…"). OnRemoveBible is "Remove Bible…" on translation
+	// i (its context menu, or Delete / Backspace in the list): the app asks
+	// before it removes anything.
+	OnManageBibles func()
+	OnRemoveBible  func(i int)
+	bibleMenu      PopupMenu.Instance // the translations list's context menu
 
 	split    *Splitter
 	locator  *searchLocator
@@ -137,6 +147,7 @@ func NewScripturePanel() *ScripturePanel {
 			}
 		}
 	})
+	s.initBibleMenu()
 	onThemeReady(s.bibles.AsControl(), func() { s.builtBibles = false; s.render() })
 
 	// The suggestions overlay the translations list, right under the field.
@@ -194,19 +205,60 @@ func NewScripturePanel() *ScripturePanel {
 	return s
 }
 
-// libraryFooter is the translations pane's footer: [+] adds a Bible from a
-// file or folder (Import Bible File…), [⚙▾] holds both imports.
+// initBibleMenu gives the translations list its context menu ("Remove
+// Bible…", "Manage Bibles…") and Delete / Backspace (remove, after the app's
+// question). A right click selects the row first, as in the song list.
+func (s *ScripturePanel) initBibleMenu() {
+	s.bibles.SetAllowRmbSelect(true)
+	s.bibleMenu = PopupMenu.New()
+	s.bibleMenu.MoreArgs().AddItem("Remove Bible…", scriptMenuRemoveBible, 0)
+	s.bibleMenu.AddSeparator()
+	s.bibleMenu.MoreArgs().AddItem("Manage Bibles…", scriptMenuManageBibles, 0)
+	s.bibleMenu.OnIdPressed(s.menuPressed)
+	s.bibles.AsNode().AddChild(s.bibleMenu.AsNode())
+	s.bibles.OnItemMouseSelected(func(_ Vector2.XY, button int) {
+		if Input.MouseButton(button) == Input.MouseButtonRight {
+			s.bibleMenu.SetItemDisabled(s.bibleMenu.GetItemIndex(scriptMenuRemoveBible), s.bible < 0)
+			popupAtMouse(s.bibleMenu)
+		}
+	})
+	s.bibles.AsControl().OnGuiInput(func(ev InputEvent.Instance) {
+		k, ok := Object.As[InputEventKey.Instance](ev)
+		if !ok || !k.AsInputEvent().IsPressed() || k.AsInputEvent().IsEcho() {
+			return
+		}
+		mods := k.AsInputEventWithModifiers()
+		if mods.IsCommandOrControlPressed() || mods.AltPressed() || mods.ShiftPressed() {
+			return
+		}
+		if key := k.Keycode(); (key == Input.KeyDelete || key == Input.KeyBackspace) && s.bible >= 0 && s.OnRemoveBible != nil {
+			s.OnRemoveBible(s.bible)
+			acceptEvent(s.bibles.AsControl())
+		}
+	})
+}
+
+// BibleListControl is the translations list (the focus hook).
+func (s *ScripturePanel) BibleListControl() Control.Instance { return s.bibles.AsControl() }
+
+// BibleMenuWindow is the translations list's context menu (screenshots).
+func (s *ScripturePanel) BibleMenuWindow() PopupMenu.Instance { return s.bibleMenu }
+
+// libraryFooter is the translations pane's footer: [+] opens the Bible
+// Manager, [⚙▾] holds it and the imports.
 func (s *ScripturePanel) libraryFooter() Control.Instance {
 	footer := panel(vMiniBarTL)
 	footer.AsControl().SetCustomMinimumSize(Vector2.New(0, 28))
 	row := hbox(0)
-	plus := newMiniButton(miniPlain, "plus", 28, 24, "Add Bible…")
+	plus := newMiniButton(miniPlain, "plus", 28, 24, "Manage Bibles…")
 	plus.AsBaseButton().OnPressed(func() {
-		if s.OnImportFile != nil {
-			s.OnImportFile()
+		if s.OnManageBibles != nil {
+			s.OnManageBibles()
 		}
 	})
 	s.libMenu = PopupMenu.New()
+	s.libMenu.MoreArgs().AddItem("Manage Bibles…", scriptMenuManageBibles, 0)
+	s.libMenu.AddSeparator()
 	s.libMenu.MoreArgs().AddItem("Import Bible File…", scriptMenuImportFile, 0)
 	s.libMenu.MoreArgs().AddItem("Import Copyrighted Bibles from EasyWorship…", scriptMenuImportCopyrighted, 0)
 	s.libMenu.OnIdPressed(s.menuPressed)
@@ -484,6 +536,10 @@ func (s *ScripturePanel) menuPressed(id int) {
 		s.OnImportCopyrighted()
 	case id == scriptMenuImportFile && s.OnImportFile != nil:
 		s.OnImportFile()
+	case id == scriptMenuManageBibles && s.OnManageBibles != nil:
+		s.OnManageBibles()
+	case id == scriptMenuRemoveBible && s.OnRemoveBible != nil && s.bible >= 0:
+		s.OnRemoveBible(s.bible)
 	}
 }
 

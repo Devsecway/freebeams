@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"freebeams/internal/app/core"
+	"freebeams/internal/bibles/biblefolder"
 	"freebeams/internal/control"
 	"freebeams/internal/models"
 	"freebeams/internal/ui"
@@ -556,39 +557,84 @@ func (a *App) resourceGoLive() {
 
 // ---- scriptures -------------------------------------------------------------------
 
-// loadBibles refreshes the installed translations.
-func (a *App) loadBibles(cmd *control.Command) {
+// loadBibles refreshes the installed translations (and their verse
+// counts, which the Bible Manager shows).
+func (a *App) loadBibles(cmd *control.Command) { a.refreshBibles(cmd, false) }
+
+// refreshBibles reloads the installed translations and their verse counts,
+// and with scan also lists the Bibles folder (the Bible Manager), in one
+// background job; cmd is answered once all of it applies. A selected
+// translation that is gone (removed in the Bible Manager) falls back to
+// core.DefaultBible.
+func (a *App) refreshBibles(cmd *control.Command, scan bool) {
 	if a.st() == nil {
 		a.answer(cmd, errNoLibrary)
 		return
 	}
 	st := a.st()
+	dir := ""
+	if scan {
+		d, err := a.biblesDir()
+		if err != nil {
+			a.bm.status, a.bm.statusErr = "The Bibles folder is not available: "+err.Error(), true
+		}
+		dir = d
+		a.bm.scanning = true
+	}
+	var ticket uint64
+	if scan {
+		ticket = a.bm.scanGen.Next()
+	}
 	a.async(cmd, func(ctx context.Context) func() error {
 		bibles, err := st.ListBibles(ctx)
+		var counts map[int64]int
+		if err == nil {
+			counts, err = st.BibleVerseCounts(ctx)
+		}
+		var (
+			folder   []biblefolder.Entry
+			problems []string
+			scanErr  error
+		)
+		if dir != "" {
+			folder, problems, scanErr = biblefolder.Scan(dir)
+		}
 		return func() error {
+			if scan && a.bm.scanGen.Current(ticket) {
+				a.bm.scanning = false
+			}
 			if err != nil {
 				a.fail("list bibles", err)
 				a.setScriptStatus("Could not list Bibles: "+err.Error(), true)
 				return err
 			}
-			cur := ""
-			if a.bibleSel >= 0 && a.bibleSel < len(a.bibles) {
-				cur = a.bibles[a.bibleSel].Abbrev
-			}
-			a.bibles = bibles
-			a.biblesVer++
-			a.bibleSel = core.FindBible(bibles, cur)
-			if a.bibleSel < 0 {
-				a.bibleSel = core.DefaultBible(bibles)
-			}
-			if len(bibles) == 0 && a.scriptStatus == "" {
-				a.setScriptStatus("No Bibles installed", false)
-			} else if a.scriptStatus == "No Bibles installed" {
-				a.setScriptStatus("", false)
+			a.applyBibles(bibles, counts)
+			if scan && dir != "" && a.bm.scanGen.Current(ticket) {
+				a.applyBiblesFolder(folder, problems, scanErr)
 			}
 			return nil
 		}
 	})
+}
+
+// applyBibles makes bibles the installed translations.
+func (a *App) applyBibles(bibles []models.Bible, counts map[int64]int) {
+	cur := ""
+	if a.bibleSel >= 0 && a.bibleSel < len(a.bibles) {
+		cur = a.bibles[a.bibleSel].Abbrev
+	}
+	a.bibles = bibles
+	a.bm.counts = counts
+	a.biblesVer++
+	a.bibleSel = core.FindBible(bibles, cur)
+	if a.bibleSel < 0 {
+		a.bibleSel = core.DefaultBible(bibles)
+	}
+	if len(bibles) == 0 && a.scriptStatus == "" {
+		a.setScriptStatus("No Bibles installed", false)
+	} else if a.scriptStatus == "No Bibles installed" {
+		a.setScriptStatus("", false)
+	}
 }
 
 func (a *App) setScriptStatus(msg string, isErr bool) {

@@ -381,6 +381,15 @@ func buildEditTheme(th Theme.Instance, p Palette) {
 }
 
 func buildTreeTheme(th Theme.Instance, p Palette) {
+	// ProgressBar (the Bible Manager's install progress): a thin highlight
+	// bar on the list background.
+	track := flat(p.ResourceBk)
+	track.SetBorderWidthAll(1)
+	track.SetBorderColor(p.BorderBL)
+	th.SetStylebox("background", "ProgressBar", track.AsStyleBox())
+	th.SetStylebox("fill", "ProgressBar", flat(p.Highlight).AsStyleBox())
+	th.SetColor("font_color", "ProgressBar", p.Text)
+
 	th.SetStylebox("panel", "Tree", flat(p.ResourceBk).AsStyleBox())
 	th.SetStylebox("focus", "Tree", StyleBoxEmpty.New().AsStyleBox())
 	// The selected row is highlight only while the list has focus; unfocused

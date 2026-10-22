@@ -139,7 +139,10 @@ func (a *App) confirmOrImportBibleFile(cmd *control.Command, f *bibleFileImport,
 				log.Printf("[freebeams] import note: %s", w)
 			}
 			a.setScriptStatus(core.BibleFileSummary(f.bible, len(f.verses)), false)
-			a.loadBibles(cmd) // answers cmd with the refreshed list
+			if a.bm.open {
+				a.bm.sel, a.bm.status, a.bm.statusErr = f.bible.Abbrev, core.BibleFileSummary(f.bible, len(f.verses)), false
+			}
+			a.refreshBibles(cmd, a.bm.open) // answers cmd with the refreshed list
 			return nil
 		}
 	})

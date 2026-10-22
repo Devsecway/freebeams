@@ -108,6 +108,8 @@ func (a *App) state() core.State {
 		Idle:          !a.busy(),
 
 		TransitionProgress: a.transitionProgress(),
+
+		BibleManager: a.bibleManagerStateDoc(),
 	})
 }
 
@@ -221,6 +223,10 @@ type actionArgs struct {
 	// Drag and drop (dragdrop.go): drag-to-schedule {source, index|title,
 	// at | row | target "outside", mode "hold"|"release", steps}.
 	At *int `json:"at"`
+
+	// The Bible Manager (biblemanager.go): bible-add / bible-remove /
+	// bible-save-package / bible-select {abbrev}.
+	Abbrev string `json:"abbrev"`
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -576,6 +582,9 @@ func (a *App) handleCommand(cmd *control.Command) {
 		if a.handleSpellCommand(cmd, args) { // spell.go
 			return
 		}
+		if a.handleBibleManagerCommand(cmd, args) { // biblemanager.go
+			return
+		}
 		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleStageCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleAudioCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
@@ -620,6 +629,10 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(w)
 	case "alerts-menu":
 		png, err = render.WindowScreenshot(a.win.Toolbar.AlertsMenuWindow())
+	case "bible-manager":
+		png, err = render.WindowScreenshot(a.win.BibleManager.AsWindow())
+	case "bible-menu": // the Scriptures translations list's context menu
+		png, err = render.WindowScreenshot(a.win.Scriptures.BibleMenuWindow().AsWindow())
 	default:
 		if shot, ok, serr := a.spellScreenshot(cmd.Query["window"]); ok { // spelling | spell-menu (spell.go)
 			png, err = shot, serr
