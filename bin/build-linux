@@ -8,7 +8,8 @@
 # runs on newer distros too.
 #
 # Outputs (<v> = bin/version, <arch> = GOARCH):
-#   releases/linux/<arch>/                             freebeams, linux_<arch>.so, freebeams.sh
+#   releases/linux/<arch>/                             freebeams, linux_<arch>.so, freebeams.sh,
+#                                                      ffmpeg, ffprobe, FFMPEG-*.txt (LGPL, bin/build-ffmpeg)
 #   releases/FreeBeams-<v>-linux-<arch>.tar.gz       the portable bundle
 #   releases/FreeBeams-<v>-<x86_64|aarch64>.AppImage (NO_APPIMAGE=1 skips it)
 #
@@ -73,6 +74,25 @@ cp -f "$SO" "$OUT/"
 cp -f packaging/linux/AppRun "$OUT/freebeams.sh"
 chmod +x "$BIN" "$OUT/freebeams.sh"
 
+# ffmpeg + ffprobe beside the binary: the media player, poster frames and
+# metadata (docs/MEDIA.md). bin/build-ffmpeg builds the pinned, checksummed
+# LGPL release once into its cache; NO_FFMPEG=1 skips it (the app then uses an
+# ffmpeg on PATH, or plays only Theora backgrounds).
+FFMPEG_BUNDLE=(ffmpeg ffprobe FFMPEG-LICENSE.txt FFMPEG-NOTICE.txt)
+step "bundle ffmpeg"
+if [ "${NO_FFMPEG:-0}" = "1" ]; then
+	echo "    skipped (NO_FFMPEG=1)"
+	FFMPEG_BUNDLE=()
+else
+	"$ROOT/bin/build-ffmpeg"
+	FF="$("$ROOT/bin/build-ffmpeg" --prefix)"
+	cp -f "$FF/bin/ffmpeg" "$FF/bin/ffprobe" "$OUT/"
+	cp -f "$FF/LICENSE.txt" "$OUT/FFMPEG-LICENSE.txt"
+	cp -f "$FF/NOTICE.txt" "$OUT/FFMPEG-NOTICE.txt"
+	chmod +x "$OUT/ffmpeg" "$OUT/ffprobe"
+	"$OUT/ffmpeg" -hide_banner -version | head -n 1
+fi
+
 step "tar.gz"
 TGZ="releases/FreeBeams-$V-linux-$GOARCH.tar.gz"
 STAGE="$(mktemp -d -t freebeams-linux.XXXXXX)"
@@ -94,6 +114,9 @@ else
 	rm -rf "$APPDIR"
 	mkdir -p "$APPDIR/usr/bin"
 	cp -f "$BIN" "$SO" "$APPDIR/usr/bin/"
+	for f in ${FFMPEG_BUNDLE[@]+"${FFMPEG_BUNDLE[@]}"}; do
+		cp -f "$OUT/$f" "$APPDIR/usr/bin/"
+	done
 	cp -f packaging/linux/AppRun "$APPDIR/AppRun"
 	cp -f packaging/linux/freebeams.desktop "$APPDIR/"
 	cp -f graphics/icon.png "$APPDIR/freebeams.png"

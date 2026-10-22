@@ -1,0 +1,21 @@
+FFmpeg in FreeBeams
+===================
+
+This copy of FreeBeams includes the programs ffmpeg and ffprobe from the
+FFmpeg project (https://ffmpeg.org/). FreeBeams runs them as separate
+programs to read the metadata of videos and audio files, to make poster
+frames, and to decode videos and audio for playback.
+
+FFmpeg is free software licensed under the GNU Lesser General Public License
+(LGPL) version 2.1 or later; the full text is in FFMPEG-LICENSE.txt next to
+this file. This build was configured without --enable-gpl and without
+--enable-nonfree, and links no external libraries other than zlib (zlib
+licence), so the programs are covered by the LGPL alone.
+
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+FreeBeams is not affiliated with the FFmpeg project.
+
+Source code: the exact source used is the release tarball below (from
+ffmpeg.org, verified by its SHA-256), built unmodified by the script
+bin/build-ffmpeg in the FreeBeams repository with the configure line below.
+You may replace ffmpeg / ffprobe in this folder with any other build.

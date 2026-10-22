@@ -79,7 +79,7 @@ if (-not (Test-Path $bash)) {
     throw "MSYS2 was not found at $msys after the install. Install it by hand (https://www.msys2.org) and rerun."
 }
 
-Step "MSYS2 packages (gcc, zip)"
+Step "MSYS2 packages (gcc, zip, and make, nasm, zlib for the bundled ffmpeg)"
 $env:MSYSTEM = 'UCRT64'           # the shell bin/build-windows expects
 $env:MSYS2_PATH_TYPE = 'inherit'  # Go and ISCC from the Windows PATH are visible inside
 $env:CHERE_INVOKING = '1'         # the login shell starts in the current directory, not $HOME
@@ -87,7 +87,7 @@ $env:CHERE_INVOKING = '1'         # the login shell starts in the current direct
 # second -Syu completes the rest, and --noconfirm answers every prompt.
 & $bash -lc 'pacman -Syu --noconfirm --needed' | Out-Host
 & $bash -lc 'pacman -Syu --noconfirm --needed' | Out-Host
-& $bash -lc 'pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-gcc zip' | Out-Host
+& $bash -lc 'pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-gcc zip make diffutils nasm mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-zlib' | Out-Host
 if ($LASTEXITCODE -ne 0) {
     throw "pacman failed (exit code $LASTEXITCODE)"
 }
