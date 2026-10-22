@@ -199,6 +199,33 @@ It is also the drag handle for the main splitter (`Cursor = hand`). Clicking it 
   Presentations search boxes fold case and diacritics the same way over the title and path.
 - **Right (Resource preview)**: 16:9 preview with title, mini video controls (play, volume, navigate), and a 28px toolbar.
 - Scriptures tab: translation picker + reference search locator. Media tab: sub-categories Videos / Images / Feeds / Audio / DVD.
+- **Scripture locator** (`SearchLocator_Scriptures`, `Mode = slmLocate`: the reference *locates* verses in the
+  listed chapters). Typing is debounced like the Songs box; Enter looks up at once.
+  - **Book suggestions**: while the book part has no chapter yet, or is ambiguous even with one (`jo 3`), a
+    dropdown under the field (drawn over the translations list, PopupMenu panel style, 22 px rows, 8 rows before
+    it scrolls) lists every book it may name, in canonical order (`models.BookCompletions`: name, abbreviation or
+    alias prefix; without an ordinal also the numbered books by the rest of their name, so `joh` → John, 1 John,
+    2 John, 3 John; `1` → the eight books that start with 1). The first is highlighted; ↑/↓ move the highlight,
+    Enter / Tab or a click pick it, Esc closes the list until the text changes. Picking completes the book part
+    and keeps the rest (`joh` → `John `, `jo 3:16` → `John 3:16`). The list never takes the focus; it closes when
+    the field loses it, after a completed book (`John `) and once a chapter follows an unambiguous book.
+  - An ambiguous book is not an error: the footer says `Choose a book: Joshua, Job, …`. A book alone shows its
+    first chapter (`gen` → Genesis 1; a single-chapter book is the whole book). Text that names no book (`xyz 3`)
+    and out-of-range chapters stay red errors.
+  - **Verse list**: always whole chapters (every chapter the reference touches), with the referenced verses
+    selected and the first of them scrolled to the middle: `john 3` lists 36 verses, all selected; `john 3:16`
+    lists chapter 3 with 16 selected; `john 3:16-18` with 16–18 selected.
+  - **Multi-select**: click selects one verse, Shift-click the range from the anchor, Cmd-click (Ctrl on
+    Windows / Linux) toggles a verse (the last selected verse stays selected), Shift-Cmd-click adds a range,
+    ↑/↓/Home/End move (Shift extends), Cmd+A selects all. A plain click inside a multi-verse selection narrows it
+    after 400 ms, so a double-click there keeps it. Non-contiguous selections are allowed.
+  - The selection is one passage (`models.SelectionPassage`: adjacent rows make a range, a whole chapter prints as
+    the chapter, a run into the next chapter as `John 3:36-4:2`): Preview shows exactly the selected verses (one
+    verse per slide, from the first), the field shows its reference (`John 3:16-18, 20`), the footer
+    `John 3:16-18 · 3 verses (KJV)`. Go Live (button, menu, Enter in the list) sends it live at the verse the
+    resource preview shows; a double-click sends it live at the double-clicked verse; Add to Schedule adds it.
+- **Preview monitor**: a double-click is Go Live (the Preview deck goes live at the selected slide); single clicks do
+  nothing.
 - **Media tile menu** (right-click on a tile and the footer `⚙▾`; the same menu, after EasyWorship's video tile menu):
   `Add Media Files…` | `Add to Schedule`, `Go Live` | `Aspect Ratio ▸` (radio: Fill, Fit, Stretch), `Repeating ▸`
   (radio: Loop, Play Once; videos only) | `Use As Logo Background` | `Remove from Library`, `Delete File…` (moves the file

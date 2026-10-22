@@ -580,6 +580,36 @@ container duration in samples), and CPU cost at 1080p (two decoders per open fil
   process checks), `bin/build-windows`, `bin/build-linux`, `bin/setup-windows.ps1`, `.github/workflows/ci.yml`,
   `release.yml`. Docs: `MEDIA.md`, `RELEASE.md`, `README.md`, `CLAUDE.md` (gotchas appended).
 
+## Scripture locator: book suggestions, whole chapters, multi-verse selection
+
+Recorded 2026-10-22 on the same machine (HDMI TV as the projector, no Screen Recording permission). The design is in
+[UI-SPEC.md](UI-SPEC.md) §3.6 "Scripture locator".
+
+| Criterion | Status | Verification |
+|---|---|---|
+| A partial or ambiguous book lists the matching books instead of an error; picking one completes the field | **pass** | `models.BooksMatching` / `BookCompletions` / `CompleteBook` (`TestBooksMatching`, `TestBookCompletions`, `TestCompleteBook`); `FindBook`'s ambiguity is an `*AmbiguousBookError` (`TestFindBookAmbiguousError`). The dropdown is `ui.suggestionList` (`FwSuggestionList`, over the translations list, never focused); keys in `ScripturePanel.referenceKey`; state in `App.refText` / `suggestSel` / `suggestOff` (`internal/app/scripture.go`). Smoke (typed through Godot's input pipeline): `type j` … `type h` (John, 1 John, 2 John, 3 John shown), `joh is not an error (John 1 is listed)`, `Down highlights 1 John`, `Enter picks 1 John`, `1 John 1 is listed`, `Esc closes the suggestions`, `click the Genesis suggestion`, `xyz 3 is an error`, `jo 3 is ambiguous, not an error`. Screenshot `scripture-suggestions.png`. |
+| A book alone shows its first chapter | **pass** | `models.ParseLocator` (`TestParseLocator`: `gen` → Genesis 1, `John ` → John 1, `1` ambiguous). Smoke: `a book alone lists its first chapter` (Genesis 1, 31 verses). |
+| `john 3` lists the whole chapter; `john 3:16` / `john 3:16-18` list chapter 3 with those verses selected | **pass** | `Passage.Chapters` / `Passage.Contains` (`TestPassageChapters`, `TestPassageContains`), `core.ListedVerses` / `VersesIn` (`TestListedVersesAndVersesIn`); the first selected verse is centred in the list. Smoke: `reference John 3:16-18` (36 rows, 15–17 selected), `john 3 lists the chapter` (36 verses, all selected, Preview `John 3` with 36 slides), `john 3:16 selects verse 16`. |
+| Multi-verse selection (Shift-click, Cmd/Ctrl-click, Shift+arrows, Cmd+A) previews exactly those verses as one passage | **pass** | `core.RowSelection` (`TestRowSelectionClick`, `TestRowSelectionStep`, `TestRowSelectionAll`) is app state; the Tree (`SelectMulti`) only projects it, its clicks and keys are taken in `ScripturePanel.verseInput`. `models.SelectionPassage` names the selection (`TestSelectionPassage`: `John 3:16-18, 20`, `John 3:36-4:2`, `Psalms 1-2`, round trip through `ParseReference`); the field shows it. Smoke (real clicks, `click {target: "verse"}`): `click verse 16`, `Shift-click verse 18` (Preview `John 3:16-18`, 3 slides), `Cmd-click verse 20 adds it`, `Cmd-click verse 17 removes it` (`John 3:16, 18, 20`), `Shift+Down extends from the anchor`, `a plain click in the selection` / `narrows it once no double-click follows`. Screenshot `scripture-multi-preview.png`. |
+| Go Live, double-click, Enter and Add to Schedule use the selected verses | **pass** | `App.goLiveVerse` / `activateVerse` / `addScriptureToSchedule`. Smoke: `Go Live sends the three verses` (live `John 3:16-18`, 3 slides; `the passage is on the output`, screenshot `scripture-multi-output.png`), `a double-click in the selection sends it all live` (at the double-clicked verse), `add the passage to the schedule`; the existing `resource Go Live sends the highlighted verse` / `Go Live again follows the preview`. |
+| A double-click on the Preview monitor is Go Live; single clicks unchanged | **pass** | `ui.MonitorHost.OnDoubleClick` (left double-click only, accepted; other clicks pass on). Smoke: `a single click on the Preview monitor does nothing`, `a double-click on the Preview monitor goes live`. |
+| Control actions and `/state` | **pass** | `reference {text, bible}` (also sets the field), `pick-suggestion {index}`, `select-verses {rows}`, `click {target: "verse"\|"suggestion"\|"preview-monitor", index, shift, meta, ctrl, double, button}`. `/state.scripture` adds `listed`, `rows`, `field`, `suggestions`, `suggestion`, `suggestionsShown`; `selected` is now the list row of the current verse and `verses` the listed rows. |
+
+SMOKE_RESULT_PLACEHOLDER
+
+### Shared files touched (scripture locator)
+
+- New: `internal/models/locator.go` (+ test), `internal/app/core/selection.go` (+ test), `internal/app/core/scripture_test.go`,
+  `internal/app/scripture.go` (the lookup and verse handlers moved out of `events.go`), `internal/ui/suggest.go`.
+- `internal/models/scripture_books.go` (`AmbiguousBookError`, `BooksMatching`), `reference.go` (`splitBook`).
+- `internal/app/core/deck.go` (`ListedVerses`, `VersesIn`, `PassageStatus`, `ChooseBookText`), `state.go` (a
+  `ScriptureState` block), `internal/app/app.go` (a field block; `verseSel` is a `core.RowSelection`), `control.go`
+  (state fields, `pick-suggestion`, `select-verses`, an `actionArgs` block), `hooks.go` (`click`, `isRowTree`
+  matches `SelectMulti`), `view.go` (wiring, the projection, a `viewCache` block).
+- `internal/ui/scripture.go` (rewritten input and projection; `SetVerses(rows)` + `SetVerseSelection`), `search.go`
+  (`onEdit`, caret at the end), `monitor.go` (`OnDoubleClick`), `register.go`, `demo.go`.
+- `test/smoke.sh` (scripture block), `docs/UI-SPEC.md` §3.6, `CLAUDE.md` (gotchas appended).
+
 ## Remaining for Phase 2
 
 - **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the
