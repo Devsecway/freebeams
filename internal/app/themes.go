@@ -430,6 +430,7 @@ func (a *App) setDefaultTheme(i int, kind models.ItemKind, cmd *control.Command)
 		return nil
 	}, func() {
 		log.Printf("[freebeams] default %s theme: %d %q", kind, t.ID, t.Name)
+		a.followDefaultTheme(kind, t) // hotkeys.go: Preview follows the new default
 	})
 }
 
@@ -532,14 +533,18 @@ func (a *App) handleThemeCommand(cmd *control.Command, args actionArgs) bool {
 		}
 		a.doDeleteTheme(a.th.list[i], cmd)
 	case "set-default-theme":
+		// {kind, name} or {kind, themeName} (Options ▸ Themes).
+		if args.Name == "" && args.Index == nil {
+			args.Name = args.ThemeName
+		}
 		i := a.themeArg(args)
 		if i < 0 || i >= len(a.th.list) {
 			cmd.RespondErr(fmt.Errorf("set-default-theme: no theme matches %s", string(cmd.Data)))
 			return true
 		}
-		kind := models.ItemKind(args.Kind)
-		if kind != models.ItemSong && kind != models.ItemScripture {
-			cmd.RespondErr(fmt.Errorf("set-default-theme: kind must be \"song\" or \"scripture\", got %q", args.Kind))
+		kind, err := parseDefaultThemeKind(args.Kind) // hotkeys.go
+		if err != nil {
+			cmd.RespondErr(fmt.Errorf("set-default-theme: %w", err))
 			return true
 		}
 		a.setDefaultTheme(i, kind, cmd)

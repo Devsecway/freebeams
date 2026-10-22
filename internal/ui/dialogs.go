@@ -40,6 +40,10 @@ type dialogWindow struct {
 	// host returns the node the window must live under when it opens (see
 	// MainWindow.dialogHost); nil keeps the current parent.
 	host func(self Node.ID) Node.Instance
+
+	// keyHook sees every key press first (Options ▸ Hotkeys capturing a
+	// key); true marks it handled, so the dialog's controls never get it.
+	keyHook func(ev InputEvent.Instance) bool
 }
 
 func newDialogWindow(title string, w, h float32) *dialogWindow {
@@ -126,6 +130,10 @@ func (d *dialogWindow) close() {
 func (d *dialogWindow) input(ev InputEvent.Instance) {
 	k, ok := Object.As[InputEventKey.Instance](ev)
 	if !ok || !k.AsInputEvent().IsPressed() || k.AsInputEvent().IsEcho() {
+		return
+	}
+	if d.keyHook != nil && d.keyHook(ev) {
+		setInputHandled(d.win.AsViewport())
 		return
 	}
 	switch k.Keycode() {

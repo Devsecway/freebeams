@@ -402,6 +402,8 @@ type layer struct {
 	rect    layout.Rect
 	offset  layout.Vec  // inner's offset from rest (transitions.go)
 	mask    layout.Mask // what root clips its children to (transitions.go)
+
+	scale float64 // inner's scale (zoom, transitions.go); 0 until first set
 }
 
 func ignoreMouse(c Control.Instance) { c.SetMouseFilter(Control.MouseFilterIgnore) }

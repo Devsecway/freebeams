@@ -162,6 +162,9 @@ type App struct {
 	settingsSnap core.Settings // the settings when the dialog opened (Cancel restores them)
 	recent       []string      // recent schedule files, newest first (File ▸ Open Recent)
 
+	// opt is the Options dialog's hotkey and default-theme editors (hotkeys.go).
+	opt optionsState
+
 	// logoDir holds the built-in Logo screen image (defaultLogoDir, logo.go);
 	// "" keeps the gradient as the default logo.
 	logoDir string
@@ -478,6 +481,7 @@ func (a *App) Process(delta Float.X) {
 	a.renderOverlay() // the alert layer moves every frame (alerts.go)
 	a.flushReplies()
 	a.serveWaiters()
+	a.serveProgressWaiters() // wait-transition (hotkeys.go)
 }
 
 // timer is a callback due after a number of frames.

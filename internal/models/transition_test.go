@@ -20,6 +20,8 @@ func TestTransitionKinds(t *testing.T) {
 		{TransitionIris, FamilyIris, DirNone, "Iris"},
 		{TransitionCoverUp, FamilyCover, DirUp, "Cover Up"},
 		{TransitionRevealRight, FamilyReveal, DirRight, "Reveal Right"},
+		{TransitionZoomIn, FamilyZoom, DirNone, "Zoom In"},
+		{TransitionZoomOut, FamilyZoom, DirNone, "Zoom Out"},
 		{TransitionKind("spin"), "", DirNone, "Unknown"},
 	}
 	for _, tt := range tests {
@@ -39,7 +41,7 @@ func TestTransitionKinds(t *testing.T) {
 		})
 	}
 	kinds := TransitionKinds()
-	if len(kinds) != 19 || kinds[0] != TransitionBlend {
+	if len(kinds) != 21 || kinds[0] != TransitionBlend {
 		t.Errorf("TransitionKinds() = %v", kinds)
 	}
 	seen := map[TransitionKind]bool{}
@@ -74,6 +76,9 @@ func TestParseTransitionKind(t *testing.T) {
 		{"circle", TransitionIris, false},
 		{"cover-down", TransitionCoverDown, false},
 		{"reveal right", TransitionRevealRight, false},
+		{"zoom", TransitionZoomIn, false},
+		{"Zoom Out", TransitionZoomOut, false},
+		{"zoom_in", TransitionZoomIn, false},
 		{"cube", "", true},
 		{"push-sideways", "", true},
 	}

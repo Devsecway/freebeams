@@ -175,3 +175,29 @@ func TestBuildThemesState(t *testing.T) {
 		t.Fatalf("empty state = %+v", empty)
 	}
 }
+
+func TestFollowsDefault(t *testing.T) {
+	def := models.Theme{ID: 3, Name: "Default Song"}
+	custom := def
+	custom.Custom = true
+	tests := []struct {
+		name string
+		d    *models.Deck
+		want bool
+	}{
+		{"library deck with the old default", &models.Deck{Theme: def}, true},
+		{"built-in default (id 0) follows a configured one", &models.Deck{Theme: models.Theme{}}, false},
+		{"schedule item snapshot", &models.Deck{ItemID: "item-1", Theme: def}, false},
+		{"another theme", &models.Deck{Theme: models.Theme{ID: 4}}, false},
+		{"restyled on its own", &models.Deck{Theme: custom}, false},
+		{"no deck", nil, false},
+	}
+	for _, tt := range tests {
+		if got := FollowsDefault(tt.d, def.ID); got != tt.want {
+			t.Errorf("%s: FollowsDefault = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+	if !FollowsDefault(&models.Deck{}, 0) {
+		t.Error("a deck with the built-in theme does not follow when the built-in was the default")
+	}
+}

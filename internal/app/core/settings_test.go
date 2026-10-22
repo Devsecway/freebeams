@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +28,8 @@ func TestSettingsDefaultsAndNormalized(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.want.Alerts = models.DefaultAlertStyles() // missing alert styles get the defaults
-			if got := tt.in.Normalized(""); got != tt.want {
+			tt.want.Hotkeys = DefaultKeymap()            // and missing hotkeys theirs
+			if got := tt.in.Normalized(""); !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
 			}
 		})
@@ -40,7 +40,7 @@ func TestSettingsDefaultsAndNormalized(t *testing.T) {
 		t.Fatal(err)
 	}
 	var back Settings
-	if err := json.Unmarshal(b, &back); err != nil || back != def {
+	if err := json.Unmarshal(b, &back); err != nil || !reflect.DeepEqual(back, def) {
 		t.Fatalf("round trip: %s -> %+v (%v)", b, back, err)
 	}
 }
@@ -120,34 +120,25 @@ func TestBindings(t *testing.T) {
 		"Logo":                               "Ctrl+L",
 		"Jump to Verse (then a number)":      "V",
 		"Jump to Pre-Chorus (then a number)": "R",
-		"Jump to slide number":               "S, then digits",
+		"Jump to slide number (then digits)": "S",
 	}
 	for action, keys := range want {
 		if got := byAction[action]; got != keys {
 			t.Errorf("%s: keys = %q, want %q", action, got, keys)
 		}
 	}
-	// Every hotkey in the tables is listed.
-	all := strings.Join(func() []string {
-		var ks []string
-		for _, r := range rows {
-			ks = append(ks, r.Keys)
-		}
-		return ks
-	}(), " ")
-	for k := range plainKeys {
-		if !strings.Contains(all, KeyLabel(k)) {
-			t.Errorf("plain key %q is not listed", k)
+	// Every default key is listed.
+	all := map[string]bool{}
+	for _, r := range rows {
+		for _, l := range r.Labels {
+			all[l] = true
 		}
 	}
-	for k := range ctrlKeys {
-		if !strings.Contains(all, "Ctrl+"+KeyLabel(k)) {
-			t.Errorf("ctrl key %q is not listed", k)
-		}
-	}
-	for k := range sectionKeys {
-		if !strings.Contains(all, KeyLabel(k)) {
-			t.Errorf("section key %q is not listed", k)
+	for _, a := range HotkeyActions() {
+		for _, c := range a.def {
+			if !all[c.Label()] {
+				t.Errorf("%s: key %s is not listed", a.ID, c.Label())
+			}
 		}
 	}
 	if !reflect.DeepEqual(rows, Bindings()) {

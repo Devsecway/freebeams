@@ -211,3 +211,10 @@ func BuildThemesState(list []models.Theme, selected int, defaults map[models.Ite
 	}
 	return st
 }
+
+// FollowsDefault reports whether library deck d (not a schedule item) shows
+// the default theme oldDefault unchanged, so it takes a new default theme of
+// its kind. A deck restyled on its own (Theme.Custom) keeps its look.
+func FollowsDefault(d *models.Deck, oldDefault int64) bool {
+	return d != nil && d.ItemID == "" && d.Theme.ID == oldDefault && !d.Theme.Custom
+}

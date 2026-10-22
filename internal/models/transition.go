@@ -8,7 +8,7 @@ import (
 )
 
 // TransitionKind names a live-output transition (EasyWorship's Blend, Push,
-// Wipe, Cover, Reveal and Iris). Directional kinds name the direction of
+// Wipe, Cover, Reveal, Iris and Zoom). Directional kinds name the direction of
 // motion: "push-left" pushes the old slide off to the left while the new one
 // enters from the right; "wipe-left" reveals the new slide from the right edge
 // leftwards; "cover-left" slides the new slide in, moving left, over the old
@@ -38,6 +38,13 @@ const (
 	TransitionRevealDown  TransitionKind = "reveal-down"
 )
 
+// Zoom: "zoom-in" grows the new slide from the centre over the old one;
+// "zoom-out" shrinks the old slide into the centre, uncovering the new one.
+const (
+	TransitionZoomIn  TransitionKind = "zoom-in"
+	TransitionZoomOut TransitionKind = "zoom-out"
+)
+
 // TransitionFamily is a transition kind without its direction.
 type TransitionFamily string
 
@@ -50,6 +57,9 @@ const (
 	FamilyCover  TransitionFamily = "cover"
 	FamilyReveal TransitionFamily = "reveal"
 )
+
+// FamilyZoom is zoom-in and zoom-out (in and out are not directions of motion).
+const FamilyZoom TransitionFamily = "zoom"
 
 // Direction is the direction of motion of a directional transition.
 type Direction string
@@ -70,6 +80,7 @@ var transitionKinds = []TransitionKind{
 	TransitionIris,
 	TransitionCoverLeft, TransitionCoverRight, TransitionCoverUp, TransitionCoverDown,
 	TransitionRevealLeft, TransitionRevealRight, TransitionRevealUp, TransitionRevealDown,
+	TransitionZoomIn, TransitionZoomOut,
 }
 
 // TransitionKinds returns every transition kind in the order pickers show them.
@@ -98,10 +109,10 @@ func (k TransitionKind) Family() TransitionFamily {
 	return TransitionFamily(name)
 }
 
-// Direction returns the direction of motion (DirNone for blend, cut, iris and
-// unknown kinds).
+// Direction returns the direction of motion (DirNone for blend, cut, iris,
+// zoom and unknown kinds).
 func (k TransitionKind) Direction() Direction {
-	if !k.Valid() {
+	if !k.Valid() || k.Family() == FamilyZoom {
 		return DirNone
 	}
 	_, dir, ok := strings.Cut(string(k), "-")
@@ -131,11 +142,13 @@ var transitionAliases = map[string]TransitionKind{
 	"push": TransitionPushLeft, "wipe": TransitionWipeLeft,
 	"cover": TransitionCoverLeft, "reveal": TransitionRevealLeft,
 	"iris-circle": TransitionIris, "circle": TransitionIris,
+	"zoom": TransitionZoomIn,
 }
 
 // ParseTransitionKind reads a kind from its name or label, case-insensitively
 // ("Push Left", "push_left", "push-left"). Family names alone mean the
-// leftward variant ("push" is push-left); "crossfade" and "fade" are blend.
+// leftward variant ("push" is push-left; "zoom" is zoom-in); "crossfade" and
+// "fade" are blend.
 func ParseTransitionKind(s string) (TransitionKind, error) {
 	key := strings.ToLower(strings.TrimSpace(s))
 	key = strings.NewReplacer(" ", "-", "_", "-").Replace(key)

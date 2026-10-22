@@ -23,10 +23,11 @@ func TestTransitionEndpoints(t *testing.T) {
 			hidden := start.InAlpha == 0 || // blend, cut
 				math.Abs(start.In.X) >= w || math.Abs(start.In.Y) >= h || // push, cover: off screen
 				(start.Mask.Kind == MaskRect && (start.Mask.Rect.W == 0 || start.Mask.Rect.H == 0)) || // wipe
-				(start.Mask.Kind == MaskCircle && start.Mask.Radius == 0) // iris
-			if kind.Family() == models.FamilyReveal {
+				(start.Mask.Kind == MaskCircle && start.Mask.Radius == 0) || // iris
+				start.InScale == 0 // zoom in
+			if kind.Family() == models.FamilyReveal || kind == models.TransitionZoomOut {
 				// The outgoing layer covers the incoming one completely.
-				hidden = !start.InOnTop && start.Out == (Vec{})
+				hidden = !start.InOnTop && start.Out == (Vec{}) && start.OutScale == 1
 			}
 			if !hidden {
 				t.Errorf("start shows the incoming layer: %+v", start)
@@ -66,16 +67,23 @@ func TestTransitionMidway(t *testing.T) {
 		{models.TransitionWipeDown, TransitionFrame{InAlpha: 1, InOnTop: true, Mask: Mask{Kind: MaskRect, Rect: Rect{W: w, H: h * e}}}},
 		// Iris: a circle from the centre that reaches the corners at the end.
 		{models.TransitionIris, TransitionFrame{InAlpha: 1, InOnTop: true, Mask: Mask{Kind: MaskCircle, Center: Vec{X: w / 2, Y: h / 2}, Radius: e * math.Hypot(w/2, h/2)}}},
+		// Zoom: in grows the incoming layer over the old one, out shrinks the
+		// old layer above the new one.
+		{models.TransitionZoomIn, TransitionFrame{InAlpha: 1, InOnTop: true, InScale: e, OutScale: 1}},
+		{models.TransitionZoomOut, TransitionFrame{InAlpha: 1, InOnTop: false, InScale: 1, OutScale: 1 - e}},
 		// Unknown kinds blend.
-		{models.TransitionKind("cube"), TransitionFrame{InAlpha: e, InOnTop: true}},
+		{models.TransitionKind("cube"), TransitionFrame{InAlpha: e, InOnTop: true, InScale: 1, OutScale: 1}},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.kind), func(t *testing.T) {
+			if tt.want.InScale == 0 && tt.want.OutScale == 0 {
+				tt.want.InScale, tt.want.OutScale = 1, 1 // every kind but zoom keeps the size
+			}
 			got := Transition(tt.kind, 0.5, w, h)
 			if !vecNear(got.In, tt.want.In) || !vecNear(got.Out, tt.want.Out) || !near(got.InAlpha, tt.want.InAlpha) ||
 				got.InOnTop != tt.want.InOnTop || got.Mask.Kind != tt.want.Mask.Kind ||
 				!rectNear(got.Mask.Rect, tt.want.Mask.Rect) || !vecNear(got.Mask.Center, tt.want.Mask.Center) ||
-				!near(got.Mask.Radius, tt.want.Mask.Radius) {
+				!near(got.Mask.Radius, tt.want.Mask.Radius) || !near(got.InScale, tt.want.InScale) || !near(got.OutScale, tt.want.OutScale) {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
 			}
 		})
@@ -96,6 +104,10 @@ func TestTransitionMonotonic(t *testing.T) {
 				v = fr.Mask.Rect.W * fr.Mask.Rect.H
 			case fr.Mask.Kind == MaskCircle:
 				v = fr.Mask.Radius
+			case kind == models.TransitionZoomIn:
+				v = fr.InScale
+			case kind == models.TransitionZoomOut:
+				v = 1 - fr.OutScale
 			case kind.Family() == models.FamilyReveal:
 				v = math.Hypot(fr.Out.X, fr.Out.Y)
 			case kind.Family() == models.FamilyPush, kind.Family() == models.FamilyCover:
