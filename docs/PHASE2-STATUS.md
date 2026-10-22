@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 586 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback and tile-menu blocks)
+test/smoke.sh          # 688 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, remote-control and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -380,8 +380,9 @@ Recorded 2026-10-22 on the same machine. "smoke: X" names a check in the `# ----
 
 ## Remote control (PLAN v0.2 item 2)
 
-Recorded 2026-10-22 on the same machine. "smoke: X" names a check in the `# ---- remote control` section of
-`test/smoke.sh` (before `# ---- item menus`). Design and security model: [REMOTE.md](REMOTE.md).
+Recorded 2026-10-22 on the same machine (a full smoke run passed 688 checks, 41 of them in the remote block).
+"smoke: X" names a check in the `# ---- remote control` section of `test/smoke.sh` (before `# ---- item menus`).
+Design and security model: [REMOTE.md](REMOTE.md).
 
 | Criterion | Status | Verification |
 |---|---|---|
