@@ -60,6 +60,10 @@ type SlideView struct {
 	// role selects the shared native player a video / audio background opens
 	// (videosource.go); RoleNone shows the poster only.
 	role VideoRole
+
+	// overlay is the alert layer above the slide layers (overlay.go); nil
+	// until the app asks for it (thumbnails never have one).
+	overlay *Overlay
 }
 
 // NewSlideView returns a SlideView showing black, with the default 500ms
@@ -262,6 +266,7 @@ func (v *SlideView) relayout() {
 	if v.transitioning {
 		v.applyTransition(v.progress) // apply put the layers back at rest
 	}
+	v.relayoutOverlay(r, s)
 }
 
 // show projects v.want onto the layers, crossfading when appropriate.
@@ -290,6 +295,7 @@ func (v *SlideView) show() {
 	v.cur.root.AsCanvasItem().SetVisible(true)
 	v.prev.root.AsCanvasItem().SetVisible(true)
 	v.AsNode().MoveChild(v.cur.root.AsNode(), -1)
+	v.raiseOverlay()    // alerts stay above both layers (overlay.go)
 	v.beginTransition() // the kind's starting state (transitions.go)
 	v.transitioning = true
 	v.progress = 0

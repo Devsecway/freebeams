@@ -93,6 +93,7 @@ func (v *SlideView) orderLayers(inOnTop bool) {
 		top = v.prev
 	}
 	v.AsNode().MoveChild(top.root.AsNode(), -1)
+	v.raiseOverlay()
 }
 
 // ── Layer side ───────────────────────────────────────────────────────────
