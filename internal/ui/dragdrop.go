@@ -135,6 +135,14 @@ func (s *ScheduleList) DropGapPoint(k int) (Vector2.XY, bool) {
 	return Vector2.New(x, y), true
 }
 
+// ScrollRowIntoView scrolls row i into view (for the drag hooks; the
+// scroll applies on the next frame).
+func (s *ScheduleList) ScrollRowIntoView(i int) {
+	if i >= 0 && i < len(s.views) {
+		s.scroll.EnsureControlVisible(s.views[i].AsControl())
+	}
+}
+
 func (s *ScheduleList) rowSpans() (tops, bottoms, mids []float64) {
 	for _, v := range s.views {
 		r := v.AsControl().GetGlobalRect()

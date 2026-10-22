@@ -12,6 +12,7 @@ import (
 	"graphics.gd/classdb/Input"
 	"graphics.gd/classdb/InputEventMouseButton"
 	"graphics.gd/classdb/InputEventMouseMotion"
+	"graphics.gd/classdb/Viewport"
 	"graphics.gd/classdb/Window"
 	"graphics.gd/variant/Vector2"
 )
@@ -90,8 +91,9 @@ func (a *App) dropOntoScheduleRow(source string, index, row int, cmd *control.Co
 // press on the source (a song row, a verse row, a media / presentation /
 // theme tile or a schedule row, by index or title; its resource tab is shown
 // first), move to the target in steps frames, release. The target is the
-// insertion gap at (default: the end), schedule row `row` (a theme), or
-// "outside" the list (the Preview grid). Mode "hold" stops before the release
+// insertion gap at (default: the end), schedule row `row` (a theme),
+// "outside" the list (the Preview grid), or "top-edge" / "bottom-edge" of the
+// list (where a held drag auto-scrolls). Mode "hold" stops before the release
 // (for a mid-drag screenshot); mode "release" then lets go.
 func (a *App) dragToSchedule(cmd *control.Command, args actionArgs) {
 	if args.Mode == "release" {
@@ -128,10 +130,20 @@ func (a *App) dragToSchedule(cmd *control.Command, args actionArgs) {
 	if steps <= 0 {
 		steps = 8
 	}
-	// Frame 1 scrolls the source into view (the point getters do), frame 3
+	// Frame 1 scrolls the source into view (the point getters do), frame 2 the
+	// schedule target; frame 4
 	// reads the settled positions and starts the drag.
 	a.after(1, func() { _, _ = a.dragSourcePoint(args.Source, index) })
-	a.after(3, func() {
+	if args.Target == "" { // a row or gap of the schedule: bring it into view
+		row := len(a.sched.Items) - 1
+		if args.Row != nil {
+			row = *args.Row
+		} else if args.At != nil {
+			row = min(*args.At, row)
+		}
+		a.after(2, func() { a.win.Schedule.ScrollRowIntoView(row) })
+	}
+	a.after(4, func() {
 		from, ok := a.dragSourcePoint(args.Source, index)
 		if !ok {
 			cmd.RespondErr(fmt.Errorf("drag-to-schedule: %s %d is not visible", args.Source, index))
@@ -219,8 +231,16 @@ func (a *App) dragTargetPoint(args actionArgs) (Vector2.XY, error) {
 	case args.Target == "outside":
 		r := a.win.PreviewGrid.AsControl().GetGlobalRect()
 		return Vector2.New(r.Position.X+r.Size.X/2, r.Position.Y+r.Size.Y/2), nil
+	case args.Target == "top-edge" || args.Target == "bottom-edge":
+		// Just inside the list's top or bottom edge: hold there to auto-scroll.
+		r := a.win.Schedule.AsControl().GetGlobalRect()
+		y := r.Position.Y + 4
+		if args.Target == "bottom-edge" {
+			y = r.Position.Y + r.Size.Y - 4
+		}
+		return Vector2.New(r.Position.X+r.Size.X/2, y), nil
 	case args.Target != "":
-		return Vector2.XY{}, fmt.Errorf("drag-to-schedule: unknown target %q (outside)", args.Target)
+		return Vector2.XY{}, fmt.Errorf("drag-to-schedule: unknown target %q (outside|top-edge|bottom-edge)", args.Target)
 	case args.Row != nil:
 		p, ok := a.win.Schedule.RowCenter(*args.Row)
 		if !ok {
@@ -263,6 +283,7 @@ func (a *App) runDrag(cmd *control.Command, from, to Vector2.XY, steps int, hold
 
 // mouseButton pushes a left-button press or release at p (canvas units).
 func (a *App) mouseButton(p Vector2.XY, pressed bool) {
+	a.warpPointer(p)
 	scale := Window.Get(a.AsNode()).ContentScaleFactor()
 	p = Vector2.New(p.X*scale, p.Y*scale)
 	ev := InputEventMouseButton.New()
@@ -279,6 +300,7 @@ func (a *App) mouseButton(p Vector2.XY, pressed bool) {
 // mouseMotion pushes a motion with the left button held to p, rel from the
 // previous one (canvas units).
 func (a *App) mouseMotion(p, rel Vector2.XY) {
+	a.warpPointer(p)
 	scale := Window.Get(a.AsNode()).ContentScaleFactor()
 	ev := InputEventMouseMotion.New()
 	ev.AsInputEventMouse().SetButtonMask(Input.MouseButtonMaskLeft)
@@ -286,4 +308,12 @@ func (a *App) mouseMotion(p, rel Vector2.XY) {
 	ev.AsInputEventMouse().SetPosition(Vector2.New(p.X*scale, p.Y*scale))
 	ev.AsInputEventMouse().SetGlobalPosition(Vector2.New(p.X*scale, p.Y*scale))
 	Input.ParseInputEvent(ev.AsInputEvent())
+}
+
+// warpPointer moves the real pointer to p (canvas units). Godot 4 works out
+// the drop target of a drag from the OS cursor every frame
+// (Viewport._update_mouse_over), not from the motion events alone, so a
+// synthesized drag must take the cursor along.
+func (a *App) warpPointer(p Vector2.XY) {
+	Viewport.Get(a.AsNode()).WarpMouse(p)
 }
