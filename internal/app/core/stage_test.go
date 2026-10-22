@@ -295,3 +295,27 @@ func TestStageStateDoc(t *testing.T) {
 		t.Fatalf("closed = %+v", closed)
 	}
 }
+
+func TestStageNote(t *testing.T) {
+	long := strings.Repeat("ab ", 100)
+	tests := []struct{ in, want string }{
+		{"", ""},
+		{"  Repeat the chorus  ", "Repeat the chorus"},
+		{"Five\r\nminutes\n\tleft", "Five minutes left"},
+		{long, strings.TrimSpace(long[:StageNoteMax])},
+		{strings.Repeat("é", StageNoteMax+5), strings.Repeat("é", StageNoteMax)},
+	}
+	for _, tt := range tests {
+		if got := NormalizeStageNote(tt.in); got != tt.want {
+			t.Errorf("NormalizeStageNote(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+	now := time.Date(2026, 10, 22, 19, 5, 0, 0, time.Local)
+	f := BuildStageFrame(StageInput{Presenter: models.PresenterState{LiveIndex: -1}, Settings: StageSettings{}, Now: now, Note: " Wrap up\nnow "})
+	if f.Note != "Wrap up now" {
+		t.Fatalf("frame note = %q", f.Note)
+	}
+	if doc := StageStateDoc(f, StageSettings{}, StageTimer{}, now, StageWindow{}); doc.Note != "Wrap up now" {
+		t.Fatalf("doc note = %q", doc.Note)
+	}
+}

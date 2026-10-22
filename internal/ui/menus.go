@@ -32,13 +32,14 @@ const (
 	MenuClear
 	MenuShowLive
 	MenuStageDisplay
+	MenuStageMessage
 
 	menuActionCount
 )
 
 var menuActionNames = [...]string{"new-schedule", "new-song", "open-schedule", "save-schedule", "save-schedule-as",
 	"quit", "options", "interface-dark", "interface-light", "about",
-	"go-live", "go-back", "logo", "black", "clear", "show-live", "stage-display"}
+	"go-live", "go-back", "logo", "black", "clear", "show-live", "stage-display", "stage-message"}
 
 // String is the action's control-API name ("open-schedule").
 func (a MenuAction) String() string {

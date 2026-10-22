@@ -14,6 +14,7 @@ import (
 	"graphics.gd/classdb/Label"
 	"graphics.gd/classdb/LabelSettings"
 	"graphics.gd/classdb/TextServer"
+	"graphics.gd/variant/Callable"
 	"graphics.gd/variant/Color"
 	"graphics.gd/variant/Float"
 	"graphics.gd/variant/Vector2"
@@ -38,6 +39,11 @@ var (
 		models.StageBadgeClear: {R: 0.90, G: 0.49, B: 0.13, A: 1}, // #e67e22
 		models.StageBadgeLogo:  {R: 0.18, G: 0.44, B: 0.85, A: 1}, // #2e6fd8
 	}
+
+	// The stage message band: white on teal, unlike anything a slide or a
+	// badge shows.
+	stageNoteBg   = Color.RGBA{R: 0, G: 121.0 / 255, B: 107.0 / 255, A: 1} // #00796b
+	stageNoteText = Color.RGBA{R: 1, G: 1, B: 1, A: 1}
 )
 
 // StageView draws a models.StageFrame: the stage display's text-only view
@@ -57,6 +63,9 @@ type StageView struct {
 	rule2 ColorRect.Instance
 	box   ColorRect.Instance // the badge's background
 
+	noteBox ColorRect.Instance // the stage message's band
+	note    Label.Instance
+
 	title   Label.Instance
 	badge   Label.Instance
 	timer   Label.Instance
@@ -70,6 +79,11 @@ type StageView struct {
 	applied  models.StageFrame
 	size     Vector2.XY
 	laidOut  bool
+
+	// placed are the labels' rects from the last relayout, placed
+	// again one deferred call later (replace).
+	placed   []placement
+	replaced bool
 }
 
 // NewStageView returns a black StageView. Add it to the tree with AsNode().
@@ -118,6 +132,7 @@ func (v *StageView) build() {
 	v.rule = rect(stageRule)
 	v.rule2 = rect(stageRule)
 	v.box = rect(stageBg)
+	v.noteBox = rect(stageNoteBg)
 	label := func() Label.Instance {
 		lb := newTextLabel()
 		lb.SetTextOverrunBehavior(TextServer.OverrunTrimEllipsis)
@@ -146,7 +161,12 @@ func (v *StageView) build() {
 	v.next.SetHorizontalAlignment(GUI.HorizontalAlignmentCenter)
 	v.next.SetVerticalAlignment(GUI.VerticalAlignmentTop)
 	v.AsNode().AddChild(v.next.AsNode())
+	v.note = newTextLabel()
+	v.note.SetHorizontalAlignment(GUI.HorizontalAlignmentCenter)
+	v.note.SetVerticalAlignment(GUI.VerticalAlignmentCenter)
+	v.AsNode().AddChild(v.note.AsNode())
 	c.OnResized(v.relayout)
+	v.AsNode().OnTreeExiting(func() { v.placed = nil }) // a freed view is never placed again
 }
 
 // stageFont is the stage display's typeface (the slides' default family).
@@ -172,12 +192,16 @@ func (v *StageView) relayout() {
 		return
 	}
 	v.laidOut, v.size, v.applied = true, size, v.frame
+	v.placed = v.placed[:0]
+	defer v.deferReplace()
 	f := v.frame
 	cw, ch, s := layout.StageCanvas(float64(size.X), float64(size.Y))
 	if s <= 0 {
 		for _, l := range v.labels() {
 			l.AsCanvasItem().SetVisible(false)
 		}
+		v.box.AsCanvasItem().SetVisible(false)
+		v.noteBox.AsCanvasItem().SetVisible(false)
 		return
 	}
 	headerSize := layout.StageHeaderFontSize(f.FontScale)
@@ -187,6 +211,7 @@ func (v *StageView) relayout() {
 		ClockW: textWidth(bold, f.Clock, headerSize),
 		TimerW: textWidth(bold, f.Timer, headerSize),
 		BadgeW: textWidth(bold, f.Badge, headerSize),
+		Note:   f.Note != "",
 	})
 
 	// Header.
@@ -223,10 +248,20 @@ func (v *StageView) relayout() {
 		v.head.AsCanvasItem().SetVisible(false)
 		v.next.AsCanvasItem().SetVisible(false)
 	}
+
+	// The stage message.
+	if f.Note != "" && b.NoteBand.H > 0 {
+		place(v.noteBox.AsControl(), b.NoteBand.Scale(s))
+		v.noteBox.AsCanvasItem().SetVisible(true)
+		v.fitted(v.note, f.Note, b.Note, b.NoteMin, b.NoteMax, s, true, stageNoteText)
+	} else {
+		v.noteBox.AsCanvasItem().SetVisible(false)
+		v.note.AsCanvasItem().SetVisible(false)
+	}
 }
 
 func (v *StageView) labels() []Label.Instance {
-	return []Label.Instance{v.title, v.badge, v.timer, v.clock, v.current, v.head, v.next}
+	return []Label.Instance{v.title, v.badge, v.timer, v.clock, v.current, v.head, v.next, v.note}
 }
 
 // pixelRule keeps a rule at least one pixel high at any scale.
@@ -248,6 +283,7 @@ func (v *StageView) line(l Label.Instance, text string, r layout.Rect, size, s f
 	l.SetText(text)
 	placeScaled(l.AsControl(), r.Scale(s), k)
 	l.AsCanvasItem().SetVisible(true)
+	v.placed = append(v.placed, placement{l.AsControl(), r.Scale(s), k})
 }
 
 // fitted auto-fits text into r (canvas units) between min and max, with the
@@ -267,6 +303,40 @@ func (v *StageView) fitted(l Label.Instance, text string, r layout.Rect, min, ma
 	l.SetText(fit.lines)
 	placeScaled(l.AsControl(), r.Scale(s), k)
 	l.AsCanvasItem().SetVisible(true)
+	v.placed = append(v.placed, placement{l.AsControl(), r.Scale(s), k})
+}
+
+// placement is where line or fitted put a label.
+type placement struct {
+	c Control.Instance
+	r layout.Rect
+	k float64
+}
+
+// deferReplace queues replace once per relayout. A Label applies a
+// LabelSettings font-size change through a deferred `changed`, so in the
+// frame the text shrinks its minimum size is still the old, bigger text's,
+// and a smaller rect (the body giving room to the stage message) is clamped
+// to it: the label grows downwards past its box. Placing it again after that
+// deferred update lands it in its box.
+func (v *StageView) deferReplace() {
+	if len(v.placed) == 0 || v.replaced {
+		return
+	}
+	v.replaced = true
+	_ = v.AsControl().Size() // flush the buffered calls: the label's deferred update is queued first
+	Callable.Defer(Callable.New(v.replace))
+}
+
+func (v *StageView) replace() {
+	v.replaced = false
+	if len(v.placed) == 0 {
+		return
+	}
+	for _, p := range v.placed {
+		placeScaled(p.c, p.r, p.k)
+	}
+	_ = v.AsControl().Size() // flush
 }
 
 // stageStyle sets a label's font, size, color and line spacing; the stage

@@ -64,18 +64,22 @@ func TestStageLayout(t *testing.T) {
 		{"big font", StageInput{W: 1920, H: 1080, FontScale: 2, Next: true, ClockW: 400, TimerW: 380, BadgeW: 300}},
 		{"4:3", StageInput{W: 1920, H: 1440, FontScale: 1, Next: true, ClockW: 240, TimerW: 200}},
 		{"header wider than the canvas", StageInput{W: 1920, H: 1080, FontScale: 1, ClockW: 1500, TimerW: 900, BadgeW: 600}},
+		{"note", StageInput{W: 1920, H: 1080, FontScale: 1, Next: true, ClockW: 240, TimerW: 200, Note: true}},
+		{"note without next", StageInput{W: 1920, H: 1080, FontScale: 1, Note: true}},
+		{"note, big font, 4:3", StageInput{W: 1920, H: 1440, FontScale: 2, Next: true, ClockW: 400, Note: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := StageLayout(tt.in)
 			all := map[string]Rect{"title": b.Title, "badge": b.Badge, "timer": b.Timer, "clock": b.Clock, "rule": b.Rule,
-				"current": b.Current, "nextRule": b.NextRule, "nextHeader": b.NextHeader, "next": b.Next}
+				"current": b.Current, "nextRule": b.NextRule, "nextHeader": b.NextHeader, "next": b.Next,
+				"noteBand": b.NoteBand, "note": b.Note}
 			for name, r := range all {
 				if !inside(r, tt.in.W, tt.in.H) {
 					t.Errorf("%s = %+v is outside the %vx%v canvas", name, r, tt.in.W, tt.in.H)
 				}
 			}
-			names := []string{"title", "badge", "timer", "clock", "rule", "current", "nextRule", "nextHeader", "next"}
+			names := []string{"title", "badge", "timer", "clock", "rule", "current", "nextRule", "nextHeader", "next", "noteBand"}
 			for i, a := range names {
 				for _, c := range names[i+1:] {
 					if overlaps(all[a], all[c]) {
@@ -100,7 +104,14 @@ func TestStageLayout(t *testing.T) {
 			if tt.in.Next && !(b.Current.H > b.Next.H) {
 				t.Errorf("the current text (%v high) should be bigger than the next (%v)", b.Current.H, b.Next.H)
 			}
-			if !tt.in.Next && !near(b.Current.Y+b.Current.H, tt.in.H-StagePad) {
+			if tt.in.Note != (b.NoteBand.H > 0 && b.Note.W > 0) || (tt.in.Note && b.NoteMin >= b.NoteMax) {
+				t.Errorf("note shown = %+v / %+v (%d..%d), want %v", b.NoteBand, b.Note, b.NoteMin, b.NoteMax, tt.in.Note)
+			}
+			if tt.in.Note && (!near(b.NoteBand.Y+b.NoteBand.H, tt.in.H-StagePad) || b.Note.X <= b.NoteBand.X ||
+				b.Note.X+b.Note.W >= b.NoteBand.X+b.NoteBand.W || b.Note.H != b.NoteBand.H) {
+				t.Errorf("note band %+v / text %+v: not at the bottom margin, or the text is not inset", b.NoteBand, b.Note)
+			}
+			if !tt.in.Next && !tt.in.Note && !near(b.Current.Y+b.Current.H, tt.in.H-StagePad) {
 				t.Errorf("without next the current text reaches the bottom margin: %+v", b.Current)
 			}
 			if b.CurrentMin >= b.CurrentMax || b.CurrentMin < 1 {

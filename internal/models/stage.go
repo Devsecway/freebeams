@@ -35,6 +35,11 @@ type StageFrame struct {
 
 	// FontScale multiplies every text size (1 = the default sizes).
 	FontScale float64 `json:"fontScale"`
+
+	// Note is the operator's message to the stage ("Repeat the chorus",
+	// "Five minutes"): a band along the bottom that only the stage display
+	// shows (EasyWorship's FoldBack alert). "" hides it.
+	Note string `json:"note"`
 }
 
 // Stage badges (StageFrame.Badge).

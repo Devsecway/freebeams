@@ -72,6 +72,9 @@ type MainWindow struct {
 	OnMonitorOutput func(foldback bool) `gd:"-"`
 	outSel          *outputSelect
 
+	// StageMessage is Live ▸ Stage Message… (stage_message.go).
+	StageMessage *StageMessageDialog `gd:"-"`
+
 	// palette is plain Go data. The Theme is not kept in a field: a RefCounted
 	// held by an extension struct is never released (leaks at exit); it lives
 	// on the node (AsControl().Theme()).
@@ -127,6 +130,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.Settings = NewSettingsDialog()
 	w.Confirm = NewConfirmDialog()
 	w.Message = NewMessageDialog()
+	w.StageMessage = NewStageMessageDialog()
 	for _, d := range w.dialogs() {
 		d.host = w.dialogHost
 		d.setTheme(theme)
@@ -138,7 +142,7 @@ func NewMainWindow(p Palette) *MainWindow {
 
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
-	return []*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg}
+	return []*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg}
 }
 
 // dialogName names a dialog window node for TopDialogHost.
@@ -154,6 +158,8 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 		return "confirm"
 	case w.Message.dlg.win.AsNode().ID():
 		return "message"
+	case w.StageMessage.dlg.win.AsNode().ID():
+		return "stage-message"
 	}
 	return "other"
 }

@@ -263,8 +263,15 @@ func (a *App) nativeKey(cmd *control.Command, args actionArgs) {
 			cmd.RespondErr(errors.New("native-key: the stage display is not open"))
 			return
 		}
+	case "stage-message":
+		// Typing into Live ▸ Stage Message… (its own OS window).
+		if !a.win.StageMessage.Visible() {
+			cmd.RespondErr(errors.New("native-key: the stage message dialog is not open"))
+			return
+		}
+		window = a.win.StageMessage.AsWindow().GetWindowId()
 	default:
-		cmd.RespondErr(fmt.Errorf("native-key: unknown window %q (main|output|stage)", args.Window))
+		cmd.RespondErr(fmt.Errorf("native-key: unknown window %q (main|output|stage|stage-message)", args.Window))
 		return
 	}
 	for _, pressed := range []bool{true, false} {

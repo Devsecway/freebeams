@@ -32,6 +32,8 @@ type stageState struct {
 	monitor bool
 	// warning is the Options dialog's message about a refused display.
 	warning string
+	// note is the stage message (Live ▸ Stage Message…), normalized.
+	note string
 
 	// ---- view
 	win       *render.Stage
@@ -64,11 +66,38 @@ func (a *App) liveMonitorContent() Control.Instance {
 func (a *App) wireStage() {
 	a.stage.settings = core.DefaultStageSettings()
 	a.stage.win = render.NewStage(a.AsNode())
-	a.stage.win.OnClosed = func() { a.event(func() { a.fail("stage display", a.setStageEnabled(false)) }) }
+	a.stage.win.OnClosed = func() {
+		log.Printf("[freebeams] stage display window closed")
+		a.event(func() { a.fail("stage display", a.setStageEnabled(false)) })
+	}
 	a.stage.win.OnInput = a.outputInput // hotkeys while the windowed stage has focus, as on the output
 	a.win.OnMonitorOutput = func(foldback bool) { a.event(func() { a.stage.monitor = foldback }) }
 	a.win.Settings.OnStage = func(v ui.StageValues) { a.event(func() { a.applyStageValues(v) }) }
 	a.stage.shownVer = -1
+	a.win.StageMessage.OnShow = func(text string) { a.event(func() { a.setStageNote(text) }) }
+	a.win.StageMessage.OnClear = func() { a.event(func() { a.setStageNote("") }) }
+}
+
+// setStageNote puts a message up on the stage display ("" takes it down).
+func (a *App) setStageNote(text string) {
+	text = core.NormalizeStageNote(text)
+	if text == a.stage.note {
+		return
+	}
+	a.stage.note = text
+	if text == "" {
+		log.Printf("[freebeams] stage message cleared")
+	} else {
+		log.Printf("[freebeams] stage message: %q", text)
+	}
+}
+
+// openStageMessage opens Live ▸ Stage Message… with text in its box.
+func (a *App) openStageMessage(text string) {
+	if a.win.DialogOpen() {
+		return // one dialog at a time from the menu (as Options… does)
+	}
+	a.win.StageMessage.Open(text, a.stage.note != "")
 }
 
 // loadStageSettings reads the persisted stage settings (startup).
@@ -185,6 +214,8 @@ func (a *App) onLiveMenu(act ui.MenuAction) {
 		if err := a.setStageEnabled(!a.stage.settings.Enabled); err != nil {
 			a.alert("Stage Display", err)
 		}
+	case ui.MenuStageMessage:
+		a.openStageMessage(a.stage.note)
 	}
 }
 
@@ -193,7 +224,7 @@ func (a *App) onLiveMenu(act ui.MenuAction) {
 // stageFrame projects the state onto the stage display at now.
 func (a *App) stageFrame(now time.Time) models.StageFrame {
 	return core.BuildStageFrame(core.StageInput{Presenter: a.pres.State, Schedule: a.sched, Settings: a.stage.settings,
-		Timer: a.stage.timer, Now: now})
+		Timer: a.stage.timer, Now: now, Note: a.stage.note})
 }
 
 // stageValues is the dialog's projection of the stage settings.
@@ -276,6 +307,9 @@ func (a *App) closeStage() {
 //	stage-timer {action}             start | stop | reset | toggle the service timer
 //	stage-monitor {on?}              the Live Output monitor previews the Foldback output (toggle without on)
 //	stage-native                     what the OS says about the stage window (macOS)
+//	stage-note {text}                put a stage message up ("" takes it down)
+//	stage-note {mode: "open", text?} open Live ▸ Stage Message… (text, else the current message, in the box)
+//	stage-note {mode: "clear"}       the dialog's Clear when it is open, else take the message down
 func (a *App) handleStageCommand(cmd *control.Command, args actionArgs) bool {
 	switch cmd.Action {
 	case "stage":
@@ -298,6 +332,29 @@ func (a *App) handleStageCommand(cmd *control.Command, args actionArgs) bool {
 			on = *args.On
 		}
 		a.stage.monitor = on
+		a.answer(cmd, nil)
+	case "stage-note":
+		switch args.Mode {
+		case "":
+			a.setStageNote(args.Text)
+		case "open":
+			if a.win.DialogOpen() {
+				cmd.RespondErr(errors.New("stage-note: another dialog is open"))
+				return true
+			}
+			text := args.Text
+			if text == "" {
+				text = a.stage.note
+			}
+			a.openStageMessage(text)
+		case "clear":
+			if !a.win.StageMessage.Clear() {
+				a.setStageNote("")
+			}
+		default:
+			cmd.RespondErr(fmt.Errorf("stage-note: unknown mode %q (open|clear, or none with text)", args.Mode))
+			return true
+		}
 		a.answer(cmd, nil)
 	case "stage-native":
 		st, ok := a.stage.win.NativeState()

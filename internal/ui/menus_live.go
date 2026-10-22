@@ -11,7 +11,7 @@ type LiveMenuState struct {
 
 // buildLive builds the Live menu (UI-SPEC §4: Go Live · Go Back · — · Show
 // Logo · Black Output · Clear Output · — · Show Live), plus Stage Display
-// (EasyWorship's Foldback). No accelerators: the hotkeys (Ctrl+B, Ctrl+L, …)
+// (EasyWorship's Foldback) and Stage Message… (its FoldBack alert). No accelerators: the hotkeys (Ctrl+B, Ctrl+L, …)
 // are the app's own, handled wherever focus is, and a native menu shortcut
 // would take them first.
 func (m *Menus) buildLive(fire func(id int)) PopupMenu.Instance {
@@ -26,6 +26,7 @@ func (m *Menus) buildLive(fire func(id int)) PopupMenu.Instance {
 	live.AddSeparator()
 	live.MoreArgs().AddCheckItem("Show Live", int(MenuShowLive), 0)
 	live.MoreArgs().AddCheckItem("Stage Display", int(MenuStageDisplay), 0)
+	live.MoreArgs().AddItem("Stage Message…", int(MenuStageMessage), 0)
 	live.OnIdPressed(fire)
 	m.live = live
 	return live

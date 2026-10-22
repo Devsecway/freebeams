@@ -146,6 +146,9 @@ type DialogState struct {
 	// operator window, else the dialog under it ("editor", …). It is never the
 	// output window. "" when no dialog is open.
 	Host string `json:"host,omitempty"`
+
+	// StageMessage reports Live ▸ Stage Message… being open.
+	StageMessage bool `json:"stageMessage,omitempty"`
 }
 
 // ResourceState is what the resource preview (right of the resource tabs) shows.

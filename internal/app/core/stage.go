@@ -236,6 +236,23 @@ type StageInput struct {
 	Settings  StageSettings
 	Timer     StageTimer
 	Now       time.Time
+
+	// Note is the operator's stage message (NormalizeStageNote).
+	Note string
+}
+
+// StageNoteMax is the longest stage message, in characters.
+const StageNoteMax = 200
+
+// NormalizeStageNote trims a stage message, folds its line breaks and runs
+// of spaces into single spaces (the band is one paragraph) and cuts it to
+// StageNoteMax characters.
+func NormalizeStageNote(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > StageNoteMax {
+		s = strings.TrimSpace(string(r[:StageNoteMax]))
+	}
+	return s
 }
 
 // stageText is a slide's text as the stage shows it: the body, trimmed, with
@@ -267,7 +284,8 @@ func StageBadge(mode models.OutputMode) string {
 func BuildStageFrame(in StageInput) models.StageFrame {
 	st := in.Settings.Normalized()
 	p := in.Presenter
-	f := models.StageFrame{FontScale: st.FontScale, Badge: StageBadge(p.Mode), ShowNext: st.ShowNext}
+	f := models.StageFrame{FontScale: st.FontScale, Badge: StageBadge(p.Mode), ShowNext: st.ShowNext,
+		Note: NormalizeStageNote(in.Note)}
 	if d := p.Live; d != nil {
 		f.Title = d.Title
 		if i := p.LiveIndex; i >= 0 && i < len(d.Slides) {
@@ -313,6 +331,9 @@ type StageState struct {
 	Timer        string  `json:"timer"`
 	TimerRunning bool    `json:"timerRunning"`
 	TimerSeconds float64 `json:"timerSeconds"`
+
+	// Note is the stage message on screen ("" when none).
+	Note string `json:"note"`
 }
 
 // StageWindow is the stage window's state for StageStateDoc.
@@ -330,6 +351,7 @@ func StageStateDoc(f models.StageFrame, st StageSettings, timer StageTimer, now 
 		Next: f.Next, NextLabel: f.NextLabel, NextTitle: f.NextTitle, NextHeader: f.NextHeader(),
 		Badge: f.Badge, Clock: f.Clock, Timer: f.Timer, TimerRunning: timer.Running,
 		TimerSeconds: math.Floor(timer.Elapsed(now).Seconds()),
+		Note:         f.Note,
 	}
 	if w.Monitor {
 		doc.Monitor = "foldback"

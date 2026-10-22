@@ -49,6 +49,7 @@ func (a *App) state() core.State {
 	if a.win.Editor.Visible() {
 		dialog.SongEditorTheme = a.win.Editor.ThemeName()
 	}
+	dialog.StageMessage = a.win.StageMessage.Visible()
 	if m := a.win.Message; m.Visible() {
 		dialog.Message = &core.Alert{Title: m.Title(), Message: m.Text()}
 	}
@@ -532,8 +533,10 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = a.out.Screenshot()
 	case "stage":
 		png, err = a.stage.win.Screenshot()
+	case "stage-message":
+		png, err = render.WindowScreenshot(a.win.StageMessage.AsWindow())
 	default:
-		err = fmt.Errorf("screenshot: unknown window %q (main|output|stage|editor|settings|dialog|message)", cmd.Query["window"])
+		err = fmt.Errorf("screenshot: unknown window %q (main|output|stage|stage-message|editor|settings|dialog|message)", cmd.Query["window"])
 	}
 	if err != nil {
 		cmd.RespondErr(err)

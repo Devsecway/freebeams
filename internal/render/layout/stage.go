@@ -28,6 +28,14 @@ const (
 	StageCurrentShare = 0.62
 )
 
+// The stage message band (StageInput.Note) along the bottom.
+const (
+	StageNoteH    = 132.0 // the band's height (grows with the header scale)
+	StageNotePadX = 28.0  // the text's inset from the band's sides
+	StageNoteMax  = 64    // the message's largest size
+	StageNoteMin  = 24
+)
+
 // StageCanvas returns the stage canvas for a w×h pixel area and the
 // canvas→pixel scale s: the canvas is at least 1920×1080 and has the area's
 // aspect ratio (cw*s == w, ch*s == h). Degenerate areas give zeros.
@@ -49,6 +57,9 @@ type StageInput struct {
 	ClockW    float64
 	TimerW    float64
 	BadgeW    float64 // the badge text; its box adds StageBadgePadX on each side
+
+	// Note reserves the stage message band at the bottom.
+	Note bool
 }
 
 // StageBoxes is the stage layout. Hidden parts have zero rects.
@@ -70,6 +81,11 @@ type StageBoxes struct {
 	Next           Rect
 	NextMax        int
 	NextMin        int
+
+	NoteBand Rect // the stage message's background band
+	Note     Rect // its text, inset in the band
+	NoteMax  int
+	NoteMin  int
 }
 
 // StageTextScale clamps a font scale for the text areas (0.5 to 2; anything
@@ -94,7 +110,8 @@ func StageHeaderFontSize(fontScale float64) float64 {
 
 // StageLayout lays the stage display out on a cw×ch canvas: a header row
 // (title on the left; badge, timer and clock right-aligned), a rule, the live
-// text, and optionally a rule, the "Next" header and the next slide's text.
+// text, optionally a rule, the "Next" header and the next slide's text, and
+// optionally the stage message band along the bottom.
 func StageLayout(in StageInput) StageBoxes {
 	var b StageBoxes
 	if in.W <= 0 || in.H <= 0 {
@@ -132,6 +149,15 @@ func StageLayout(in StageInput) StageBoxes {
 
 	top := b.Rule.Y + b.Rule.H + StageGap
 	bottom := in.H - StagePad
+	if in.Note {
+		h := math.Round(StageNoteH * hs)
+		b.NoteBand = Rect{X: StagePad, Y: bottom - h, W: inner, H: h}
+		padX := math.Round(StageNotePadX * hs)
+		b.Note = Rect{X: StagePad + padX, Y: b.NoteBand.Y, W: math.Max(0, inner-2*padX), H: h}
+		b.NoteMax = int(math.Round(StageNoteMax * hs))
+		b.NoteMin = int(math.Round(StageNoteMin * hs))
+		bottom = b.NoteBand.Y - StageGap
+	}
 	avail := math.Max(0, bottom-top)
 	b.CurrentMax = int(math.Round(StageCurrentMax * ts))
 	b.CurrentMin = int(math.Round(StageCurrentMin * ts))
