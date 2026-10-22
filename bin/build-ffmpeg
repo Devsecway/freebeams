@@ -86,6 +86,8 @@ cd "$WORK/ffmpeg-$FFMPEG_VERSION"
 # What FreeBeams runs: ffprobe (metadata), ffmpeg decoding to raw RGBA /
 # f32le pipes (the player), JPEG / PNG stills (posters). Every native decoder,
 # demuxer, parser and filter stays in; encoders and muxers are cut to those.
+# The commas are ffmpeg's component lists, not array separators.
+# shellcheck disable=SC2054
 flags=(
 	--prefix="$PREFIX"
 	--disable-debug --disable-doc --disable-ffplay
@@ -112,9 +114,9 @@ grep -q '^License: LGPL version 2.1 or later' configure.out || fail "configure d
 jobs="${FFMPEG_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 step "make -j$jobs"
 make -j"$jobs" >&2
-rm -rf "$PREFIX"
+rm -rf "${PREFIX:?}"
 make install >&2
-rm -rf "$PREFIX/include" "$PREFIX/lib" "$PREFIX/share"
+rm -rf "${PREFIX:?}/include" "${PREFIX:?}/lib" "${PREFIX:?}/share"
 
 # configure ignores a component name it does not know: check that what the
 # app runs is there (ffmpeg -f rawvideo / f32le / image2, -c:v mjpeg).
