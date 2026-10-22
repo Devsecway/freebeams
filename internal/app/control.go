@@ -52,6 +52,7 @@ func (a *App) state() core.State {
 	if m := a.win.Message; m.Visible() {
 		dialog.Message = &core.Alert{Title: m.Title(), Message: m.Text()}
 	}
+	dialog.AlertDialog, dialog.AlertsMenu = a.win.AlertDialog(), a.win.Toolbar.AlertsMenuVisible()
 	return core.BuildState(core.StateInput{
 		Presenter:        a.pres.State,
 		Schedule:         a.sched,
@@ -83,6 +84,7 @@ func (a *App) state() core.State {
 		Bundled:       a.bundled,
 		Playback:      a.playbackStates(),
 		Remote:        a.remoteStateDoc(),
+		Alerts:        a.alertsStateDoc(),
 		LastError:     a.lastError,
 		Dialog:        dialog,
 		WindowTitle:   a.win.WindowTitle(),
@@ -162,12 +164,27 @@ type actionArgs struct {
 	ThemeName string `json:"themeName"`
 
 	// Playback (playback.go); volume takes Value, loop takes On, all take Target.
-	Seconds *float64 `json:"seconds"` // seek: the position in seconds
+	Seconds *float64 `json:"seconds"` // seek: the position in seconds; countdown / alert: a length
 
 	// The remote control (remote.go): the server's port and a pairing
 	// request's or a paired device's id (Name matches by name).
 	Port   *int   `json:"port"`
 	Device string `json:"device"`
+
+	// Alerts (alerts.go).
+	Values   map[string]string `json:"values"`   // alert / alert-fill: token values
+	Alert    *models.Alert     `json:"alert"`    // save-alert / alert-editor
+	Code     string            `json:"code"`     // nursery: the code
+	Caption  string            `json:"caption"`  // countdown: the line above the time
+	Position string            `json:"position"` // countdown: top-left … center
+	End      string            `json:"end"`      // countdown: hide|hold|overrun; alert: count|manual|token|duration
+	Time     string            `json:"time"`     // countdown: to a time of day
+	Minutes  *float64          `json:"minutes"`  // countdown: a length in minutes
+	Display  string            `json:"display"`  // alert: ticker|static|auto
+	Location string            `json:"location"` // alert: top|bottom
+	Count    *int              `json:"count"`    // alert: passes
+	Align    string            `json:"align"`    // alert: left|center|right
+	Run      *int              `json:"run"`      // alert-clear: one showing
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -498,7 +515,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}
@@ -533,6 +550,11 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(w)
 	case "output":
 		png, err = a.out.Screenshot()
+	case "alert-manager", "alert-editor", "alert-fill", "nursery", "countdown":
+		w, _ := a.win.AlertWindow(cmd.Query["window"])
+		png, err = render.WindowScreenshot(w)
+	case "alerts-menu":
+		png, err = render.WindowScreenshot(a.win.Toolbar.AlertsMenuWindow())
 	default:
 		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|settings|dialog|message)", cmd.Query["window"])
 	}
