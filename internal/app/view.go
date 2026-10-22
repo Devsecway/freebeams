@@ -367,6 +367,8 @@ func (a *App) render() {
 		v.themesVer = a.th.ver
 		w.Themes.SetItems(a.themeRows())
 		w.Schedule.SetThemeNames(a.themeNames())
+		w.Songs.SetThemeChoices(a.songThemeChoices()) // per-song themes (songthemes.go)
+		w.Editor.SetThemeChoices(a.songThemeChoices())
 		v.themeSel = -2
 	}
 	if a.th.sel != v.themeSel {

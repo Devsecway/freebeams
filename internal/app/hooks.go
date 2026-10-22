@@ -71,6 +71,12 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 			return true
 		}
 		song := models.Song{ID: args.ID, Title: args.Title, Author: args.Author, Copyright: args.Copyright, CCLI: args.CCLI}
+		themeID, err := a.songThemeArg("save-song", args) // the editor's Theme picker
+		if err != nil {
+			cmd.RespondErr(err)
+			return true
+		}
+		song.ThemeID = themeID
 		a.win.Editor.Close()
 		a.saveSong(song, args.Lyrics, cmd)
 	case "delete-song":

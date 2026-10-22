@@ -115,9 +115,9 @@ if [ -n "${MACOS_CERT_P12_BASE64:-}" ]; then
 	echo "==> importing the signing certificate into a temporary keychain"
 	# Outside the working tree on purpose: a crash between create and cleanup
 	# must not leave key material in the checkout.
-	KEYCHAIN="$(mktemp -d -t freebeams-kc)/build-signing.keychain-db"
+	KEYCHAIN="$(mktemp -d -t freebeams-kc.XXXXXX)/build-signing.keychain-db"
 	KEYCHAIN_PW="$(uuidgen)"
-	P12="$(mktemp -t freebeams-cert)"
+	P12="$(mktemp -t freebeams-cert.XXXXXX)"
 	CLEANUP_FILES+=("$P12")
 
 	b64decode MACOS_CERT_P12_BASE64 "$P12"
@@ -155,7 +155,7 @@ if [ "$SKIP_NOTARIZE" != "1" ]; then
 	if [ -n "${APPLE_API_KEY_P8_BASE64:-}" ]; then
 		require APPLE_API_KEY_ID "set APPLE_API_KEY_ID alongside APPLE_API_KEY_P8_BASE64"
 		require APPLE_API_ISSUER_ID "set APPLE_API_ISSUER_ID alongside APPLE_API_KEY_P8_BASE64"
-		API_KEY="$(mktemp -t freebeams-authkey)"
+		API_KEY="$(mktemp -t freebeams-authkey.XXXXXX)"
 		CLEANUP_FILES+=("$API_KEY")
 		b64decode APPLE_API_KEY_P8_BASE64 "$API_KEY"
 		NOTARY_ARGS=(--key "$API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID")
@@ -191,7 +191,7 @@ sign_one() {
 }
 
 echo "==> discovering nested Mach-O binaries"
-manifest="$(mktemp -t freebeams-manifest)"
+manifest="$(mktemp -t freebeams-manifest.XXXXXX)"
 CLEANUP_FILES+=("$manifest")
 while IFS= read -r -d '' f; do
 	if file -b "$f" | grep -q "Mach-O"; then
@@ -236,7 +236,7 @@ if [ "$SKIP_NOTARIZE" = "1" ]; then
 	echo "    NOTE: not notarized; Gatekeeper blocks this DMG on other Macs."
 else
 	echo "==> submitting to the Apple notary service (this can take a few minutes)"
-	submit_log="$(mktemp -t freebeams-notary)"
+	submit_log="$(mktemp -t freebeams-notary.XXXXXX)"
 	CLEANUP_FILES+=("$submit_log")
 	xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait 2>&1 | tee "$submit_log"
 	if ! grep -q 'status: Accepted' "$submit_log"; then

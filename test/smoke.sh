@@ -1068,6 +1068,86 @@ else
 	log "playback: skipped (ffmpeg=$FFMPEG native=$PB_NATIVE)"
 fi
 
+# ---- song themes -----------------------------------------------------------------------------
+# A song's own theme (Song.ThemeID) wins over the songs default, from save-song (the editor's
+# OK path), the editor's Theme picker and the Songs list's Theme ▸ submenu. The theme has a
+# solid orange background (#c46a1f) the default song theme never shows. Schedule items keep
+# their snapshot; deleting the theme sends the song back to the default.
+act "Songs tab (song themes)" tab '{"tab":"songs"}' 's["tab"] == 0'
+SONG_THEME_BASE="$(post get-theme '{"name":"Default Song"}')"
+act "save a theme for a song" save-theme "$(recolor "$SONG_THEME_BASE" "Smoke Song Theme" c46a1f 0)" '"Smoke Song Theme" in s["themes"]["names"] and s["themes"]["songDefault"] == "Default Song"'
+act "save-song with a theme (editor OK path)" save-song '{"title":"Smoke Theme Song","author":"FreeBeams","themeName":"Smoke Song Theme","lyrics":"[Verse 1]\nthemed line one\n\n[Chorus]\nthemed chorus"}' 's["songs"]["current"] == "Smoke Theme Song" and s["songs"]["theme"] == "Smoke Song Theme" and s["preview"]["title"] == "Smoke Theme Song" and s["preview"]["theme"] == "Smoke Song Theme"'
+act "save-song refuses an unknown theme" save-song '{"title":"Smoke Theme Song","themeName":"No Such Theme"}' 'not r["ok"] and "no theme matches" in r["error"]'
+wait_idle
+act "find the themed song" search-songs '{"q":"smoke theme song"}' 's["songs"]["results"] == 1'
+act "select the themed song" select-song '{"title":"Smoke Theme Song"}' 's["songs"]["theme"] == "Smoke Song Theme" and s["preview"]["theme"] == "Smoke Song Theme"'
+act "the themed song goes live" go-live '' 's["live"]["title"] == "Smoke Theme Song" and s["live"]["theme"] == "Smoke Song Theme"'
+wait_idle
+shot song-theme-output output
+pixel "the output shows the song's own theme" "$OUT/song-theme-output.png" has c46a1f 0.0 0.0 0.2 0.08 5000
+# The editor shows the song's theme; a pick in its Theme picker is saved by OK.
+act "open the song editor (song themes)" editor '{"mode":"edit"}' 's["dialog"]["editor"] and s["dialog"]["songEditorTheme"] == "Smoke Song Theme"'
+act "pick (Default) in the editor's Theme picker" song-editor-theme '{"themeName":"(Default)"}' 's["dialog"]["songEditorTheme"] == "(Default)"'
+act "pick the theme again" song-editor-theme '{"themeName":"Smoke Song Theme"}' 's["dialog"]["songEditorTheme"] == "Smoke Song Theme"'
+wait_idle
+shot song-editor-theme editor
+pixel "the song editor with its Theme picker has content" "$OUT/song-editor-theme.png" notblank
+act "pick (Default) and press OK" song-editor-theme '{"themeName":"(Default)"}' 's["dialog"]["songEditorTheme"] == "(Default)"'
+act "OK saves the song" accept '' 'r["ok"]'
+wait_idle
+check "the song uses the default theme again" "$LAST" 'not s["dialog"]["editor"] and s["songs"]["current"] == "Smoke Theme Song" and s["songs"]["theme"] == "" and s["preview"]["theme"] == "Default Song"'
+act "go live with the default theme" go-live '' 's["live"]["title"] == "Smoke Theme Song" and s["live"]["theme"] == "Default Song"'
+wait_idle
+shot song-default-output output
+pixel "the output background changed back" "$OUT/song-default-output.png" lacks c46a1f 0.0 0.0 0.2 0.08 50
+# The Songs list's Theme ▸ submenu: (Default) and every theme, the song's own checked.
+act "find the themed song again" search-songs '{"q":"smoke theme song"}' 's["songs"]["results"] == 1'
+act "select it in the list" select-song '{"title":"Smoke Theme Song"}' 's["songs"]["selected"] == 0'
+wait_idle
+act "the Theme submenu lists (Default) and every theme" song-menu '{"mode":"theme"}' 'd["entries"][0] == "(Default)" and "Smoke Song Theme" in d["entries"] and "Default Song" in d["entries"] and d["checked"] == 0'
+wait_idle
+shot song-menu song-menu
+shot song-theme-menu song-theme-menu
+pixel "the song context menu has content" "$OUT/song-menu.png" notblank
+pixel "the Theme submenu has content" "$OUT/song-theme-menu.png" notblank
+act "close the song menu" song-menu '{"mode":"close"}' 'r["ok"]'
+act "Theme ▸ sets the song's theme from the list" set-song-theme '{"title":"Smoke Theme Song","themeName":"Smoke Song Theme"}' 's["songs"]["theme"] == "Smoke Song Theme" and s["preview"]["title"] == "Smoke Theme Song" and s["preview"]["theme"] == "Smoke Song Theme" and s["live"]["theme"] == "Default Song"'
+act "set-song-theme refuses an unknown theme" set-song-theme '{"title":"Smoke Theme Song","themeName":"No Such Theme"}' 'not r["ok"]'
+wait_idle
+act "the submenu checks the song's theme" song-menu '{"mode":"open"}' 'd["entries"][d["checked"]] == "Smoke Song Theme"'
+act "close the song menu again" song-menu '{"mode":"close"}' 'r["ok"]'
+act "the re-themed song goes live" go-live '' 's["live"]["theme"] == "Smoke Song Theme"'
+wait_idle
+shot song-theme-output-2 output
+pixel "the output follows the list's Theme ▸ choice" "$OUT/song-theme-output-2.png" has c46a1f 0.0 0.0 0.2 0.08 5000
+# Schedule items keep their snapshot; adding the song again uses its new theme.
+act "add the themed song to the schedule" add-to-schedule '{"source":"song"}' 's["schedule"]["items"][-1] == "Smoke Theme Song"'
+SONG_THEME_ROW=$(( $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST") - 1 ))
+act "back to (Default) from the list" set-song-theme '{"title":"Smoke Theme Song","themeName":"(Default)"}' 's["songs"]["theme"] == "" and s["preview"]["theme"] == "Default Song"'
+act "the schedule item keeps its theme" select-schedule "{\"index\":$SONG_THEME_ROW}" 's["preview"]["title"] == "Smoke Theme Song" and s["preview"]["theme"] == "Smoke Song Theme"'
+act "add the song again" add-to-schedule '{"source":"song"}' "len(s[\"schedule\"][\"items\"]) == $SONG_THEME_ROW + 2"
+act "the new item uses the song's new theme" select-schedule "{\"index\":$((SONG_THEME_ROW + 1))}" 's["preview"]["title"] == "Smoke Theme Song" and s["preview"]["theme"] == "Default Song"'
+act "remove the second item (song themes)" remove-schedule "{\"index\":$((SONG_THEME_ROW + 1))}" "len(s[\"schedule\"][\"items\"]) == $SONG_THEME_ROW + 1"
+act "remove the first item (song themes)" remove-schedule "{\"index\":$SONG_THEME_ROW}" "len(s[\"schedule\"][\"items\"]) == $SONG_THEME_ROW"
+act "save the schedule (song themes)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+# Deleting the theme sends the song back to the default: no dangling id.
+act "theme the song once more" set-song-theme '{"title":"Smoke Theme Song","themeName":"Smoke Song Theme"}' 's["songs"]["theme"] == "Smoke Song Theme"'
+act "select the themed song (before the delete)" select-song '{"title":"Smoke Theme Song"}' 's["preview"]["theme"] == "Smoke Song Theme"'
+act "delete the song's theme" delete-theme '{"name":"Smoke Song Theme","confirm":true}' 's["themes"]["count"] == 2 and "Smoke Song Theme" not in s["themes"]["names"]'
+check "the song falls back to the default" "$LAST" 's["songs"]["theme"] == ""'
+act "a new deck of the song uses the default" select-song '{"title":"Smoke Theme Song"}' 's["preview"]["title"] == "Smoke Theme Song" and s["preview"]["theme"] == "Default Song"'
+act "the editor shows (Default) after the delete" editor '{"mode":"edit"}' 's["dialog"]["songEditorTheme"] == "(Default)"'
+act "close the editor (song themes)" editor '{"mode":"close"}' 'not s["dialog"]["editor"]'
+act "the fallback goes live" go-live '' 's["live"]["title"] == "Smoke Theme Song" and s["live"]["theme"] == "Default Song"'
+wait_idle
+shot song-fallback-output output
+pixel "the output no longer shows the deleted theme" "$OUT/song-fallback-output.png" lacks c46a1f 0.0 0.0 0.2 0.08 50
+act "the submenu checks (Default) after the delete" song-menu '{"mode":"open"}' 'd["checked"] == 0'
+act "close the song menu (delete)" song-menu '{"mode":"close"}' 'r["ok"]'
+act "delete the themed song" delete-song '{"index":0,"confirm":true}' 'r["ok"]'
+wait_idle
+act "clear the song search (song themes)" search-songs '{"q":""}' 's["songs"]["results"] == s["songs"]["count"]'
+
 # ---- item menus (media and presentation tile menus) --------------------------------------------
 # The right-click / gear menus of the media and presentation tiles (UI-SPEC §3.6), driven
 # through `media-menu {item}` / `presentation-menu {item}`. A square image whose top quarter

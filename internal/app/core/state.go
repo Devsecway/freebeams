@@ -11,6 +11,9 @@ type DeckState struct {
 	Label  string `json:"label"`  // selected/live slide label ("Verse 2", "John 3:16")
 	Text   string `json:"text"`   // selected/live slide text
 	Footer string `json:"footer"` // selected/live slide footer
+
+	// Theme is the name of the theme the deck is drawn with.
+	Theme string `json:"theme"`
 }
 
 // ScheduleState summarises the schedule.
@@ -44,6 +47,10 @@ type SongsState struct {
 	// row, LyricsMatches the rows that needed their lyrics to match.
 	First         string `json:"first,omitempty"`
 	LyricsMatches int    `json:"lyricsMatches"`
+
+	// Theme is the loaded song's own theme ("" when it uses the default song
+	// theme): the per-song theme.
+	Theme string `json:"theme"`
 }
 
 // ScriptureState summarises the Scriptures tab.
@@ -132,6 +139,9 @@ type DialogState struct {
 	Alerts   int    `json:"alerts"`            // error messages queued (shown one at a time)
 	// ThemeEditor reports the theme editor being open.
 	ThemeEditor bool `json:"themeEditor,omitempty"`
+	// SongEditorTheme is the song editor's Theme picker entry ("(Default)" or
+	// a theme name) while the editor is open.
+	SongEditorTheme string `json:"songEditorTheme,omitempty"`
 	// Host is the window the topmost dialog is a child of: "main" for the
 	// operator window, else the dialog under it ("editor", …). It is never the
 	// output window. "" when no dialog is open.
@@ -233,6 +243,7 @@ func deckState(d *models.Deck, i int) DeckState {
 		return ds
 	}
 	ds.Title, ds.ItemID, ds.Count = d.Title, d.ItemID, len(d.Slides)
+	ds.Theme = d.Theme.Name
 	if i >= 0 && i < len(d.Slides) {
 		s := d.Slides[i]
 		ds.Label, ds.Text, ds.Footer = s.Label, s.Text, s.Footer

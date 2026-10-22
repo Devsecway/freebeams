@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 # that (GOOS=macos is not even a Go target: "unsupported GOOS/GOARCH pair"),
 # so resolve the host binary with the target cleared and exec it with the
 # target back in the environment, where gd reads it.
-gd="$(GOOS= GOARCH= go tool -n gd)"
+gd="$(GOOS='' GOARCH='' go tool -n gd)"
 if command -v cygpath >/dev/null 2>&1; then # MSYS2 on Windows: go prints a C:\ path
 	gd="$(cygpath -u "$gd")"
 fi
