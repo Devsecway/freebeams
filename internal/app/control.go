@@ -73,8 +73,14 @@ func (a *App) state() core.State {
 		BibleSelected: a.bibleSel,
 		Scripture: core.ScriptureState{
 			Reference: a.reference, Passage: deckTitle(a.scriptureDeck), Verses: len(a.verseRows),
-			Selected: a.verseSelection(), Status: a.scriptStatus, Error: a.scriptErr,
+			Selected: a.currentVerseRow(), Status: a.scriptStatus, Error: a.scriptErr,
 			CopyrightedAvailable: core.CopyrightedBiblesToImport(a.ewBibles, a.bibles),
+			Listed:               a.listedText(),
+			Rows:                 append([]int{}, a.verseSel.Rows...),
+			Field:                a.refText,
+			Suggestions:          bookNames(a.bookSuggestions()),
+			Suggestion:           a.suggestSel,
+			SuggestionsShown:     a.suggestionsShown(),
 		},
 		Media:         a.mediaStateDoc(),
 		Presentations: a.presentationsStateDoc(),
@@ -194,6 +200,12 @@ type actionArgs struct {
 	Align    string            `json:"align"`    // alert: left|center|right
 	Run      *int              `json:"run"`      // alert-clear: one showing
 
+	// Scriptures (scripture.go): select-verses {rows}; click {target, index,
+	// shift, meta, ctrl, double, button} (hooks.go).
+	Rows   []int  `json:"rows"`
+	Double bool   `json:"double"`
+	Button string `json:"button"`
+
 	// The audio playlist (audio.go): audio-stop {fade}; the other actions
 	// reuse Index, Title, Path(s), Seconds, Value, Mode, On, From, To, Confirm.
 	Fade *bool `json:"fade"`
@@ -268,8 +280,30 @@ func (a *App) handleCommand(cmd *control.Command) {
 			a.bibleSel = i
 		}
 		a.win.Resources.SetTab(ui.TabScriptures)
-		a.win.Scriptures.SetReferenceText(args.Text)
+		a.setReferenceField(args.Text)
 		a.lookupReference(args.Text, cmd)
+	case "pick-suggestion":
+		// Choose book suggestion i for the reference field's text (Enter / Tab /
+		// a click in the dropdown): the field is completed and looked up.
+		if args.Index == nil {
+			cmd.RespondErr(errArgs)
+			return
+		}
+		a.pickSuggestion(*args.Index, cmd)
+	case "select-verses":
+		// Select verse rows of the listed chapters, as clicks in the list do:
+		// Preview shows them and the reference field names them.
+		if len(a.listVerses) == 0 {
+			cmd.RespondErr(errors.New("select-verses: no verses are listed"))
+			return
+		}
+		sel := core.NewRowSelection(args.Rows)
+		if len(sel.Rows) == 0 || sel.Rows[len(sel.Rows)-1] >= len(a.listVerses) {
+			cmd.RespondErr(fmt.Errorf("select-verses: rows must be 0..%d", len(a.listVerses)-1))
+			return
+		}
+		a.selectVerses(sel)
+		ok()
 	case "select-preview-slide":
 		i := args.I
 		if i == nil {

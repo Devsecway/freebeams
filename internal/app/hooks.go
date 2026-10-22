@@ -113,6 +113,11 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 			return true
 		}
 		a.clickScheduleRow(cmd, *args.Index)
+	case "click":
+		// A real mouse click through Godot's input pipeline on a named
+		// target: a verse row, a book suggestion or the Preview monitor, with
+		// modifiers, a double-click or the right button.
+		a.clickTarget(cmd, args)
 	case "split":
 		// Move a splitter, as a drag does (layout runs on the next frame). A
 		// snapped-closed pane is reopened first, as a click on its grip does.
@@ -359,9 +364,9 @@ func isLineEdit(n Node.Instance) (Control.Instance, bool) {
 	return Control.Instance{}, false
 }
 
-// isRowTree matches a row-selecting list (the verse list, not the Bibles).
+// isRowTree matches the multi-select verse list (not the Bibles).
 func isRowTree(n Node.Instance) (Control.Instance, bool) {
-	if t, ok := Object.As[Tree.Instance](n); ok && t.SelectMode() == Tree.SelectRow {
+	if t, ok := Object.As[Tree.Instance](n); ok && t.SelectMode() == Tree.SelectMulti {
 		return t.AsControl(), true
 	}
 	return Control.Instance{}, false
@@ -399,4 +404,74 @@ func isSongTable(n Node.Instance) (Control.Instance, bool) {
 		return t.AsControl(), true
 	}
 	return Control.Instance{}, false
+}
+
+// clickTarget clicks a named target like the operator's mouse:
+// "verse" (row index, scrolled into view first), "suggestion" (index in the
+// reference field's dropdown) or "preview-monitor". shift / meta / ctrl are
+// held; double sends a double-click; button "right" clicks with the right
+// button.
+func (a *App) clickTarget(cmd *control.Command, args actionArgs) {
+	index := -1
+	if args.Index != nil {
+		index = *args.Index
+	}
+	at := func() (Vector2.XY, bool) {
+		switch args.Target {
+		case "verse":
+			return a.win.Scriptures.VerseRowCenter(index)
+		case "suggestion":
+			return a.win.Scriptures.SuggestionCenter(index)
+		case "preview-monitor":
+			r := a.win.PreviewMonitor.AsControl().GetGlobalRect()
+			return Vector2.New(r.Position.X+r.Size.X/2, r.Position.Y+r.Size.Y/2), r.Size.X > 0
+		}
+		return Vector2.XY{}, false
+	}
+	switch args.Target {
+	case "verse", "suggestion", "preview-monitor":
+	default:
+		cmd.RespondErr(fmt.Errorf("click: unknown target %q (verse|suggestion|preview-monitor)", args.Target))
+		return
+	}
+	button, mask := Input.MouseButtonLeft, Input.MouseButtonMaskLeft
+	if args.Button == "right" {
+		button, mask = Input.MouseButtonRight, Input.MouseButtonMaskRight
+	}
+	if args.Target == "verse" {
+		a.win.Scriptures.ScrollVerseIntoView(index)
+	}
+	// One frame for the scroll to apply before the row's position is read.
+	a.after(1, func() {
+		pos, ok := at()
+		if !ok {
+			cmd.RespondErr(fmt.Errorf("click: %s %d is not visible", args.Target, index))
+			return
+		}
+		scale := Window.Get(a.AsNode()).ContentScaleFactor()
+		pos = Vector2.New(pos.X*scale, pos.Y*scale)
+		clicks := 1
+		if args.Double {
+			clicks = 2
+		}
+		for c := 0; c < clicks; c++ {
+			for _, pressed := range []bool{true, false} {
+				ev := InputEventMouseButton.New()
+				ev.SetButtonIndex(button)
+				ev.SetPressed(pressed)
+				ev.SetDoubleClick(pressed && c == 1)
+				if pressed {
+					ev.AsInputEventMouse().SetButtonMask(mask)
+				}
+				mods := ev.AsInputEventWithModifiers()
+				mods.SetShiftPressed(args.Shift)
+				mods.SetMetaPressed(args.Meta)
+				mods.SetCtrlPressed(args.Ctrl)
+				ev.AsInputEventMouse().SetPosition(pos)
+				ev.AsInputEventMouse().SetGlobalPosition(pos)
+				Input.ParseInputEvent(ev.AsInputEvent())
+			}
+		}
+		a.after(nativeKeyFrames, func() { a.answer(cmd, nil) })
+	})
 }

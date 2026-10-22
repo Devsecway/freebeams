@@ -317,6 +317,18 @@ internal/app               Godot: the App node that wires store + presenter + ui
   on any such line (`$OUT/keepalive-types.txt`). A new package whose values goroutines share goes into
   `keepalive.denied`. `GDDEBUG=keepalive` prints every root every frame (filter `[keepalive] root:` out of a smoke
   log); `GDDEBUG=keepalive-cost` (which turns that trace on too) prints the walk's time per root type every 300 frames.
+- A control's `gui_input` *signal* is emitted before its own `_gui_input`, and accepting the event there
+  (`acceptEvent`) skips the built-in handling. The verse list (`ui/scripture.go` `verseInput`) takes the Tree's
+  clicks and navigation keys this way and reports intents; the app owns the multi-selection (`core.RowSelection`)
+  and render projects it with `TreeItem.MoreArgs().Select(0, setAsCursor)` (multi mode: adds to the selection).
+  Turn the Tree's type-to-search off (`SetAllowSearch(false)`), or a typed letter moves the selection behind the app.
+- A double-click arrives as press, release, press (`double_click`), release. Godot's own multi-select Tree narrows
+  the selection on the first release, so a double-click inside it activates one row; `ScripturePanel` defers a
+  plain click inside a multi-row selection by 400 ms (`verseCollapseDelay`) instead.
+- `LineEdit.SetText` puts the caret at column 0 (`searchLocator.setText` moves it to the end).
+- Focus on click: the viewport walks up from the clicked control to the first one whose focus mode is not None,
+  stopping at a `MouseFilterStop` control. An overlay with `FocusNone` + `MouseFilterStop` (the reference field's
+  suggestion list) can be clicked while the LineEdit keeps the focus and its caret.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

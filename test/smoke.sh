@@ -271,8 +271,10 @@ shot scripture-live-output output
 act "Go Back returns the previous item to live" go-back '' 's["live"]["title"] == "Amazing Grace"'
 act "Go Back again" go-back '' 's["live"]["title"] == "John 3:16"'
 pixel "scripture output has content" "$OUT/scripture-live-output.png" notblank
-act "reference John 3:16-18" reference '{"text":"John 3:16-18"}' 's["scripture"]["verses"] == 3 and s["preview"]["count"] == 3'
-act "select preview slide 2" select-preview-slide '{"i":2}' 's["preview"]["index"] == 2 and "18" in s["preview"]["label"] and s["scripture"]["selected"] == 2'
+# The verse list lists whole chapters with the referenced verses selected;
+# Preview shows the selected verses.
+act "reference John 3:16-18" reference '{"text":"John 3:16-18"}' 's["scripture"]["verses"] == 36 and s["scripture"]["listed"] == "John 3" and s["scripture"]["rows"] == [15, 16, 17] and s["preview"]["count"] == 3'
+act "select preview slide 2" select-preview-slide '{"i":2}' 's["preview"]["index"] == 2 and "18" in s["preview"]["label"] and s["scripture"]["selected"] == 17'
 act "reference 1 cor 13" reference '{"text":"1 cor 13"}' 's["preview"]["title"] == "1 Corinthians 13" and s["scripture"]["verses"] == 13 and s["preview"]["count"] == 13'
 act "reference ps 23:1-3" reference '{"text":"ps 23:1-3"}' 's["preview"]["title"] == "Psalms 23:1-3" and s["preview"]["count"] == 3 and s["preview"]["footer"] == "Psalms 23:1 (KJV)"'
 act "reference in another Bible" reference '{"text":"jn 3:16","bible":"RVA"}' 's["scripture"]["bible"] == "RVA" and "(RVA)" in s["preview"]["footer"]'
@@ -309,14 +311,67 @@ pixel "first preview tile is at the grid padding" "$OUT/grid-deck-change.png" ha
 # Review #2: the verse Go Live sends is the highlighted one, also after
 # moving in the Preview grid (not the last clicked verse row).
 act "the passage goes live at verse 16" go-live '{"slide":0}' 's["live"]["title"] == "John 3:16-18" and s["live"]["index"] == 0'
-act "select preview slide 3 (John 3:18)" select-preview-slide '{"i":2}' 's["scripture"]["selected"] == 2 and s["resource"]["caption"] == "John 3:18 · 3 / 3"'
-act "resource Go Live sends the highlighted verse" resource-go-live '' 's["live"]["title"] == "John 3:16-18" and s["live"]["index"] == 2 and s["live"]["label"] == "John 3:18" and s["scripture"]["selected"] == 2'
-act "move the preview back to slide 2" select-preview-slide '{"i":1}' 's["scripture"]["selected"] == 1 and s["resource"]["caption"] == "John 3:17 · 2 / 3"'
+act "select preview slide 3 (John 3:18)" select-preview-slide '{"i":2}' 's["scripture"]["selected"] == 17 and s["resource"]["caption"] == "John 3:18 · 3 / 3"'
+act "resource Go Live sends the highlighted verse" resource-go-live '' 's["live"]["title"] == "John 3:16-18" and s["live"]["index"] == 2 and s["live"]["label"] == "John 3:18" and s["scripture"]["selected"] == 17'
+act "move the preview back to slide 2" select-preview-slide '{"i":1}' 's["scripture"]["selected"] == 16 and s["resource"]["caption"] == "John 3:17 · 2 / 3"'
 act "Go Live again follows the preview" resource-go-live '' 's["live"]["index"] == 1 and s["live"]["label"] == "John 3:17"'
 # Review #1: the verse list has no use for Backspace, so it is still Prev.
 act "focus the verse list" focus '{"target":"verse-list"}' 's["focus"] == "list"'
 act "Backspace in the verse list is Prev" native-key '{"name":"backspace"}' 's["live"]["index"] == 0 and s["schedule"]["items"] == []'
 act "release focus (verses)" focus '{"target":"none"}' 's["focus"] == "none"'
+
+# The locator: a partial book lists the books it may be (typed through
+# Godot's input pipeline), a suggestion completes the field, "john 3" lists
+# the chapter, and Shift / Cmd clicks select verses that go to Preview and
+# Live together. A double-click on the Preview monitor goes live.
+act "focus the reference field" focus '{"target":"reference"}' 's["focus"] == "text"'
+act "Cmd+A selects the field's text" native-key '{"name":"a","meta":true}' 'r["ok"]'
+act "type j" native-key '{"name":"j"}' 's["scripture"]["field"] == "j" and s["scripture"]["suggestionsShown"]'
+act "type o" native-key '{"name":"o"}' 's["scripture"]["field"] == "jo"'
+act "type h" native-key '{"name":"h"}' 's["scripture"]["field"] == "joh" and s["scripture"]["suggestions"] == ["John", "1 John", "2 John", "3 John"] and s["scripture"]["suggestionsShown"] and s["scripture"]["suggestion"] == 0'
+sleep 0.5
+wait_idle
+check "joh is not an error (John 1 is listed)" "$LAST" 'not s["scripture"]["error"] and s["scripture"]["listed"] == "John 1" and s["scripture"]["suggestionsShown"]'
+shot scripture-suggestions main
+act "Down highlights 1 John" native-key '{"name":"down"}' 's["scripture"]["suggestion"] == 1 and s["scripture"]["field"] == "joh"'
+act "Enter picks 1 John" native-key '{"name":"enter"}' 's["scripture"]["field"] == "1 John " and not s["scripture"]["suggestionsShown"]'
+wait_idle
+check "1 John 1 is listed" "$LAST" 's["scripture"]["listed"] == "1 John 1" and s["preview"]["title"] == "1 John 1" and not s["scripture"]["error"]'
+act "Cmd+A again" native-key '{"name":"a","meta":true}' 'r["ok"]'
+act "type g" native-key '{"name":"g"}' 's["scripture"]["suggestions"] == ["Genesis", "Galatians"] and s["scripture"]["suggestionsShown"]'
+act "Esc closes the suggestions" native-key '{"name":"escape"}' 'not s["scripture"]["suggestionsShown"] and s["scripture"]["field"] == "g" and s["focus"] == "text"'
+act "type e (the list opens again)" native-key '{"name":"e"}' 's["scripture"]["suggestions"] == ["Genesis"] and s["scripture"]["suggestionsShown"] and s["scripture"]["suggestion"] == 0'
+act "click the Genesis suggestion" click '{"target":"suggestion","index":0}' 's["scripture"]["field"] == "Genesis " and not s["scripture"]["suggestionsShown"] and s["focus"] == "text"'
+wait_idle
+check "a book alone lists its first chapter" "$LAST" 's["scripture"]["listed"] == "Genesis 1" and s["scripture"]["verses"] == 31'
+act "xyz 3 is an error" reference '{"text":"xyz 3"}' 'not r["ok"] and "unknown book" in r["error"]'
+LAST="$(state)"
+check "the unknown book is a red status, with no suggestions" "$LAST" 's["scripture"]["error"] and s["scripture"]["suggestions"] == []'
+act "jo 3 is ambiguous, not an error" reference '{"text":"jo 3"}' 'r["ok"] and not s["scripture"]["error"] and s["scripture"]["status"].startswith("Choose a book: Joshua") and len(s["scripture"]["suggestions"]) == 8'
+act "john 3 lists the chapter" reference '{"text":"john 3"}' 's["scripture"]["verses"] == 36 and s["scripture"]["rows"] == list(range(36)) and s["preview"]["title"] == "John 3" and s["preview"]["count"] == 36'
+act "john 3:16 selects verse 16" reference '{"text":"john 3:16"}' 's["scripture"]["verses"] == 36 and s["scripture"]["rows"] == [15] and s["preview"]["count"] == 1 and s["preview"]["title"] == "John 3:16"'
+act "click verse 16" click '{"target":"verse","index":15}' 's["scripture"]["rows"] == [15] and s["focus"] == "list"'
+act "Shift-click verse 18" click '{"target":"verse","index":17,"shift":true}' 's["scripture"]["rows"] == [15, 16, 17] and s["preview"]["title"] == "John 3:16-18" and s["preview"]["count"] == 3 and s["scripture"]["field"] == "John 3:16-18"'
+wait_idle
+shot scripture-multi-preview main
+act "Go Live sends the three verses" resource-go-live '' 's["live"]["title"] == "John 3:16-18" and s["live"]["count"] == 3 and s["live"]["index"] == 0 and "For God so loved" in s["live"]["text"]'
+wait_idle
+shot scripture-multi-output output
+pixel "the passage is on the output" "$OUT/scripture-multi-output.png" notblank
+act "Cmd-click verse 20 adds it" click '{"target":"verse","index":19,"meta":true}' 's["scripture"]["rows"] == [15, 16, 17, 19] and s["preview"]["title"] == "John 3:16-18, 20" and s["preview"]["count"] == 4'
+act "Cmd-click verse 17 removes it" click '{"target":"verse","index":16,"meta":true}' 's["scripture"]["rows"] == [15, 17, 19] and s["scripture"]["passage"] == "John 3:16, 18, 20" and s["scripture"]["field"] == "John 3:16, 18, 20"'
+act "Shift+Down extends from the anchor" native-key '{"name":"down","shift":true}' 's["scripture"]["rows"] == [16, 17] and s["preview"]["title"] == "John 3:17-18"'
+act "a double-click in the selection sends it all live" click '{"target":"verse","index":17,"double":true}' 's["live"]["title"] == "John 3:17-18" and s["live"]["index"] == 1 and s["scripture"]["rows"] == [16, 17]'
+act "a plain click in the selection" click '{"target":"verse","index":16}' 's["scripture"]["rows"] == [16, 17]'
+sleep 0.6
+LAST="$(state)"
+check "narrows it once no double-click follows" "$LAST" 's["scripture"]["rows"] == [16] and s["preview"]["title"] == "John 3:17"'
+act "add the passage to the schedule" add-to-schedule '{"source":"scripture"}' 's["schedule"]["items"] == ["John 3:17"]'
+act "remove it again" remove-schedule '{"index":0}' 's["schedule"]["items"] == []'
+act "click verse 21" click '{"target":"verse","index":20}' 's["preview"]["title"] == "John 3:21" and s["live"]["title"] == "John 3:17-18"'
+act "a single click on the Preview monitor does nothing" click '{"target":"preview-monitor"}' 's["live"]["title"] == "John 3:17-18"'
+act "a double-click on the Preview monitor goes live" click '{"target":"preview-monitor","double":true}' 's["live"]["title"] == "John 3:21" and s["live"]["index"] == s["preview"]["index"]'
+act "release focus (locator)" focus '{"target":"none"}' 's["focus"] == "none"'
 
 act "missing verses report an error" reference '{"text":"jn 3:99"}' 'not r["ok"] and "no verses" in r["error"].lower()'
 LAST="$(state)"

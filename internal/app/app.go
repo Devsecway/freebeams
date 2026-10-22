@@ -112,10 +112,18 @@ type App struct {
 	scriptureDeck *models.Deck
 	verseRows     []string
 	versesVer     int
-	verseSel      int // verse last chosen in the verse list (see verseSelection)
+	verseSel      core.RowSelection // the selected rows of the verse list (scripture.go)
 	scriptStatus  string
 	scriptErr     bool
 	verseGen      core.Generation
+
+	// The verse list and the reference field (scripture.go).
+	listVerses []models.Verse // the verses of the listed chapters, one per row
+	refText    string         // the reference field's text (typed, or set by the app)
+	refVer     int            // bumped when the app sets the field's text
+	refFocused bool           // the reference field has keyboard focus
+	suggestSel int            // the highlighted book suggestion
+	suggestOff string         // the text whose suggestions Esc dismissed
 
 	songRes resourcePreview // the Scriptures preview derives from verseSelection
 
@@ -197,7 +205,8 @@ func (a *App) Ready() {
 	a.results = make(chan func(), 64)
 	a.pres = models.NewPresenter()
 	a.sched = models.NewSchedule()
-	a.schedSel, a.songSel, a.bibleSel, a.verseSel = -1, -1, -1, -1
+	a.schedSel, a.songSel, a.bibleSel = -1, -1, -1
+	a.verseSel = core.NewRowSelection(nil)
 	a.view = newViewCache()
 	a.inputRec = keepalive.Hide(openInputRecorder())
 	a.initPlayback()

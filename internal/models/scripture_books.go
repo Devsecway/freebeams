@@ -166,7 +166,8 @@ func bookKey(name string) string {
 
 // FindBook resolves a book name, abbreviation, alias or unambiguous prefix
 // ("jn", "1 Cor", "I Samuel", "Song of Songs", "Phile"). Matching ignores case,
-// spaces and periods. Errors wrap ErrBadReference.
+// spaces and periods. Errors wrap ErrBadReference; a prefix that several books
+// share ("jo") is an *AmbiguousBookError naming them.
 func FindBook(name string) (Book, error) {
 	k := bookKey(name)
 	if k == "" {
@@ -191,13 +192,58 @@ func FindBook(name string) (Book, error) {
 	case 1:
 	default:
 		sort.Ints(matches)
-		names := make([]string, len(matches))
-		for i, n := range matches {
-			names[i] = Books[n-1].Name
+		amb := &AmbiguousBookError{Name: name}
+		for _, n := range matches {
+			amb.Books = append(amb.Books, Books[n-1])
 		}
-		return Book{}, fmt.Errorf("%w: ambiguous book %q (%s)", ErrBadReference, name, strings.Join(names, ", "))
+		return Book{}, amb
 	}
 	match := matches[0]
 	b, _ := BookByNumber(match)
 	return b, nil
+}
+
+// AmbiguousBookError is FindBook's error for a prefix that several books share
+// ("jo": Joshua, Job, Joel, Jonah, John, 1 John, 2 John, 3 John). It wraps
+// ErrBadReference.
+type AmbiguousBookError struct {
+	Name  string // what was typed
+	Books []Book // the candidates, in canonical order
+}
+
+func (e *AmbiguousBookError) Error() string {
+	names := make([]string, len(e.Books))
+	for i, b := range e.Books {
+		names[i] = b.Name
+	}
+	return fmt.Sprintf("%v: ambiguous book %q (%s)", ErrBadReference, e.Name, strings.Join(names, ", "))
+}
+
+func (e *AmbiguousBookError) Unwrap() error { return ErrBadReference }
+
+// BooksMatching returns the books that prefix may be the start of, in canonical
+// order: a book matches when its name, abbreviation or one of its aliases starts
+// with prefix (compared like FindBook: case, spaces and periods ignored, a
+// leading ordinal word read as its digit). A prefix without an ordinal also
+// matches the numbered books by the rest of their name, so "joh" offers John,
+// 1 John, 2 John and 3 John, and "1" every book that starts with 1. Nil for an
+// empty prefix or one that matches nothing.
+func BooksMatching(prefix string) []Book {
+	k := bookKey(prefix)
+	if k == "" {
+		return nil
+	}
+	numbered := k[0] >= '1' && k[0] <= '3'
+	var out []Book
+	for _, b := range Books {
+		for _, name := range append([]string{b.Name, b.Abbrev}, b.Aliases...) {
+			key := bookKey(name)
+			if strings.HasPrefix(key, k) ||
+				(!numbered && len(key) > 1 && key[0] >= '1' && key[0] <= '3' && strings.HasPrefix(key[1:], k)) {
+				out = append(out, b)
+				break
+			}
+		}
+	}
+	return out
 }
