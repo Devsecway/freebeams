@@ -1,8 +1,8 @@
 # Remote control (PLAN v0.2 item 2)
 
 A phone or tablet on the church Wi-Fi drives FreeBeams from a web page: the schedule, the Preview and Live slide
-lists, Next / Prev, Black / Clear / Logo, going live with a schedule item, and adding a library song to the
-schedule. Nothing is installed on the phone. The page is plain HTML, CSS and JavaScript embedded in the binary
+lists, Next / Prev, Black / Clear / Logo, going live with a schedule item, adding a library song to the
+schedule, and the audio playlist's play / pause and previous / next track. Nothing is installed on the phone. The page is plain HTML, CSS and JavaScript embedded in the binary
 (`internal/remote/web`), with no external requests, because church Wi-Fi is often offline.
 
 ## Using it
@@ -40,7 +40,9 @@ The remote listens on every interface, so the server assumes that anyone on the 
 - **A whitelist of actions.** A phone reaches only the actions in `internal/remote/actions.go`. Each is rebuilt
   from a few typed fields and mapped to one app action: `next`, `prev`, `first`, `last`, `black`/`clear`/`logo`
   (`{on}` sets the mode rather than toggling it, so two phones agree), `go-live {slide}`, `preview-item {index}`,
-  `live-item {index}`, `live-slide {index}`, `add-song {id}`. Device permissions (view, control, schedule) gate
+  `live-item {index}`, `live-slide {index}`, `add-song {id}`, and the audio playlist's `audio-toggle`,
+  `audio-next`, `audio-prev` (no arguments; stop, seek, volume and editing the playlist stay on the operator's
+  computer). Device permissions (view, control, schedule) gate
   them. Approval grants all three today. The loopback control server (`internal/control`, its own bearer key) is
   separate and never exposed. Files, settings, quitting and key events cannot be reached from the network.
 - **No TLS.** The LAN is trusted for confidentiality. The token travels in clear on the Wi-Fi, so an attacker who

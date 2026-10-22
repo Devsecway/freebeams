@@ -205,6 +205,7 @@ func LoadSchedule(path string) (*Schedule, error) {
 		s.Title = titleFromPath(path)
 	}
 	s.repairIDs()
+	s.Playlist.Normalize()
 	s.Path, s.Dirty = path, false
 	return &s, nil
 }

@@ -78,6 +78,12 @@ type viewCache struct {
 	alertsAnim      bool
 	alertsCdRunning bool
 	alertsCdStatus  string
+
+	// The background audio (audio.go): the open player, the seek last
+	// applied to it and the rows the track list shows.
+	audioSrc  *render.MediaSource
+	audioSeek int
+	audioRows []ui.PlaylistRow
 }
 
 func newViewCache() viewCache {
@@ -189,6 +195,7 @@ func (a *App) buildUI() {
 	a.wireStage()    // the stage display (stage.go)
 	a.wireRemote()   // the remote control's pairing dialog and Options page (remote.go)
 	a.wireAlerts()   // the Alerts ▾ menu and its dialogs (alerts.go)
+	a.wireAudio()    // the audio playlist under the schedule (audio.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -422,6 +429,9 @@ func (a *App) render() {
 
 	// The Alerts ▾ menu and the alert dialogs' lists (alerts.go).
 	a.renderAlerts(v)
+
+	// The audio playlist and its player (audio.go).
+	a.renderAudio()
 
 	// Error messages: the first queued alert is on screen.
 	switch {

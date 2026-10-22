@@ -92,6 +92,80 @@ the track or a keyboard step seeks at once. Icons: `play`, `pause`, `skip_back`,
 (default) or `"preview"`. `search-media {"kind": "audio"}` lists the Audio collection; `/state.media` has `audio`
 (count) and `native`.
 
+## Audio playlist (background audio)
+
+An audio item in the schedule plays only while it is the Live item. Churches also need music that keeps playing
+while other items go live: walk-in music under the announcements loop, quiet music under a prayer slide. That is
+the **audio playlist** under the Schedule panel.
+
+**EasyWorship.** EW 7/8 has no playlist. Its audio files are schedule items with Media Usage (Auto / Background /
+Foreground) and Repeating on the Audio Properties form (`Form_VideoProperties`, `Frame_InspectorMedia`), and the
+library's Audio collection (`ResourceAudioAdd` / `ResourceAudioEdit`). The decoded forms have no Playlist,
+Soundtrack or background-music bar. So the feature is our own, kept minimal and in the existing UI's terms: a
+panel in the Schedule column (it belongs to the service, like the schedule), the Media tab's Audio collection as
+its source, and the monitors' transport vocabulary (round play / pause, skip, loop, volume icons).
+
+**Behaviour (decisions).**
+
+- A playlist is an ordered list of audio files from the media library, saved **with the schedule**
+  (`models.Schedule.Playlist`, the `playlist` key of the `.fbs` file: `tracks [{id, mediaId, path, title, seconds}]`,
+  `repeat`, `shuffle`, `fadeOut`). It is left out of the file while it is empty with default settings
+  (`omitzero` + `Playlist.IsZero`), so schedules without music are written exactly as before; schedules from before
+  the playlist (and `.fws` files) open with an empty one. The format version stays 1: older FreeBeams builds ignore
+  the key. Tracks keep their own path and title, so a schedule still plays a file that left the library; a track
+  whose file is gone is shown dimmed and skipped. Not in the library itself: one playlist per service is what
+  churches plan, and a library of playlists can come later from the same model.
+- It plays **independently of the Live slide**: going live with anything (a song, a video, another audio item),
+  Black, Clear and **Logo** never touch it. Logo is deliberately included: walk-in music under the logo screen
+  before the service is the main use. A Live audio or video item plays on top of it (the operator pauses the
+  playlist if they want).
+- Play starts the cued track (or resumes); at the end of a track the next one starts. **Repeat** cycles off → all →
+  one (the transport's button; `loop` icon, `repeat_one` for one): off stops after the last track with the first
+  one cued, all wraps around, one plays the track again. The operator's Next / Prev ignore repeat one. **Prev**
+  restarts a track that has played for more than 3 s (`core.PrevRestart`), as music players do.
+- **Shuffle** plays every track once per pass in a random order (no track twice in a row across passes); turning
+  it on keeps the current track first, a track added mid-pass is put among the ones still to come, and a picked
+  track (double-click) takes the current place so the pass stays complete.
+- **Stop** fades out over the playlist's fade-out (⚙ ▸ Fade Out on Stop ▸ Off / 2 / 5 / 10 s; any 0–30 s through
+  the control API), then closes the player; a second Stop during the fade stops at once, Play cancels it. Stop keeps
+  the track cued (it starts from 0).
+- A missing file (checked with `os.Stat` whenever the player moves) and a file the player fails on
+  (`TrackFailed`, logged once) are skipped; when nothing can play, Play says so.
+- The volume is the operator's, not the schedule's (not saved, not dirty). Editing the list, repeat, shuffle and
+  the fade-out marks the schedule dirty. New / Open schedule stop the music and cue the new playlist's first
+  track. Removing the playing track plays the one now at its place.
+
+**Pieces.**
+
+- `internal/models/playlist.go`: `Playlist`, `PlaylistTrack`, `RepeatMode`; Insert / Remove / Move / Normalize,
+  `Schedule.EditPlaylist` (marks dirty). `playlist_test.go`.
+- `internal/app/core/audio.go`: `AudioPlayer`, the pure state machine (status, current track by ID, volume,
+  seek requests, fade-out, the shuffle order of the pass, failed files) with injected `Exists` and `Rand`;
+  `State` builds `/state.audio`. `audio_test.go` covers the order, the end of the list, repeat all / one,
+  missing and failing files, shuffle without repeats, Prev / Next while stopped or paused, the fade, and edits.
+- `internal/render/audiosource.go`: `RoleAudio`, an audio-only `MediaSource` role (`OpenAudio` / `CloseAudio`),
+  and `PumpMedia`. It is additive: the `nativePlayer` interface and `videosource.go` are unchanged, so the playlist
+  plays through whatever backend plays the monitors (AVFoundation on macOS; the ffmpeg-pipe player once it lands
+  for Windows / Linux). The source has no layer: the app opens and closes it in render and pumps it every frame,
+  since no SlideView may hold a source while only music plays.
+- `internal/app/audio.go`: events (panel callbacks, control actions, `audioEvents` turning the player's end /
+  failure into state, the fade's end), `renderAudio` (opens the file the state wants, applies seek before play,
+  volume × fade gain, play / pause; then the panel), `/state.audio`, the phone's music bar.
+- `internal/ui/playlist.go`: `ui.AudioPlaylist`, a dumb view under the schedule list: header (+ ▾ Add Selected
+  Audio / Add Audio Files…, ⚙ ▾ Fade Out on Stop ▸ / Remove Track / Clear Playlist), the track list (▶ / ❚❚ on the
+  current track, missing files dimmed; double-click plays; right-click Play Track / Move Up / Move Down / Remove),
+  and the transport: title, `0:12 / 3:00`, seek slider, ⏮ ⏯ ⏭ ⏹, repeat, shuffle, volume. The Media tab's tile menu
+  has **Add to Audio Playlist** (audio tiles only). Icons `stop`, `shuffle`, `repeat_one` (`uicore/icons.go`).
+
+**Automation.** `/state.audio`: `status (stopped|playing|paused), playing, track, title, next, order, position,
+duration, volume, gain, fading, repeat, shuffle, fadeOut, tracks [{title, path, seconds, missing}], native, loaded,
+failed`. Actions: `audio-play {index}`, `audio-pause`, `audio-toggle`, `audio-stop {fade}`, `audio-next`,
+`audio-prev`, `audio-seek {seconds}`, `audio-volume {value}`, `audio-repeat {mode}` (no mode cycles),
+`audio-shuffle {on}` (no on toggles), `audio-fade-out {seconds}`, `playlist-add {index | title | path | paths}`
+(a Media tab item, default the selection, or audio files, which are added to the library too),
+`playlist-remove {index}`, `playlist-move {from, to}`, `playlist-clear {confirm}`, `media-menu {item:
+"add-to-playlist"}`. Phones: `audio-toggle`, `audio-next`, `audio-prev` (docs/REMOTE.md).
+
 ## Fallbacks
 
 - A file AVFoundation cannot open or play (`status failed`): the slide shows its poster (or black for audio), the
@@ -107,4 +181,6 @@ the track or a keyboard step seeks at once. Icons: `play`, `pause`, `skip_back`,
 - Poster frames through `AVAssetImageGenerator` (videos still need ffmpeg for a thumbnail on macOS).
 - A per-item Repeat / Aspect property on `models.Media`: `models.Background.Loop` is the hook (`Media.Background()`
   sets it; `PlaybackDefaults` reads it).
-- Audio playback off macOS.
+- Audio playback off macOS (the audio playlist included: it plays through the same player layer).
+- Audio playlist: drag-and-drop from the Media tab into the list, a crossfade between tracks, playlists kept in the
+  library (reusable across services), routing the music to its own output device.

@@ -87,6 +87,7 @@ func (a *App) state() core.State {
 		Stage:         a.stageStateDoc(),
 		Remote:        a.remoteStateDoc(),
 		Alerts:        a.alertsStateDoc(),
+		Audio:         a.audioStateDoc(),
 		LastError:     a.lastError,
 		Dialog:        dialog,
 		WindowTitle:   a.win.WindowTitle(),
@@ -191,6 +192,10 @@ type actionArgs struct {
 	Count    *int              `json:"count"`    // alert: passes
 	Align    string            `json:"align"`    // alert: left|center|right
 	Run      *int              `json:"run"`      // alert-clear: one showing
+
+	// The audio playlist (audio.go): audio-stop {fade}; the other actions
+	// reuse Index, Title, Path(s), Seconds, Value, Mode, On, From, To, Confirm.
+	Fade *bool `json:"fade"`
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -521,7 +526,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleStageCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleStageCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleAudioCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}

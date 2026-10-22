@@ -78,6 +78,18 @@
     <button class="mode" data-mode="logo" type="button" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="13" rx="2"/><path d="M5 16l4.5-5 3 3 2-2 4.5 4"/><circle cx="15.5" cy="9" r="1.4" class="fill"/></svg><span>Logo</span></button>
   </div>
 
+  <!-- The background audio playlist (shown while it has tracks). -->
+  <div id="music" class="music" hidden>
+    <svg class="music-note" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+    <div class="music-text">
+      <div class="music-label" id="music-label">Audio playlist</div>
+      <div class="music-title" id="music-title"></div>
+    </div>
+    <button id="music-prev" class="music-btn" type="button" aria-label="Previous track"><svg viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M19 5l-9 7 9 7z" class="fill"/></svg></button>
+    <button id="music-play" class="music-btn play" type="button" aria-label="Play or pause the music" data-playing="false"><svg class="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" class="fill"/></svg><svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" class="fill"/><rect x="14" y="4" width="4" height="16" rx="1" class="fill"/></svg></button>
+    <button id="music-next" class="music-btn" type="button" aria-label="Next track"><svg viewBox="0 0 24 24"><path d="M18 5v14"/><path d="M5 5l9 7-9 7z" class="fill"/></svg></button>
+  </div>
+
   <nav class="tabs" role="tablist">
     <button class="tab" data-tab="schedule" role="tab" type="button">Schedule</button>
     <button class="tab" data-tab="slides" role="tab" type="button">Slides</button>
