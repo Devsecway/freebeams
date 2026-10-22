@@ -69,7 +69,8 @@ type App struct {
 	// (the app dies): services sit behind a keepalive.Hidden (see
 	// internal/keepalive; read them through st() / ctrl()), and the context
 	// behind a func (a *cancelCtx's children map is written by every derived
-	// context).
+	// context). test/smoke.sh fails when the walk reaches such a type
+	// (FREEBEAMS_KEEPALIVE_CHECK, keepalivecheck.go).
 	inputRec keepalive.Hidden[inputRecorder]  // FREEBEAMS_INPUT_LOG debugging aid (*os.File, *bufio.Writer)
 	lib      keepalive.Hidden[store.Store]    // the library: *sql.DB, used from every async job
 	ctrlSrv  keepalive.Hidden[control.Server] // the control HTTP server
@@ -192,6 +193,7 @@ func (a *App) ctrl() *control.Server { return a.ctrlSrv.Get() }
 func (a *App) Ready() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.ctx, a.cancel = func() context.Context { return ctx }, cancel
+	initKeepaliveCheck() // FREEBEAMS_KEEPALIVE_CHECK (keepalivecheck.go)
 	a.results = make(chan func(), 64)
 	a.pres = models.NewPresenter()
 	a.sched = models.NewSchedule()
@@ -417,6 +419,7 @@ func (a *App) Process(delta Float.X) {
 	if a.quitting {
 		return
 	}
+	checkKeepalive() // FREEBEAMS_KEEPALIVE_CHECK: nothing goroutine-shared is walked
 	for drained := false; !drained; {
 		select {
 		case fn := <-a.results:
@@ -605,5 +608,6 @@ func (a *App) shutdown() {
 		}
 		a.lib = keepalive.Hidden[store.Store]{}
 	}
+	writeKeepaliveTypes()
 	SceneTree.Get(a.AsNode()).Quit()
 }

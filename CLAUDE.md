@@ -298,11 +298,25 @@ internal/app               Godot: the App node that wires store + presenter + ui
   `SetSamplerVisible(false)` in dialogs.
 - A context menu on a widget another feature also clicks: connect `OnGuiInput` on the instance (a signal) instead of
   defining `GuiInput` on the extension type, so the handlers coexist (`ui.PreviewMenu` on `MonitorHost`).
-- graphics.gd's per-frame keepalive walk (`keep_reachable_instances_alive`) follows every pointer, interface and map
-  reachable from an extension instance, even unexported plain-Go ones. A map a goroutine writes there is a
-  `fatal error: concurrent map iteration and map write` (the app dies). `App.ctx` was one: a `*cancelCtx` whose
-  `children` map every async job's derived context writes; it is now a `func() context.Context` (func, chan and
-  `unsafe.Pointer` fields are not walked). `App.st` (`*sql.DB`: `dep`, `openStmt` maps) is the same shape.
+- graphics.gd's per-frame keepalive walk (`keep_reachable_instances_alive`, classdb `keepalive.go`) reflects over
+  every field of every extension instance, exported or not, on the main thread and without a lock. It follows
+  pointers, slices, arrays, maps (iterating them) and interfaces (into the dynamic type) wherever an engine
+  `Instance` or an interface may be; it skips func, chan, `unsafe.Pointer` and scalar fields, exported Node fields
+  and pointers to other extension classes. Anything a goroutine mutates must not be reachable that way: a map is
+  `fatal error: concurrent map iteration and map write` (the app dies), a slice or interface a torn read.
+  `App.ctx` (a `*cancelCtx`, whose `children` map every derived context writes) and `App.st` (`*sql.DB`: `dep`,
+  `openStmt`) both were. **Rule:** hold a service (the store, the control and remote servers, a decoder with
+  goroutines, anything from `net`, `database/sql`, `os/exec`, `bufio`, …) in a `keepalive.Hidden[T]`
+  (`internal/keepalive`: one `unsafe.Pointer` field, which the walk skips and the GC traces) and read it through
+  an accessor (`a.st()`, `a.ctrl()`, `a.rm.srv.Get()`, `ffPlayer.p()`); a context goes behind a
+  `func() context.Context`. Never hide an engine object: a RefCounted only a Hidden references is freed at the end
+  of the frame (keep `Instance`s in walked fields or pin them). The guard: `FREEBEAMS_KEEPALIVE_CHECK=1|<path>`
+  reads graphics.gd's compiled-walker cache (`compiled_keepalives`, linkname in `internal/app/keepalivecheck.go`)
+  each frame and logs `[keepalive-check] walked <type>` for every walked type `keepalive.Risk` denies (by
+  package); `<path>` also gets the sorted list of walked types at shutdown. `test/smoke.sh` runs with it and fails
+  on any such line (`$OUT/keepalive-types.txt`). A new package whose values goroutines share goes into
+  `keepalive.denied`. `GDDEBUG=keepalive` prints every root every frame (filter `[keepalive] root:` out of a smoke
+  log); `GDDEBUG=keepalive-cost` (which turns that trace on too) prints the walk's time per root type every 300 frames.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:
