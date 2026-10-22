@@ -25,4 +25,5 @@ func RegisterAll() {
 	classdb.Register[demoDriver]()
 	classdb.Register[demoThumb]()
 	classdb.Register[transportButton]()
+	classdb.Register[suggestionList]()
 }

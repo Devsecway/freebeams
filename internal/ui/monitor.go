@@ -7,6 +7,9 @@ import (
 
 	"graphics.gd/classdb/Container"
 	"graphics.gd/classdb/Control"
+	"graphics.gd/classdb/Input"
+	"graphics.gd/classdb/InputEvent"
+	"graphics.gd/classdb/InputEventMouseButton"
 	"graphics.gd/classdb/Node"
 	"graphics.gd/classdb/PanelContainer"
 	"graphics.gd/variant/Callable"
@@ -27,6 +30,11 @@ type MonitorHost struct {
 	// FitWidth makes the host's minimum height follow its width (a 16:9 screen
 	// spanning the full width), for use in vertical boxes.
 	FitWidth bool `gd:"-"`
+
+	// OnDoubleClick reports a left double-click on the monitor (the Preview
+	// monitor goes live). Single clicks are not taken: they pass to the
+	// parent as before.
+	OnDoubleClick func() `gd:"-"`
 
 	bg     PanelContainer.Instance // surround (FwOutput), hidden for thumbnails
 	screen PanelContainer.Instance // black screen + frame (FwScreen)
@@ -105,6 +113,16 @@ func (m *MonitorHost) Content() Control.Instance {
 func (m *MonitorHost) ScreenRect() uicore.Rect {
 	size := m.AsControl().Size()
 	return uicore.Letterbox(float64(size.X), float64(size.Y), m.Aspect, m.Margin)
+}
+
+func (m *MonitorHost) GuiInput(ev InputEvent.Instance) {
+	mb, ok := Object.As[InputEventMouseButton.Instance](ev)
+	if !ok || m.OnDoubleClick == nil || mb.ButtonIndex() != Input.MouseButtonLeft ||
+		!mb.AsInputEvent().IsPressed() || !mb.DoubleClick() {
+		return
+	}
+	m.OnDoubleClick()
+	acceptEvent(m.AsControl())
 }
 
 func (m *MonitorHost) Notification(what Object.Notification) {

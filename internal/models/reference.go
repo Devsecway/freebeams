@@ -59,16 +59,7 @@ func ParseReference(s string) (Passage, error) {
 		return Passage{}, badRef(input, "empty reference")
 	}
 
-	// Split "1 Cor 13:4" / "1co13:4" into the book part and the rest: an optional
-	// leading ordinal digit, then everything up to the first digit.
-	i := 0
-	if len(s) > 1 && s[0] >= '1' && s[0] <= '3' && !isDigit(s[1]) {
-		i = 1
-	}
-	for i < len(s) && !isDigit(s[i]) {
-		i++
-	}
-	bookPart, rest := s[:i], s[i:]
+	bookPart, rest := splitBook(s)
 	book, err := FindBook(bookPart)
 	if err != nil {
 		return Passage{}, fmt.Errorf("parse reference %q: %w", input, err)
@@ -95,6 +86,19 @@ func ParseReference(s string) (Passage, error) {
 	}
 	p.Ranges = ranges
 	return p, nil
+}
+
+// splitBook splits "1 Cor 13:4" / "1co13:4" into the book part and the rest:
+// an optional leading ordinal digit, then everything up to the first digit.
+func splitBook(s string) (book, rest string) {
+	i := 0
+	if len(s) > 1 && s[0] >= '1' && s[0] <= '3' && !isDigit(s[1]) {
+		i = 1
+	}
+	for i < len(s) && !isDigit(s[i]) {
+		i++
+	}
+	return s[:i], s[i:]
 }
 
 // normaliseDashes maps Unicode dashes and spaces to '-' and ' '.

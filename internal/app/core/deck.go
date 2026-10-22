@@ -125,11 +125,11 @@ func SameDeck(a, b *models.Deck) bool {
 	return a == b || (a.ItemID == b.ItemID && a.Title == b.Title && a.Theme == b.Theme && reflect.DeepEqual(a.Slides, b.Slides))
 }
 
-// SelectedVerse is the selected verse of the looked-up passage: the one the
-// verse list highlights, the resource preview shows and Go Live sends. While
-// Preview shows the passage itself it is Preview's selected slide (moving in
-// the Preview grid moves the verse selection); otherwise it is lastRow, the
-// verse last chosen in the verse list. -1 when there is no passage.
+// SelectedVerse is the current slide of the selected passage (the verses
+// selected in the verse list): the one the resource preview shows and Go Live
+// starts at. While Preview shows the passage itself it is Preview's selected
+// slide (moving in the Preview grid moves it); otherwise it is lastRow, the
+// slide of the verse last clicked in the list. -1 when there is no passage.
 func SelectedVerse(passage, preview *models.Deck, previewIndex, lastRow int) int {
 	if passage == nil || len(passage.Slides) == 0 {
 		return -1
@@ -166,6 +166,54 @@ func GridLabels(d *models.Deck) []GridLabel {
 		out[i] = GridLabel{Label: s.Label, Number: i + 1}
 	}
 	return out
+}
+
+// ListedVerses keeps the verses the verse list shows: the ones with text
+// (ScriptureSlides skips the others too, so a row is always a slide).
+func ListedVerses(verses []models.Verse) []models.Verse {
+	out := make([]models.Verse, 0, len(verses))
+	for _, v := range verses {
+		if strings.TrimSpace(v.Text) != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// VersesIn returns the rows of listed whose verse the passage names
+// (ascending): the verses a lookup selects in the listed chapters.
+func VersesIn(listed []models.Verse, p models.Passage) []int {
+	var out []int
+	for i, v := range listed {
+		if p.Contains(v.Chapter, v.Verse) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// PassageStatus is the Scriptures footer text for the selected passage:
+// "John 3:16-18 · 3 verses (KJV)".
+func PassageStatus(ref string, verses int, abbrev string) string {
+	s := fmt.Sprintf("%s · %d verse", ref, verses)
+	if verses != 1 {
+		s += "s"
+	}
+	if abbrev != "" {
+		s += " (" + abbrev + ")"
+	}
+	return s
+}
+
+// ChooseBookText is the Scriptures footer text while the typed book is
+// ambiguous: "Choose a book: John, 1 John, 2 John, 3 John" (the field's
+// suggestions list them).
+func ChooseBookText(books []models.Book) string {
+	names := make([]string, len(books))
+	for i, b := range books {
+		names[i] = b.Name
+	}
+	return "Choose a book: " + strings.Join(names, ", ")
 }
 
 // VerseRows formats verse list rows: "16  For God so loved…". Verses from a

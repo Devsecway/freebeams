@@ -159,7 +159,8 @@ func fillDemo(w *MainWindow) {
 		"16  For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.",
 		"17  For God sent not his Son into the world to condemn the world; but that the world through him might be saved.",
 		"18  He that believeth on him is not condemned: but he that believeth not is condemned already, because he hath not believed in the name of the only begotten Son of God.",
-	}, 0)
+	})
+	w.Scriptures.SetVerseSelection([]int{0, 1, 2}, 0, true, false)
 	w.Scriptures.SetStatus("John 3:16-18 · 3 verses", false)
 	w.Toolbar.SetToggled(ActionLive, true)
 }

@@ -46,6 +46,9 @@ type searchLocator struct {
 	edit LineEdit.Instance
 	tick *ticker
 	deb  uicore.Debouncer
+
+	// onEdit, when set, sees every text change at once (not debounced).
+	onEdit func(string)
 }
 
 func newSearchLocator(placeholder string, onSearch func(string)) *searchLocator {
@@ -69,6 +72,9 @@ func newSearchLocator(placeholder string, onSearch func(string)) *searchLocator 
 	s.edit.OnTextChanged(func(text string) {
 		s.deb.Trigger(time.Now(), text)
 		s.tick.AsNode().SetProcess(true)
+		if s.onEdit != nil {
+			s.onEdit(text)
+		}
 	})
 	s.edit.OnTextSubmitted(func(text string) {
 		s.deb.Trigger(time.Now(), text)
@@ -93,12 +99,14 @@ func (s *searchLocator) poll() {
 	}
 }
 
-// setText replaces the text without triggering a search.
+// setText replaces the text without triggering a search, with the caret at
+// the end (LineEdit.SetText puts it at the start).
 func (s *searchLocator) setText(text string) {
 	if s.edit.Text() == text {
 		return
 	}
 	s.edit.SetText(text)
+	s.edit.SetCaretColumn(len([]rune(text)))
 	s.deb.Reset(text)
 }
 
