@@ -130,9 +130,8 @@ func (a *App) dragToSchedule(cmd *control.Command, args actionArgs) {
 	if steps <= 0 {
 		steps = 8
 	}
-	// Frame 1 scrolls the source into view (the point getters do), frame 2 the
-	// schedule target; frame 4
-	// reads the settled positions and starts the drag.
+	// Frame 1 scrolls the source into view (the point getters do), frame 2
+	// the schedule target; frame 4 reads the settled positions and drags.
 	a.after(1, func() { _, _ = a.dragSourcePoint(args.Source, index) })
 	if args.Target == "" { // a row or gap of the schedule: bring it into view
 		row := len(a.sched.Items) - 1

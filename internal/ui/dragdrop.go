@@ -292,8 +292,8 @@ func (s *ScheduleList) drawDrop(o Control.Instance) {
 	}
 	y = max(2, min(y, size.Y-2))
 	x0, x1 := float32(schedCardInset), size.X-schedCardInset
-	ci.DrawRect(rect(x0+3, y-1, x1-x0-3, 2), col)
-	ci.DrawCircle(Vector2.New(x0+3, y), Float.X(3), col)
+	ci.DrawRect(rect(x0+3, y-1.5, x1-x0-3, 3), col)
+	ci.DrawCircle(Vector2.New(x0+3, y), Float.X(3.5), col)
 }
 
 // CanDropData / DropData: the list itself takes drops on its empty space

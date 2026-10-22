@@ -2063,6 +2063,61 @@ act "a presentation menu item needs a tile" presentation-menu '{"item":"reveal"}
 act "default logo again" set-setting '{"key":"logo","value":""}' 'not s["settings"]["logo"].get("path", "").endswith("smoke-square.png") and s["settings"]["logo"].get("path", "").endswith("FreeBeams.png")'
 act "Songs tab (menus)" tab '{"tab":"songs"}' 's["tab"] == 0'
 act "save the schedule (menus)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+# ---- drag and drop ----------------------------------------------------------------------------
+# Real drags through Godot's input pipeline into and within the schedule
+# (drag-to-schedule: press on the source, a motion per frame, release). Godot 4
+# finds a drag's drop target from the OS cursor, so the hook warps the pointer.
+act "a fresh schedule for drag and drop" new-schedule '' 's["schedule"]["items"] == []'
+act "search amazing (drag)" search-songs '{"q":"amazing"}' 's["songs"]["results"] >= 2 and s["songs"]["first"] == "Amazing Grace"'
+act "drag a song into the empty schedule" drag-to-schedule '{"source":"song","title":"Amazing Grace"}' 'r["ok"]'
+wait_idle
+check "the song is in the schedule" "$LAST" 's["schedule"]["items"] == ["Amazing Grace"] and s["tab"] == 0'
+act "look up jn 3:16 (drag)" reference '{"text":"jn 3:16"}' 's["scripture"]["passage"] == "John 3:16"'
+act "drag the verses to the top" drag-to-schedule '{"source":"scripture","at":0}' 's["schedule"]["items"] == ["John 3:16", "Amazing Grace"]'
+act "drag a song into the middle" drag-to-schedule '{"source":"song","index":1,"at":1}' 'r["ok"]'
+wait_idle
+check "the song went between the two" "$LAST" 'len(s["schedule"]["items"]) == 3 and s["schedule"]["items"][0] == "John 3:16" and s["schedule"]["items"][2] == "Amazing Grace" and s["schedule"]["items"][1] not in ("John 3:16", "Amazing Grace")'
+DD_MID="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["schedule"]["items"][1])' "$LAST")"
+act "drag a media tile to the end" drag-to-schedule '{"source":"media","index":0}' "len(s[\"schedule\"][\"items\"]) == 4 and s[\"schedule\"][\"items\"][:3] == [\"John 3:16\", \"$DD_MID\", \"Amazing Grace\"] and s[\"tab\"] == 2"
+DD_MEDIA="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["schedule"]["items"][3])' "$LAST")"
+# Mid-drag: the insertion line between rows (highlight #3A6DCE) and the
+# labelled preview under the pointer. Preview shows library content first,
+# so no schedule row is selected (a selected card is the same blue).
+act "look up jn 3:17 (drag)" reference '{"text":"jn 3:17"}' 's["scripture"]["passage"] == "John 3:17" and s["schedule"]["selected"] == -1'
+wait_idle
+shot drag-before main
+pixel "no insertion line before the drag" "$OUT/drag-before.png" lacks 3a6dce 0.0 0.08 0.19 0.45 300
+act "hold a verse drag over gap 2" drag-to-schedule '{"source":"scripture","at":2,"mode":"hold"}' 'r["ok"]'
+shot drag-mid main
+pixel "the insertion line shows mid-drag" "$OUT/drag-mid.png" has 3a6dce 0.0 0.08 0.19 0.45 300
+act "a second drag waits for the release" drag-to-schedule '{"source":"song","index":0}' 'not r["ok"]'
+act "release the held drag" drag-to-schedule '{"mode":"release"}' "s[\"schedule\"][\"items\"] == [\"John 3:16\", \"$DD_MID\", \"John 3:17\", \"Amazing Grace\", \"$DD_MEDIA\"]"
+act "reorder: drag the last row to the top" drag-to-schedule '{"source":"schedule","index":4,"at":0}' "s[\"schedule\"][\"items\"] == [\"$DD_MEDIA\", \"John 3:16\", \"$DD_MID\", \"John 3:17\", \"Amazing Grace\"]"
+act "reorder: drag the top row into the middle" drag-to-schedule '{"source":"schedule","index":0,"at":3}' "s[\"schedule\"][\"items\"] == [\"John 3:16\", \"$DD_MID\", \"$DD_MEDIA\", \"John 3:17\", \"Amazing Grace\"]"
+act "reorder onto its own place changes nothing" drag-to-schedule '{"source":"schedule","index":1,"at":2}' "s[\"schedule\"][\"items\"] == [\"John 3:16\", \"$DD_MID\", \"$DD_MEDIA\", \"John 3:17\", \"Amazing Grace\"]"
+act "a song dropped outside the list does nothing" drag-to-schedule '{"source":"song","index":0,"target":"outside"}' 'r["ok"]'
+wait_idle
+check "the schedule is unchanged" "$LAST" "len(s[\"schedule\"][\"items\"]) == 5"
+act "a row dropped outside the list stays" drag-to-schedule '{"source":"schedule","index":0,"target":"outside"}' "s[\"schedule\"][\"items\"] == [\"John 3:16\", \"$DD_MID\", \"$DD_MEDIA\", \"John 3:17\", \"Amazing Grace\"]"
+act "a theme dropped onto a row applies to that item" drag-to-schedule '{"source":"theme","title":"Default Scripture","row":4}' 'len(s["schedule"]["items"]) == 5 and s["tab"] == 4'
+act "the item has the theme" select-schedule '{"index":4}' 's["preview"]["title"] == "Amazing Grace" and s["preview"]["theme"] == "Default Scripture"'
+act "a theme dropped between rows does nothing" drag-to-schedule '{"source":"theme","title":"Default Song","at":5}' 'len(s["schedule"]["items"]) == 5'
+# Auto-scroll: with more rows than fit, a drag held at the bottom edge
+# scrolls to the end and drops after the last row.
+act "Songs tab (drag)" tab '{"tab":"songs"}' 's["tab"] == 0'
+act "select Amazing Grace (drag)" select-song '{"title":"Amazing Grace"}' '"Amazing Grace" in s["preview"]["title"]'
+for _ in $(seq 1 10); do LAST="$(post add-to-schedule '{"source":"song"}')"; done
+wait_idle
+check "a long schedule" "$LAST" 'len(s["schedule"]["items"]) == 15'
+act "hold a drag at the bottom edge" drag-to-schedule '{"source":"song","index":1,"target":"bottom-edge","mode":"hold"}' 'r["ok"]'
+sleep 1.5
+shot drag-autoscroll main
+act "release at the bottom edge" drag-to-schedule '{"mode":"release"}' 'r["ok"]'
+wait_idle
+check "the drop went after the last row (auto-scrolled)" "$LAST" "len(s[\"schedule\"][\"items\"]) == 16 and s[\"schedule\"][\"items\"][-1] == \"$DD_MID\""
+act "a click still selects a schedule row" click-schedule '{"index":14}' 's["schedule"]["selected"] == 14 and s["preview"]["title"] == "Amazing Grace" and s["focus"] == "list"'
+act "save the schedule (drag and drop)" save-schedule "{\"path\":\"$OUT/smoke-dragdrop.fbs\"}" 'not s["schedule"]["dirty"]'
+
 # Open File Location last: the Finder window it opens takes the focus.
 act "Open File Location shows the square in the Finder" media-menu '{"item":"reveal","title":"smoke-square"}' 'r["ok"] and "file location" not in s["lastError"]'
 # The Finder window is now frontmost; an occluded Godot window stops redrawing (screenshots freeze), so come back.
