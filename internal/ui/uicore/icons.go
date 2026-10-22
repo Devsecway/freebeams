@@ -175,7 +175,7 @@ var icons = map[string]IconSpec{
 
 	// ---- song editor (16) ----
 	// The Lyrics header's SpellCheck button (ui/spelling.go): an "a" with a check mark.
-	"spellcheck": {16, `<path d="M2.25 10.75L5 3.25l2.75 7.5M3.25 8h3.5"/><path d="M8 10.25l2.25 2.5 3.75-5.5"/>`},
+	"spellcheck": {16, `<path d="M2.25 10.75L5 3.25l2.75 7.5M3.25 8.25h3.5"/><path d="M8 10.25l2.25 2.5 3.75-5.5"/>`},
 }
 
 // gearPath builds the 16 px cog: 8 teeth between radii 4.9 and 6.5 and a hub.
