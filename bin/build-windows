@@ -70,7 +70,9 @@ rc=0
 GOOS=windows "$ROOT/bin/gd" build || rc=$?
 # Godot's headless export can crash on teardown on GPU-less machines after
 # writing the exe, so trust the artifacts, not only the exit status.
-[ -f "$EXE" ] && [ -f "$DLL" ] || fail "gd build failed (exit $rc): $EXE or $DLL was not produced"
+if [ ! -f "$EXE" ] || [ ! -f "$DLL" ]; then
+	fail "gd build failed (exit $rc): $EXE or $DLL was not produced"
+fi
 [ "$rc" -eq 0 ] || echo "    note: gd exited $rc but the artifacts exist (Godot teardown crash)"
 
 step "version $V"

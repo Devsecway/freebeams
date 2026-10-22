@@ -47,9 +47,12 @@ jobs:
     needs: version
     runs-on: macos-15 # arm64; gd builds the x86_64 slice too (universal)
     timeout-minutes: 90 # Apple's notary queue is variable
-    env:
-      GDPATH: ${{ runner.temp }}/gd
     steps:
+      # GDPATH keeps gd's Godot under the runner's temp dir (cached below).
+      # The runner context is not available in a job-level env block.
+      - name: Set GDPATH
+        shell: bash
+        run: echo "GDPATH=$RUNNER_TEMP/gd" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
@@ -94,9 +97,12 @@ jobs:
     name: Windows zip + installer
     needs: version
     runs-on: windows-latest
-    env:
-      GDPATH: ${{ runner.temp }}/gd
     steps:
+      # GDPATH keeps gd's Godot under the runner's temp dir (cached below).
+      # The runner context is not available in a job-level env block.
+      - name: Set GDPATH
+        shell: bash
+        run: echo "GDPATH=$RUNNER_TEMP/gd" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
@@ -143,9 +149,12 @@ jobs:
     # ubuntu-22.04 on purpose: an older glibc keeps the binary's floor low so
     # the AppImage runs on newer distros too.
     runs-on: ubuntu-22.04
-    env:
-      GDPATH: ${{ runner.temp }}/gd
     steps:
+      # GDPATH keeps gd's Godot under the runner's temp dir (cached below).
+      # The runner context is not available in a job-level env block.
+      - name: Set GDPATH
+        shell: bash
+        run: echo "GDPATH=$RUNNER_TEMP/gd" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
