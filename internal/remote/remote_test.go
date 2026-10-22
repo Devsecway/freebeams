@@ -339,6 +339,11 @@ func TestActionsAreWhitelisted(t *testing.T) {
 		{"live-slide", `{"index":3}`, 200, "jump", `{"kind":"slide","n":4}`},
 		{"go-live", `{"slide":1}`, 200, "go-live", `{"slide":1}`},
 		{"add-song", `{"id":42}`, 200, "remote-add-song", `{"id":42}`},
+		{"audio-toggle", `{"index":3}`, 200, "audio-toggle", ""},
+		{"audio-next", "", 200, "audio-next", ""},
+		{"audio-prev", "{}", 200, "audio-prev", ""},
+		{"audio-stop", "{}", 400, "", ""},
+		{"playlist-add", `{"path":"/etc/passwd"}`, 400, "", ""},
 		{"live-slide", `{"index":98}`, 400, "jump", `{"kind":"slide","n":99}`}, // the app's error comes back
 		{"preview-item", `{}`, 400, "", ""},
 		{"quit", `{}`, 400, "", ""},
@@ -707,7 +712,7 @@ func TestBuildState(t *testing.T) {
 	// The JSON the phone reads (web/app.js) has these names.
 	var doc map[string]any
 	json.Unmarshal([]byte(mustJSON(t, st)), &doc)
-	for _, k := range []string{"seq", "name", "mode", "output", "schedule", "title", "selected", "liveItem", "preview", "live"} {
+	for _, k := range []string{"seq", "name", "mode", "output", "schedule", "title", "selected", "liveItem", "preview", "live", "audio"} {
 		if _, ok := doc[k]; !ok {
 			t.Errorf("state JSON lacks %q", k)
 		}
@@ -718,8 +723,16 @@ func TestBuildState(t *testing.T) {
 		}
 	}
 
+	music := BuildState(StateInput{Selected: -1, Audio: AudioDoc{Title: "Prelude", Status: "playing", Tracks: 3}})
+	if b := mustJSON(t, music); !strings.Contains(b, `"audio":{"title":"Prelude","status":"playing","tracks":3}`) {
+		t.Fatalf("audio state = %s", b)
+	}
+
 	// Nothing loaded: empty lists, not null, and -1 indexes.
 	empty := BuildState(StateInput{Selected: -1})
+	if empty.Audio.Status != "stopped" || empty.Audio.Tracks != 0 {
+		t.Fatalf("empty audio = %+v", empty.Audio)
+	}
 	if b := mustJSON(t, empty); !strings.Contains(b, `"schedule":[]`) || !strings.Contains(b, `"slides":[]`) || empty.Live.Index != -1 || empty.LiveItem != -1 || empty.Mode != "normal" {
 		t.Fatalf("empty state = %s", b)
 	}
