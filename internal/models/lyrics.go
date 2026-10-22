@@ -417,3 +417,17 @@ func stripCopyrightMark(c string) string {
 func hasPrefixFold(s, prefix string) bool {
 	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
 }
+
+// IsSectionHeader reports whether line is a section header in any form a
+// lyric editor may show: a bracket tag ("[Verse 1]", "[Repeat x2]"), a
+// colon header ("Chorus:"), or a bare label in its long or short form
+// ("Verse 2", "Chorus", "V1", "C2"). The spelling checker never flags such a
+// line (internal/spell).
+func IsSectionHeader(line string) bool {
+	line = strings.TrimSpace(line)
+	if _, ok := headerTag(line, true); ok {
+		return true
+	}
+	tag, _, ok := parseSectionLabel(strings.TrimSuffix(line, ":"))
+	return ok && tag.kind != SectionOther
+}

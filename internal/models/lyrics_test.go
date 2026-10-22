@@ -446,3 +446,18 @@ func FuzzParseLyrics(f *testing.F) {
 		}
 	})
 }
+
+func TestIsSectionHeader(t *testing.T) {
+	for _, tt := range []struct {
+		line string
+		want bool
+	}{
+		{"[Verse 1]", true}, {"[Repeat x2]", true}, {"Chorus:", true}, {"Verse 2", true},
+		{"V1", true}, {"C2", true}, {"  Pre-Chorus ", true}, {"Bridge", true},
+		{"Amazing grace", false}, {"Vamp", false}, {"", false}, {"Holy holy:", false},
+	} {
+		if got := IsSectionHeader(tt.line); got != tt.want {
+			t.Errorf("IsSectionHeader(%q) = %v, want %v", tt.line, got, tt.want)
+		}
+	}
+}
