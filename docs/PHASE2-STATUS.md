@@ -10,8 +10,8 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 976 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control, alerts, audio-playlist and tile-menu blocks)
-FREEBEAMS_PLAYER=ffmpeg test/smoke.sh   # 979: the same with the ffmpeg player (Windows / Linux) on a Mac
+test/smoke.sh          # 1065 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control, alerts, audio-playlist, preview-restyle (89) and tile-menu blocks)
+FREEBEAMS_PLAYER=ffmpeg test/smoke.sh   # 979 before the preview-restyle block (not re-run since): the same with the ffmpeg player (Windows / Linux) on a Mac
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -583,7 +583,7 @@ container duration in samples), and CPU cost at 1080p (two decoders per open fil
 ## Preview Output menu: restyling one item
 
 Recorded 2026-10-22 on the same machine. "smoke: X" names a check in the `# ---- preview restyle` section of
-`test/smoke.sh` (before `# ---- item menus`). The operator's case: the default theme and the words do not match, so
+`test/smoke.sh` (89 checks, before `# ---- item menus`; the full run passed with 1065). The operator's case: the default theme and the words do not match, so
 the item in Preview gets another background or text style before it goes live.
 
 | Criterion | Status | Verification |
