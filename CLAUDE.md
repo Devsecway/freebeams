@@ -329,6 +329,15 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - Focus on click: the viewport walks up from the clicked control to the first one whose focus mode is not None,
   stopping at a `MouseFilterStop` control. An overlay with `FocusNone` + `MouseFilterStop` (the reference field's
   suggestion list) can be clicked while the LineEdit keeps the focus and its caret.
+- Drag and drop: Godot starts a drag once the *relative* motion of the button-held motion events adds up to 10 px
+  (`drag_accum`), so a synthesized `InputEventMouseMotion` needs `SetRelative`. The drop target, though, is found
+  from the OS cursor every frame (`_update_mouse_over`), not from the events: a synthesized drag only drops where
+  it was aimed if the real pointer goes along (`Viewport.WarpMouse`, `internal/app/dragdrop.go`).
+- `SetDragPreview` inside `_get_drag_data` is a buffered void call: follow it with a getter (`flushCalls`) or it
+  lands after Godot has taken the data. The preview lives under the viewport, outside the main window's themed
+  tree: give it the theme explicitly (`ui.themeOf`). Plain Trees drag through `SetDragForwarding(drag, can, drop)`.
+- A drop target is only asked (`_can_drop_data`) while the pointer is over it; clear its drop feedback from a
+  ticker (`GuiIsDragging`, pointer still inside) and on `NotificationDragEnd`, not from the last can-drop call.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

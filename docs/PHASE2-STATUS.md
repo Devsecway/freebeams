@@ -646,6 +646,39 @@ the merge failed outside this work, `screenshot song-menu is not a PNG: {"ok":fa
   (`onEdit`, caret at the end), `monitor.go` (`OnDoubleClick`), `register.go`, `demo.go`.
 - `test/smoke.sh` (scripture block), `docs/UI-SPEC.md` §3.6, `CLAUDE.md` (gotchas appended).
 
+## Drag and drop
+
+Recorded 2026-10-22 on the same machine (no TV attached for this run). As in EasyWorship, resources are dragged
+into the schedule and schedule rows are dragged to reorder.
+
+| Criterion | Status | Verification |
+|---|---|---|
+| A song row, the selected verses, a media tile and a presentation tile drag onto the schedule and insert at the drop position | **pass** | Sources hand Godot a `uicore.DragPayload` (`TestDragPayloadRoundTrip`): `slideTile.GetDragData` (grids with a `DragSource`), `SetDragForwarding` on the song and verse Trees (`internal/ui/dragdrop.go`). The list reports `OnDropInsert(source, index, gap)`; the app runs the Add to Schedule path with an insert index (`App.insertingAt` → `addToSchedule` uses `Schedule.Insert`; songs through `selectSongAt`). Smoke: `drag a song into the empty schedule`, `drag the verses to the top`, `drag a song into the middle`, `drag a media tile to the end`, `release the held drag` (a verse drop at gap 2). Presentations share the media path (no deck in the smoke library at that point). |
+| An insertion line between rows marks the drop position; a labelled preview follows the pointer | **pass** | `uicore.DropGap` (`TestDropGap`; upper half of a row inserts before it); a `FwDragPreview` chip with the title. Smoke: `no insertion line before the drag` / `the insertion line shows mid-drag` (screenshots `drag-before.png`, `drag-mid.png`). |
+| Reordering by drag inside the schedule, through the move path | **pass** | `uicore.DropMove` (`TestDropMove`) → `OnMove` → `App.moveScheduleItem`. Smoke: `reorder: drag the last row to the top`, `drag the top row into the middle`, `reorder onto its own place changes nothing`. |
+| A theme dropped onto a schedule row applies to that item (stretch goal) | **pass** | `OnDropOnto` → `App.applyThemeToItem` (the Theme submenu's path); the target row is outlined and the gaps do not accept a theme. Smoke: `a theme dropped onto a row applies to that item`, `the item has the theme`, `a theme dropped between rows does nothing`. |
+| Dropping outside the list does nothing | **pass** | Only the list and its rows accept the payload. Smoke: `a song dropped outside the list does nothing`, `a row dropped outside the list stays`. |
+| The list auto-scrolls near its top and bottom edges | **pass** | `uicore.AutoScroll` (`TestAutoScroll`), run by a ticker while the drop feedback shows; the feedback clears when the pointer leaves or the drag ends. Smoke: `hold a drag at the bottom edge` / `the drop went after the last row (auto-scrolled)` with 15 rows (screenshot `drag-autoscroll.png`). |
+| Clicks, double-clicks, context menus and keyboard focus unchanged | **pass** | Drags start only after 10 px of held motion; the existing click / double-click / context-menu / focus checks all pass, plus `a click still selects a schedule row` after the drags. A press on a row of a multi-verse selection drags the whole selection (the pending narrow-on-click is cancelled). |
+| Control hook | **pass** | `drag-to-schedule {source: song\|scripture\|media\|presentation\|theme\|schedule, index\|title, at\|row\|target: outside\|top-edge\|bottom-edge, mode: hold\|release, steps}`: press, one motion per frame (with `relative`), release, through Godot's input pipeline. It warps the real pointer along: Godot 4 picks a drag's drop target from the OS cursor (CLAUDE.md). |
+
+Smoke on 2026-10-22: `test/smoke.sh` **PASS** (1145 checks; the drag and drop block adds 36), log hygiene clean;
+`test/splitters.sh` **PASS**.
+
+Limitations: the hook moves the real mouse pointer while it drags (an operator touching the mouse during a smoke
+run can disturb it); one item per drag (no multi-select drag of songs or tiles); dropping files from the Finder
+into the schedule is not handled; a drag that starts on an unselected row selects it (and previews it) first, as
+a click does.
+
+### Shared files touched (drag and drop)
+
+- New: `internal/ui/dragdrop.go`, `internal/ui/uicore/dragdrop.go` (+ test), `internal/app/dragdrop.go`.
+- `internal/ui/schedule.go` (a field block, `initDrop`), `slidegrid.go` (`DragSource` block), `songs.go` /
+  `scripture.go` (`initDrag` calls), `media.go` / `presentations.go` / `themes.go` (`DragSource`), `register.go`.
+- `internal/app/app.go` (a `drop` field block), `events.go` (`addToSchedule` inserts while dropping;
+  `selectSongAt`), `view.go` (`wireDragDrop`), `hooks.go` (`drag-to-schedule`), `control.go` (an `actionArgs` block: `at`).
+- `test/smoke.sh` (the `# ---- drag and drop` block, before Open File Location), `CLAUDE.md` (gotchas appended).
+
 ## Remaining for Phase 2
 
 - **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the
@@ -665,7 +698,7 @@ the merge failed outside this work, `screenshot song-menu is not a PNG: {"ok":fa
 - **Packaging** (PLAN §4 M6): the release build, scripts, CI workflows and docs are in place, see
   [RELEASE.md](RELEASE.md). Still open: signing and notarization (needs credentials), and the Windows and Linux
   builds, which are unverified until the release workflow has run.
-- Media library polish: audio (EasyWorship's `Audio` folder), drag-and-drop into the schedule, per-item titles and
+- Media library polish: audio (EasyWorship's `Audio` folder), dropping Finder files into the schedule, per-item titles and
   tags, removing items whose files have gone missing.
 - Presentations polish: verify `pdftoppm` and LibreOffice on a machine that has them (or bundle poppler in the
   release for Windows / Linux); per-page thumbnails for the Preview / Live grids; re-render a schedule
