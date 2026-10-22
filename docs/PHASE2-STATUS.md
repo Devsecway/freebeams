@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # SMOKECOUNT checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control and tile-menu blocks)
+test/smoke.sh          # 786 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -382,7 +382,7 @@ Recorded 2026-10-22 on the same machine. "smoke: X" names a check in the `# ----
 
 Recorded 2026-10-22 on the same machine, with the TV unplugged (one display: the output and the stage display were
 both windows on the built-in display). "smoke: X" names a check in the `# ---- stage display (v0.2)` section of
-`test/smoke.sh` (before `# ---- item menus`, 98 checks; the full run passed with 745). The stage display is EasyWorship's **Foldback output**: the decoded
+`test/smoke.sh` (before `# ---- item menus`, 98 checks; the full run passed with 786 after merging the remote control). The stage display is EasyWorship's **Foldback output**: the decoded
 forms give its names (Options ▸ Foldback, "Enable support for Foldback Output", the Live Output monitor's
 `ToolButton_LiveFoldBackOuputSelect` with Live Output · Alternate Output · FoldBack Output, Action_FoldBackAlert) but
 not its layout, which is ours.
