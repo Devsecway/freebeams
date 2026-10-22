@@ -14,7 +14,7 @@ import (
 // translations install.
 const bundledStatus = "Installing bundled Bibles…"
 
-// startBundledInstall installs the bundled translations (KJV, ASV) the
+// startBundledInstall installs the bundled translations (KJV, ASV, RVA) the
 // library lacks, off the main thread, when the library has not recorded the
 // current bundle version (a first launch, or a newer bundle). The Scriptures
 // footer reports progress; /state.bundled and /state.import.running reflect
@@ -43,7 +43,7 @@ func (a *App) startBundledInstall() {
 			if err != nil {
 				a.bundled.Error = err.Error()
 				a.setScriptStatus("Bundled Bibles could not be installed", true)
-				a.alert("Bundled Bibles", fmt.Errorf("The bundled Bibles (KJV, ASV) could not be installed.\n\n%w", err))
+				a.alert("Bundled Bibles", fmt.Errorf("The bundled Bibles (KJV, ASV, RVA) could not be installed.\n\n%w", err))
 				return err
 			}
 			a.bundled.Done, a.bundled.Version = true, rep.Version

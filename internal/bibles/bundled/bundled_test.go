@@ -34,10 +34,10 @@ func index(verses []models.Verse) map[[3]int]string {
 }
 
 func TestBundledTranslations(t *testing.T) {
-	if got := Abbrevs(); !slices.Equal(got, []string{"KJV", "ASV"}) {
-		t.Fatalf("Abbrevs = %q: only the KJV and the ASV may be bundled", got)
+	if got := Abbrevs(); !slices.Equal(got, []string{"KJV", "ASV", "RVA"}) {
+		t.Fatalf("Abbrevs = %q: only the KJV, the ASV and the RVA may be bundled", got)
 	}
-	if n := Size(); n <= 0 || n > 4<<20 {
+	if n := Size(); n <= 0 || n > 6<<20 {
 		t.Errorf("embedded size = %d bytes", n)
 	}
 	loaded := map[string]map[[3]int]string{}
@@ -46,8 +46,15 @@ func TestBundledTranslations(t *testing.T) {
 			if tr.License != "Public Domain" || !models.IsPublicDomainBible(tr.Abbrev, tr.Name) {
 				t.Fatalf("%s is not public domain: it must not be bundled", tr.Abbrev)
 			}
-			if tr.Attribution == "" || !strings.Contains(tr.Attribution, SourceURL) {
+			if tr.Attribution == "" || (tr.Origin == OriginBibleTranslations) != strings.Contains(tr.Attribution, SourceURL) {
 				t.Errorf("attribution = %q", tr.Attribution)
+			}
+			h, err := Header(tr.Abbrev)
+			if err != nil || h.Abbrev != tr.Abbrev || h.Name != tr.Name || h.Language != tr.Language || h.Verses != tr.Verses || h.Copyright != "Public Domain" {
+				t.Errorf("package header = %+v, %v", h, err)
+			}
+			if n := FileSize(tr.Abbrev); n < 1<<20 || n > 2<<20 {
+				t.Errorf("package size = %d bytes", n)
 			}
 			res, err := Load(tr.Abbrev)
 			if err != nil {
@@ -80,7 +87,7 @@ func TestBundledTranslations(t *testing.T) {
 		})
 	}
 	kjv, asv := loaded["KJV"], loaded["ASV"]
-	if kjv == nil || asv == nil {
+	if kjv == nil || asv == nil || loaded["RVA"] == nil {
 		t.Fatal("a translation did not load")
 	}
 	checks := []struct {
@@ -96,6 +103,13 @@ func TestBundledTranslations(t *testing.T) {
 		{"ASV", [3]int{19, 36, 1}, "The transgression of the wicked saith within my heart, There is no fear of God before his eyes."},
 		{"ASV", [3]int{9, 13, 1}, "Saul was forty years old when he began to reign; and when he had reigned two years over Israel,"},
 		{"ASV", [3]int{40, 18, 24}, "And when he had begun to reckon, one was brought unto him, that owed him ten thousand talents."},
+		// The RVA keeps its accents (UTF-8 from the .ewb) and its 1909 spelling.
+		{"RVA", [3]int{1, 1, 1}, "EN el principio crió Dios los cielos y la tierra."},
+		{"RVA", [3]int{1, 1, 2}, "Y la tierra estaba desordenada y vacía, y las tinieblas estaban sobre la haz del abismo, y el Espíritu de Dios se movía sobre la haz de las aguas."},
+		{"RVA", [3]int{19, 23, 1}, "JEHOVÁ es mi pastor; nada me faltará."},
+		{"RVA", [3]int{43, 3, 16}, "Porque de tal manera amó Dios al mundo, que ha dado á su Hijo unigénito, para que todo aquel que en Él cree, no se pierda, mas tenga vida eterna."},
+		{"RVA", [3]int{1, 6, 10}, "Y engendró Noé tres hijos: á Sem, á Châm, y á Japhet."},
+		{"RVA", [3]int{66, 22, 21}, "La gracia de nuestro Señor Jesucristo sea con todos vosotros. Amén."},
 	}
 	for _, c := range checks {
 		if got := loaded[c.abbrev][c.ref]; got != c.want {
@@ -160,14 +174,15 @@ func TestInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(rep.Installed, []string{"KJV", "ASV"}) || len(rep.Skipped) != 0 || rep.Version != Version {
+	if !slices.Equal(rep.Installed, []string{"KJV", "ASV", "RVA"}) || len(rep.Skipped) != 0 || rep.Version != Version {
 		t.Fatalf("first install: %+v", rep)
 	}
 	if needed, err := Needed(ctx, st); err != nil || needed {
 		t.Fatalf("Needed after install = %v, %v", needed, err)
 	}
 	bibles, err := st.ListBibles(ctx)
-	if err != nil || len(bibles) != 2 || bibles[0].Abbrev != "ASV" || bibles[1].Abbrev != "KJV" || bibles[1].Copyright != "Public Domain" {
+	if err != nil || len(bibles) != 3 || bibles[0].Abbrev != "ASV" || bibles[1].Abbrev != "KJV" || bibles[1].Copyright != "Public Domain" ||
+		bibles[2].Abbrev != "RVA" || bibles[2].Language != "es" {
 		t.Fatalf("ListBibles = %+v, %v", bibles, err)
 	}
 	p, _ := models.ParseReference("jn 3:16")
@@ -185,10 +200,10 @@ func TestInstall(t *testing.T) {
 
 	// Idempotent: a second run adds nothing.
 	rep, err = Install(ctx, st)
-	if err != nil || len(rep.Installed) != 0 || !reflect.DeepEqual(rep.Skipped, []string{"KJV (already installed)", "ASV (already installed)"}) {
+	if err != nil || len(rep.Installed) != 0 || !reflect.DeepEqual(rep.Skipped, []string{"KJV (already installed)", "ASV (already installed)", "RVA (already installed)"}) {
 		t.Fatalf("second install: %+v, %v", rep, err)
 	}
-	if bibles, _ := st.ListBibles(ctx); len(bibles) != 2 {
+	if bibles, _ := st.ListBibles(ctx); len(bibles) != 3 {
 		t.Fatalf("second install duplicated: %+v", bibles)
 	}
 }
@@ -202,11 +217,11 @@ func TestInstallSkipsExistingAbbrev(t *testing.T) {
 		t.Fatal(err)
 	}
 	rep, err := Install(ctx, st)
-	if err != nil || !slices.Equal(rep.Installed, []string{"ASV"}) || !slices.Equal(rep.Skipped, []string{"KJV (already installed)"}) {
+	if err != nil || !slices.Equal(rep.Installed, []string{"ASV", "RVA"}) || !slices.Equal(rep.Skipped, []string{"KJV (already installed)"}) {
 		t.Fatalf("install = %+v, %v", rep, err)
 	}
 	bibles, _ := st.ListBibles(ctx)
-	if len(bibles) != 2 || bibles[1].Name != "EasyWorship KJV" {
+	if len(bibles) != 3 || bibles[1].Name != "EasyWorship KJV" {
 		t.Fatalf("bibles = %+v", bibles)
 	}
 }
@@ -230,5 +245,39 @@ func TestInstallErrors(t *testing.T) {
 	}
 	if bibles, _ := st.ListBibles(ctx); len(bibles) != 0 {
 		t.Errorf("a cancelled install left %+v", bibles)
+	}
+}
+
+// A built-in the operator removed is not brought back by a newer bundle, and
+// adding it again forgets the removal.
+func TestInstallSkipsRemoved(t *testing.T) {
+	ctx := context.Background()
+	st := openTemp(t)
+	if err := SetRemoved(ctx, st, "asv", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetRemoved(ctx, st, "NIV", true); err != nil { // not a built-in: ignored
+		t.Fatal(err)
+	}
+	if got, err := Removed(ctx, st); err != nil || !slices.Equal(got, []string{"ASV"}) {
+		t.Fatalf("Removed = %q, %v", got, err)
+	}
+	rep, err := Install(ctx, st)
+	if err != nil || !slices.Equal(rep.Installed, []string{"KJV", "RVA"}) || !slices.Equal(rep.Skipped, []string{"ASV (removed)"}) {
+		t.Fatalf("install = %+v, %v", rep, err)
+	}
+	if err := SetRemoved(ctx, st, "ASV", false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := Removed(ctx, st); len(got) != 0 {
+		t.Fatalf("Removed after re-adding = %q", got)
+	}
+	// An older recorded version runs the install again: ASV comes back now.
+	if err := st.SetSetting(ctx, SettingVersion, 1); err != nil {
+		t.Fatal(err)
+	}
+	rep, err = Install(ctx, st)
+	if err != nil || !slices.Equal(rep.Installed, []string{"ASV"}) {
+		t.Fatalf("install after re-adding = %+v, %v", rep, err)
 	}
 }

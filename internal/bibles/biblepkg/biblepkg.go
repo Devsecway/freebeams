@@ -236,6 +236,9 @@ func WriteFile(path string, b models.Bible, verses []models.Verse) error {
 		return fmt.Errorf("write bible package: %w", err)
 	}
 	_, err = tmp.Write(buf.Bytes())
+	if err == nil {
+		err = tmp.Chmod(0o644) // CreateTemp makes it private
+	}
 	if cerr := tmp.Close(); err == nil {
 		err = cerr
 	}
