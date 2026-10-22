@@ -105,30 +105,6 @@ const DigitTimeout = time.Second
 // maxJumpNumber bounds multi-digit numbers (S 1 2 = slide 12).
 const maxJumpNumber = 999
 
-// sectionKeys are the EasyWorship section jump keys (HotKeys.2.ini).
-var sectionKeys = map[string]models.SectionKind{
-	"v": models.SectionVerse,
-	"c": models.SectionChorus,
-	"b": models.SectionBridge,
-	"r": models.SectionPreChorus,
-	"t": models.SectionTag,
-	"i": models.SectionIntro,
-	"e": models.SectionEnding,
-}
-
-// plainKeys are the unmodified hotkeys (UI-SPEC §3.7, HotKeys.2.ini).
-var plainKeys = map[string]Action{
-	"right": ActNext, "space": ActNext, "n": ActNext,
-	"left": ActPrev, "backspace": ActPrev, "p": ActPrev,
-	"home": ActFirst, "end": ActLast,
-	"down": ActScheduleNext, "up": ActSchedulePrev,
-	"pagedown": ActGoLiveNext, "pageup": ActGoLivePrev,
-	"enter": ActGoLive,
-}
-
-// ctrlKeys are the Ctrl (or ⌘) hotkeys.
-var ctrlKeys = map[string]Action{"b": ActBlack, "c": ActClear, "l": ActLogo}
-
 // repeatable keys keep working while held (natural key repeat).
 var repeatable = map[string]bool{"right": true, "left": true, "up": true, "down": true}
 
@@ -144,15 +120,20 @@ var passThrough = map[Focus]map[string]bool{
 // where the list has no use for it (e.g. the verse list) it is still Prev.
 var fallbackKeys = map[string]bool{"backspace": true}
 
-// Hotkeys maps key presses to commands. It is a small state machine: a
-// section key (V, C, B, R, T, I, E) jumps immediately and then waits up to
-// DigitTimeout for a number (V then 2 = Verse 2); S waits for a slide number.
-// Further digits within the timeout extend the number (S 1 2 = slide 12).
+// Hotkeys maps key presses to commands through a Keymap (the defaults when
+// none is set). It is a small state machine: a section jump key (V, C, B, R,
+// T, I, E by default) jumps immediately and then waits up to DigitTimeout for
+// a number (V then 2 = Verse 2); the slide jump key (S) waits for a slide
+// number. Further digits within the timeout extend the number (S 1 2 = slide
+// 12).
 type Hotkeys struct {
 	// Now is the clock (injected for tests); nil means time.Now.
 	Now func() time.Time
 
-	pending  string // "" or a section key / "s" awaiting a digit
+	keymap Keymap
+	index  map[Chord]HotkeyAction // chord → action, built from keymap
+
+	pending  string // "" or the id of a jump action awaiting a digit
 	number   int
 	deadline time.Time
 }
@@ -164,10 +145,49 @@ func (h *Hotkeys) now() time.Time {
 	return time.Now()
 }
 
+// SetKeymap replaces the bindings (normalized). A pending number is
+// forgotten.
+func (h *Hotkeys) SetKeymap(km Keymap) {
+	h.keymap = km.Normalized()
+	h.index = map[Chord]HotkeyAction{}
+	for _, a := range hotkeyActions {
+		for _, c := range h.keymap[a.ID] {
+			h.index[c] = a
+		}
+	}
+	h.Reset()
+}
+
+// Keymap returns the bindings in use.
+func (h *Hotkeys) Keymap() Keymap {
+	if h.index == nil {
+		h.SetKeymap(nil)
+	}
+	return h.keymap.Clone()
+}
+
+// lookup finds the action bound to c. Shift is ignored when the chord with
+// Shift is not bound itself (Shift+N is still Next).
+func (h *Hotkeys) lookup(c Chord) (HotkeyAction, bool) {
+	if h.index == nil {
+		h.SetKeymap(nil)
+	}
+	if a, ok := h.index[c]; ok {
+		return a, true
+	}
+	if c.Shift {
+		c.Shift = false
+		a, ok := h.index[c]
+		return a, ok
+	}
+	return HotkeyAction{}, false
+}
+
 // Reset forgets a pending section/slide number.
 func (h *Hotkeys) Reset() { h.pending, h.number = "", 0 }
 
-// Pending returns the key waiting for a digit ("" when none).
+// Pending returns the id of the jump action waiting for a digit ("" when
+// none).
 func (h *Hotkeys) Pending() string { return h.pending }
 
 // Handle maps a key press in the given focus context to a command. consumed
@@ -185,71 +205,55 @@ func (h *Hotkeys) Handle(ev KeyEvent, focus Focus) (cmd Command, consumed bool) 
 		h.Reset()
 	}
 	key := ev.Key
+	c := ChordOf(ev)
+	mod := c.Ctrl || c.Alt
 
-	if ev.Ctrl || ev.Meta {
-		h.Reset()
-		if ev.Alt {
+	if !mod {
+		if d, ok := digit(key); ok {
+			if h.pending == "" {
+				return Command{}, false
+			}
+			if ev.Echo {
+				return Command{}, true
+			}
+			if n := h.number*10 + d; n <= maxJumpNumber {
+				h.number = n
+			}
+			h.deadline = now.Add(DigitTimeout)
+			a, _ := hotkeyAction(h.pending)
+			if a.act == ActJumpSlide {
+				return Command{Action: ActJumpSlide, N: h.number}, true
+			}
+			return Command{Action: ActJumpSection, Section: a.section, N: h.number}, true
+		}
+		if passThrough[focus][key] {
+			h.Reset()
 			return Command{}, false
 		}
-		a, ok := ctrlKeys[key]
-		if !ok {
-			return Command{}, false // e.g. ⌘Q, ⌘S: not ours
-		}
-		if ev.Echo {
-			return Command{}, true
-		}
-		return Command{Action: a}, true
-	}
-	if ev.Alt {
-		return Command{}, false
 	}
 
-	if d, ok := digit(key); ok {
-		if h.pending == "" {
-			return Command{}, false
-		}
-		if ev.Echo {
-			return Command{}, true
-		}
-		if n := h.number*10 + d; n <= maxJumpNumber {
-			h.number = n
-		}
-		h.deadline = now.Add(DigitTimeout)
-		if h.pending == "s" {
-			return Command{Action: ActJumpSlide, N: h.number}, true
-		}
-		return Command{Action: ActJumpSection, Section: sectionKeys[h.pending], N: h.number}, true
-	}
-
-	if passThrough[focus][key] {
-		h.Reset()
-		return Command{}, false
-	}
-
-	if kind, ok := sectionKeys[key]; ok {
-		if ev.Echo {
-			return Command{}, true
-		}
-		h.pending, h.number, h.deadline = key, 0, now.Add(DigitTimeout)
-		return Command{Action: ActJumpSection, Section: kind}, true
-	}
-	if key == "s" {
-		if ev.Echo {
-			return Command{}, true
-		}
-		h.pending, h.number, h.deadline = "s", 0, now.Add(DigitTimeout)
-		return Command{}, true
-	}
-
-	a, ok := plainKeys[key]
+	a, ok := h.lookup(c)
 	if !ok {
+		if mod {
+			h.Reset() // e.g. ⌘Q, ⌘S: not ours
+		}
 		return Command{}, false
+	}
+	if a.jumps() {
+		if ev.Echo {
+			return Command{}, true
+		}
+		h.pending, h.number, h.deadline = a.ID, 0, now.Add(DigitTimeout)
+		if a.act == ActJumpSlide {
+			return Command{}, true
+		}
+		return Command{Action: ActJumpSection, Section: a.section}, true
 	}
 	h.Reset()
-	if ev.Echo && !repeatable[key] {
+	if ev.Echo && (mod || !repeatable[key]) {
 		return Command{}, true
 	}
-	return Command{Action: a}, true
+	return Command{Action: a.act}, true
 }
 
 // Unhandled maps a key that Handle passed through to the focused widget, and
@@ -263,7 +267,11 @@ func (h *Hotkeys) Unhandled(ev KeyEvent, focus Focus) Command {
 	if ev.Echo && !repeatable[ev.Key] {
 		return Command{}
 	}
-	return Command{Action: plainKeys[ev.Key]}
+	a, ok := h.lookup(ChordOf(ev))
+	if !ok || a.jumps() {
+		return Command{}
+	}
+	return Command{Action: a.act}
 }
 
 // digit parses "0".."9".

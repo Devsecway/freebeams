@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"freebeams/internal/models"
@@ -39,6 +38,10 @@ type Settings struct {
 	// Alerts is Options ▸ Alerts: the look and place of the message band,
 	// the nursery badge, the countdown and the clock (SettingAlertStyles).
 	Alerts models.AlertStyles `json:"alerts"`
+
+	// Hotkeys is Options ▸ Hotkeys: the keys of every hotkey action
+	// (SettingHotkeys, keymap.go).
+	Hotkeys Keymap `json:"hotkeys"`
 }
 
 // DefaultSettings returns the built-in settings: a 500 ms blend, the automatic
@@ -51,6 +54,7 @@ func DefaultSettings(logoDir string) Settings {
 		Logo:           LogoBackground(logoDir),
 		InterfaceColor: ColorDark,
 		Alerts:         models.DefaultAlertStyles(),
+		Hotkeys:        DefaultKeymap(),
 	}
 }
 
@@ -69,6 +73,7 @@ func (s Settings) Normalized(logoDir string) Settings {
 		s.InterfaceColor = ColorDark
 	}
 	s.Alerts = s.Alerts.Normalized()
+	s.Hotkeys = s.Hotkeys.Normalized()
 	return s
 }
 
@@ -134,59 +139,6 @@ func LogoFromPath(path, logoDir string) models.Background {
 	return models.Background{Kind: models.BackgroundImage, Path: path, Color: LogoGradient().Color}
 }
 
-// Binding is one row of the read-only hotkey table.
-type Binding struct {
-	Action string `json:"action"`
-	Keys   string `json:"keys"`
-}
-
-// Bindings lists the hotkeys (UI-SPEC §3.7) as the Options dialog shows them,
-// derived from the key tables in hotkeys.go so the table cannot drift from the
-// behaviour.
-func Bindings() []Binding {
-	names := map[Action]string{
-		ActNext: "Next slide", ActPrev: "Previous slide",
-		ActFirst: "First slide", ActLast: "Last slide",
-		ActScheduleNext: "Next schedule item", ActSchedulePrev: "Previous schedule item",
-		ActGoLiveNext: "Go live with the next item", ActGoLivePrev: "Go live with the previous item",
-		ActGoLive: "Go live", ActBlack: "Black", ActClear: "Clear", ActLogo: "Logo",
-	}
-	order := []Action{ActNext, ActPrev, ActFirst, ActLast, ActGoLive, ActScheduleNext, ActSchedulePrev,
-		ActGoLiveNext, ActGoLivePrev, ActBlack, ActClear, ActLogo}
-	keysOf := func(table map[string]Action, a Action, prefix string) []string {
-		var ks []string
-		for k, act := range table {
-			if act == a {
-				ks = append(ks, prefix+KeyLabel(k))
-			}
-		}
-		sort.Slice(ks, func(i, j int) bool { return keyRank(ks[i]) < keyRank(ks[j]) })
-		return ks
-	}
-	var out []Binding
-	for _, a := range order {
-		ks := append(keysOf(plainKeys, a, ""), keysOf(ctrlKeys, a, "Ctrl+")...)
-		out = append(out, Binding{Action: names[a], Keys: strings.Join(ks, " / ")})
-	}
-	sections := []struct {
-		kind models.SectionKind
-		name string
-	}{
-		{models.SectionVerse, "Verse"}, {models.SectionChorus, "Chorus"}, {models.SectionBridge, "Bridge"},
-		{models.SectionPreChorus, "Pre-Chorus"}, {models.SectionTag, "Tag"}, {models.SectionIntro, "Intro"},
-		{models.SectionEnding, "Ending"},
-	}
-	for _, s := range sections {
-		for k, kind := range sectionKeys {
-			if kind == s.kind {
-				out = append(out, Binding{Action: "Jump to " + s.name + " (then a number)", Keys: KeyLabel(k)})
-			}
-		}
-	}
-	out = append(out, Binding{Action: "Jump to slide number", Keys: "S, then digits"})
-	return out
-}
-
 // keyLabels are the display names of the named keys.
 var keyLabels = map[string]string{
 	"right": "→", "left": "←", "up": "↑", "down": "↓",
@@ -201,16 +153,4 @@ func KeyLabel(key string) string {
 		return l
 	}
 	return strings.ToUpper(key)
-}
-
-// keyRank orders a binding's keys: arrows first, then the other named keys,
-// letters last.
-func keyRank(label string) string {
-	switch {
-	case strings.ContainsAny(label, "←→↑↓"):
-		return "0"
-	case len(label) == 1:
-		return "2" + label
-	}
-	return "1" + label
 }
