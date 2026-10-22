@@ -5,8 +5,6 @@ import (
 	"log"
 
 	"freebeams/internal/media/ffplayer"
-
-	"graphics.gd/classdb/Node"
 )
 
 // Media player backends behind MediaSource (docs/MEDIA.md). The app picks
@@ -61,15 +59,13 @@ func MediaPlayer() string { return playerBackend }
 // the Theora fallback.
 func NativeVideoSupported() bool { return playerBackend != PlayerTheora }
 
-// openNativePlayer opens path with the selected backend. host is a node in
-// the scene tree (the layer's texture rect): the ffmpeg player adds its
-// AudioStreamPlayer under the tree's root.
-func openNativePlayer(path string, host Node.Instance) (nativePlayer, error) {
+// openNativePlayer opens path with the selected backend.
+func openNativePlayer(path string) (nativePlayer, error) {
 	switch playerBackend {
 	case PlayerAVFoundation:
 		return openAVPlayer(path)
 	case PlayerFFmpeg:
-		return openFFPlayer(path, host)
+		return openFFPlayer(path)
 	}
 	return nil, errors.New("no media player on this platform")
 }

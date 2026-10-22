@@ -1526,6 +1526,26 @@ act "black off (alerts)" black '{"on":false}' 's["mode"] == "normal"'
 LAST="$(state)"
 check "the audio state is present (empty, stopped)" "$LAST" 's["audio"]["tracks"] == [] and s["audio"]["status"] == "stopped" and s["audio"]["track"] == -1 and s["audio"]["repeat"] == "off" and not s["audio"]["shuffle"]'
 AU_NATIVE="$(field "$LAST" audio.native)"
+# playlist_ffmpeg counts the app's ffmpeg processes decoding a playlist track
+# (the ffmpeg player, FREEBEAMS_PLAYER=ffmpeg; AVFoundation runs none).
+playlist_ffmpeg() {
+	local p n=0
+	for p in $(app_pids); do
+		ps -o command= -p "$p" 2>/dev/null | grep -q 'ffmpeg .*pl-[0-9]-' && n=$((n + 1))
+	done
+	echo "$n"
+}
+# no_playlist_ffmpeg DESCRIPTION: waits (up to 5 s) until none is left.
+no_playlist_ffmpeg() {
+	local n
+	for _ in $(seq 1 20); do
+		n="$(playlist_ffmpeg)"
+		[ "$n" = 0 ] && break
+		sleep 0.25
+	done
+	[ "$n" = 0 ] || fail "$1: $n ffmpeg process(es) still decode a playlist track"
+	log "ok: $1"
+}
 act "an empty playlist cannot play" audio-play '' 'not r["ok"] and "no track" in r["error"]'
 act "a seek needs a playing track" audio-seek '{"seconds":1}' 'not r["ok"]'
 act "a bad repeat mode is refused" audio-repeat '{"mode":"twice"}' 'not r["ok"]'
@@ -1607,6 +1627,7 @@ if [ "$FFMPEG" = "True" ] && [ "$AU_NATIVE" = "True" ]; then
 	act "stop fades out" audio-stop '' 's["audio"]["fading"] and s["audio"]["status"] == "playing"'
 	pb_wait "the volume ramps down" 's["audio"]["fading"] and 0 < s["audio"]["gain"] < 0.9'
 	pb_wait "the fade ends stopped" 's["audio"]["status"] == "stopped" and not s["audio"]["fading"] and s["audio"]["gain"] == 1 and not s["audio"]["loaded"]'
+	no_playlist_ffmpeg "the stopped playlist leaves no decoder running"
 	# The phone remote: play / pause, next and previous track (internal/remote/actions.go).
 	RPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 	RBASE="http://127.0.0.1:$RPORT"
@@ -1648,7 +1669,12 @@ PY
 	act "open the schedule again" open-schedule "{\"path\":\"$AU_SCHED\"}" '[t["title"] for t in s["audio"]["tracks"]] == ["pl-4-postlude", "pl-1-prelude", "pl-2-hymn"] and s["audio"]["repeat"] == "all" and s["audio"]["fadeOut"] == 2 and s["audio"]["status"] == "stopped" and s["audio"]["track"] == 0 and not s["schedule"]["dirty"]'
 	act "the reopened playlist plays" audio-play '' 's["audio"]["playing"] and s["audio"]["title"] == "pl-4-postlude"'
 	pb_wait "the reopened playlist's first track plays" 's["audio"]["loaded"] and s["audio"]["position"] > 0.1'
+	if [ "${PB_PLAYER:-}" = "ffmpeg" ]; then
+		[ "$(playlist_ffmpeg)" -ge 1 ] || fail "the ffmpeg player runs no decoder for the playing track"
+		log "ok: the ffmpeg player decodes the playing track"
+	fi
 	act "stop (audio)" audio-stop '{"fade":false}' 's["audio"]["status"] == "stopped"'
+	no_playlist_ffmpeg "stop kills the track's decoder"
 	act "Clear Playlist asks first" playlist-clear '' 'len(s["audio"]["tracks"]) == 3'
 	wait_idle
 	check "the clear question is up" "$LAST" 's["dialog"]["confirm"] == "Clear Playlist"'

@@ -7,6 +7,7 @@ import (
 	"graphics.gd/classdb/AudioStreamGenerator"
 	"graphics.gd/classdb/AudioStreamGeneratorPlayback"
 	"graphics.gd/classdb/AudioStreamPlayer"
+	"graphics.gd/classdb/Engine"
 	"graphics.gd/classdb/Node"
 	"graphics.gd/classdb/SceneTree"
 	"graphics.gd/variant/Float"
@@ -25,8 +26,7 @@ import (
 const audioBufferSecs = 0.25
 
 type ffPlayer struct {
-	p    *ffplayer.Player
-	root Node.Instance // the scene root, where the audio player goes
+	p *ffplayer.Player
 
 	// Audio (files with sound, created once the player is ready).
 	audio    AudioStreamPlayer.Instance
@@ -43,18 +43,24 @@ type ffPlayer struct {
 	haveFrame bool
 }
 
-// openFFPlayer starts the ffmpeg player on path. host is any node in the
-// tree (its root receives the AudioStreamPlayer).
-func openFFPlayer(path string, host Node.Instance) (nativePlayer, error) {
+// openFFPlayer starts the ffmpeg player on path.
+func openFFPlayer(path string) (nativePlayer, error) {
 	cfg := ffConfig
 	if rate := int(AudioServer.GetMixRate()); rate > 0 {
 		cfg.SampleRate = rate
 	}
-	f := &ffPlayer{p: ffplayer.Open(cfg, path), volume: 1, epoch: -1}
-	if host != Node.Nil && host.IsInsideTree() {
-		f.root = SceneTree.Get(host).Root().AsNode()
+	return &ffPlayer{p: ffplayer.Open(cfg, path), volume: 1, epoch: -1}, nil
+}
+
+// sceneRoot is the root window, where the AudioStreamPlayers go: sources
+// outlive the views that opened them, and the playlist's (RoleAudio) has
+// no view at all.
+func sceneRoot() (Node.Instance, bool) {
+	tree, ok := Object.As[SceneTree.Instance](Engine.GetMainLoop())
+	if !ok {
+		return Node.Nil, false
 	}
-	return f, nil
+	return tree.Root().AsNode(), true
 }
 
 func (f *ffPlayer) Play()           { f.p.Play() }
@@ -123,11 +129,12 @@ func (f *ffPlayer) CopyFrame(dst []byte) (w, h int, result frameResult) {
 // feedAudio keeps the generator filled while playing and tells the player
 // how much of what it handed out is still queued (its audio clock).
 func (f *ffPlayer) feedAudio() {
-	if !f.p.Info().HasAudio || f.root == Node.Nil {
+	if !f.p.Info().HasAudio {
 		return
 	}
 	if !f.hasNode {
-		if f.p.Status() != ffplayer.Ready {
+		root, ok := sceneRoot()
+		if !ok || f.p.Status() != ffplayer.Ready {
 			return
 		}
 		gen := AudioStreamGenerator.New()
@@ -136,7 +143,7 @@ func (f *ffPlayer) feedAudio() {
 		f.audio = AudioStreamPlayer.New()
 		f.audio.SetStream(gen.AsAudioStream())
 		f.audio.SetVolumeLinear(Float.X(f.volume))
-		f.root.AddChild(f.audio.AsNode())
+		root.AddChild(f.audio.AsNode())
 		f.hasNode = true
 	}
 	playing := f.p.Playing()

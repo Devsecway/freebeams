@@ -140,9 +140,8 @@ var (
 // one). nil when the role shows no video or audio.
 func Current(role VideoRole) *MediaSource { return current[role] }
 
-// acquireSource opens (or shares) the player for (role, path). host is a
-// node in the scene tree (see openNativePlayer).
-func acquireSource(role VideoRole, path string, host Node.Instance) *MediaSource {
+// acquireSource opens (or shares) the player for (role, path).
+func acquireSource(role VideoRole, path string) *MediaSource {
 	k := sourceKey{role, path}
 	if s, ok := sources[k]; ok {
 		s.refs++
@@ -150,7 +149,7 @@ func acquireSource(role VideoRole, path string, host Node.Instance) *MediaSource
 		return s
 	}
 	s := &MediaSource{role: role, path: path, refs: 1, volume: 1}
-	p, err := openNativePlayer(path, host)
+	p, err := openNativePlayer(path)
 	if err != nil {
 		log.Printf("[render] open %s: %v", path, err)
 		s.status = statusFailed
@@ -483,7 +482,7 @@ func (n *nativeLayer) sync() {
 	want := n.path != "" && n.role != RoleNone && n.visible
 	switch {
 	case want && n.src == nil:
-		n.src = acquireSource(n.role, n.path, n.rect.AsNode())
+		n.src = acquireSource(n.role, n.path)
 		n.src.layers = append(n.src.layers, n)
 		if n.src.hasFrame {
 			n.showTexture(n.src.tex)
