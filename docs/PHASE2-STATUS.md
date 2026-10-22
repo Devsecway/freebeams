@@ -347,6 +347,37 @@ the schedule keep their snapshots (EasyWorship's behaviour). The Songs and Scrip
   `ui/itemmenus.go` is new. `mainwindow.go`, `splitter.go`, `monitor.go`, `events.go`, `icons.go` are untouched.
 - `test/smoke.sh`: the `# ---- item menus` block before `# ---- quit`.
 
+## Per-song themes
+
+Recorded 2026-10-22 on the same machine. "smoke: X" names a check in the `# ---- song themes` section of
+`test/smoke.sh` (before `# ---- item menus`). Before this, `Song.ThemeID` was stored and then ignored.
+
+| Criterion | Status | Verification |
+|---|---|---|
+| A song deck uses the song's own theme when `ThemeID != 0` and the theme exists, else the configured default song theme. A deleted or unknown id falls back silently | **pass** | `core.SongTheme` (`internal/app/core/songthemes.go`), used by `App.newSongDeck`. `TestSongTheme` covers no theme, its own theme, a deleted id and a list that is not loaded yet. Smoke: `save-song with a theme (editor OK path)`, `the themed song goes live`, `the output shows the song's own theme` (an exact pixel check of `#c46a1f` in the output's top-left corner). |
+| Song editor Theme picker: "(Default)" followed by every theme. OK saves `ThemeID`. The editor stays a dumb view | **pass** | `ui.SongEditor` gets a `Theme` row in its field grid (an `OptionButton` like the theme editor's, 26 px high): `SetThemeChoices([]ui.ThemeChoice)` comes from the app's render pass, and `Open(song, …)` takes the song's id. A pick only changes the editor's own state. `OptionButton.select` projects it and does not emit a signal. A theme deleted while the editor is open saves as 0. Screenshot `song-editor-theme.png`. Smoke: `open the song editor (song themes)` (`dialog.songEditorTheme`), `pick (Default) in the editor's Theme picker`, `OK saves the song`, `the song uses the default theme again`, `the output background changed back`. |
+| Songs list context menu: Theme ▸ with "(Default)" and every theme, the song's own theme checked. It sets the theme without opening the editor | **pass** | `SongLibraryPanel.addThemeMenu` / `projectThemeMenu` (`internal/ui/songthemes.go`) build a named submenu (`AddSubmenuItem(label, name, songMenuTheme)` with an explicit id). It is re-projected from the selected row's `SongSummary.ThemeID` on every right-click. `OnSetTheme(row, themeID)` → `App.setSongTheme` → `store.SetSongTheme`, a targeted UPDATE that leaves the lyrics and the FTS index alone. Screenshots `song-menu.png`, `song-theme-menu.png`. Smoke: `the Theme submenu lists (Default) and every theme`, `Theme ▸ sets the song's theme from the list`, `the submenu checks the song's theme`, `the output follows the list's Theme ▸ choice`. |
+| A changed theme re-previews the song when it is in Preview. Schedule items keep their snapshot, and adding the song again uses the new theme | **pass** | `App.songThemeChanged` restyles Preview in place when it shows the song as library content (`core.RestyleLibraryDeck`, the selection is kept), together with the resource preview and the list rows. Live and the schedule are left alone. `TestRestyleLibraryDeck`. Smoke: `the schedule item keeps its theme`, `the new item uses the song's new theme`. |
+| Deleting a theme leaves no dangling song theme | **pass** | `store.DeleteTheme` runs `UPDATE songs SET theme_id = 0` in the same transaction. The app clears the rows and the loaded song (`App.forgetSongTheme`, `core.ForgetSongTheme`). `core.SongTheme` also ignores an unknown id. `TestSongThemes` (store), `TestForgetSongTheme`. Smoke: `delete the song's theme`, `the song falls back to the default`, `a new deck of the song uses the default`, `the editor shows (Default) after the delete`, `the output no longer shows the deleted theme`, `the submenu checks (Default) after the delete`. |
+| EasyWorship import of song themes | **skipped** | All 223 local songs have `presentation_id` 0, so the link cannot be verified. EW themes are multi-slide layouts with flag-only element properties and external media, and the text style was not found. Details: [formats/easyworship-songs.md](formats/easyworship-songs.md) "Per-song themes: not imported". |
+| Control actions and `/state` | **pass** | `set-song-theme {index\|title, themeName}`, `song-editor-theme {themeName}` (a pick in the open editor), `song-menu {mode: "open"\|"theme"\|"close"}` (replies with the submenu entries and the checked one), `save-song {…, themeName}`. In all of them `""` or `"(Default)"` means the default song theme, and an unknown name is refused. `screenshot?window=song-menu\|song-theme-menu`. `/state.songs.theme` (the loaded song's own theme, `""` for the default), `/state.preview.theme` / `/state.live.theme` (the deck's theme name), `/state.dialog.songEditorTheme`. |
+
+### Shared files touched (per-song themes)
+
+- New files: `internal/app/songthemes.go`, `internal/app/core/songthemes.go` (+ test), `internal/store/songthemes.go`
+  (+ test), `internal/ui/songthemes.go`.
+- `internal/models/song.go` (`SongSummary.ThemeID`, own block), `internal/store/songs.go` (`theme_id` in the two list
+  queries), `internal/store/themes.go` (`DeleteTheme` clears songs).
+- `internal/app/themes.go` (`newSongDeck`, `wireSongThemes()` call, `forgetSongTheme` on delete,
+  `handleSongThemeCommand` as `handleThemeCommand`'s default), `view.go` (two `SetThemeChoices` lines in the Themes
+  block), `control.go` (`SongsState.Theme`, `dialog.SongEditorTheme`, `actionArgs.ThemeName` in its own block, the
+  two menu screenshot windows), `hooks.go` (`save-song` takes `themeName`), `core/state.go` (`DeckState.Theme`,
+  `SongsState.Theme`, `DialogState.SongEditorTheme`, own blocks).
+- `internal/ui/dialogs.go` (SongEditor fields in their own block, the picker row, the id in `Open` / `save`),
+  `internal/ui/songs.go` (`songMenuTheme`, the panel fields in their own block, one line each in the constructor and
+  `showMenu`).
+- `test/smoke.sh`: the `# ---- song themes` block before `# ---- item menus`.
+
 ## Remaining for Phase 2
 
 - **Video playback off macOS**: the Theora path (`render/video.go`) is unverified on a machine with a Theora-capable
@@ -359,8 +390,8 @@ the schedule keep their snapshots (EasyWorship's behaviour). The Songs and Scrip
   preview (UI-SPEC §3 mentions mini controls there).
 - **Themes polish**: a video background in the editor ("use as background" from the Media tab is the natural
   hook: `Media.Background()`), the font picker's search bar (`OptionButton.search_bar_enabled`, Godot 4.7) once the
-  list grows, honouring `Song.ThemeID` (per-song theme, imported from EasyWorship) in `newSongDeck`, a theme picker
-  for the song editor, and EasyWorship's "Apply changes to items in schedule" choice (today a saved theme always
+  list grows, importing EasyWorship's per-song themes (needs a library whose songs have them, see "Per-song
+  themes"), and EasyWorship's "Apply changes to items in schedule" choice (today a saved theme always
   restyles the schedule items that use it).
 - **Settings**: default themes per item type (the Options dialog has Output, Transition, Logo, Library and a
   read-only Hotkeys table; editable hotkeys and a Zoom transition are not done). The native menus cannot be
