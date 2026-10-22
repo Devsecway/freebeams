@@ -63,10 +63,13 @@ ln -s /Applications "$STAGE/Applications"
 
 echo "==> writing $DMG"
 rm -f "$DMG"
-# hdiutil fails now and then on CI runners ("Resource busy" while a scanner
-# holds the staged files): retry, and show its message instead of -quiet.
+# hdiutil's own size estimate for -srcfolder is sometimes too small ("create
+# failed - No space left on device" on CI runners): size the image from the
+# staged folder plus headroom. It also fails now and then with "Resource busy"
+# while a scanner holds the staged files: retry, and show its message.
+size_mb=$(($(du -sm "$STAGE" | cut -f1) * 12 / 10 + 32))
 for try in 1 2 3 4; do
-	if hdiutil create -volname "FreeBeams $V" -srcfolder "$STAGE" -ov -format UDZO -imagekey zlib-level=9 "$DMG"; then
+	if hdiutil create -volname "FreeBeams $V" -srcfolder "$STAGE" -size "${size_mb}m" -fs HFS+ -ov -format UDZO -imagekey zlib-level=9 "$DMG"; then
 		break
 	fi
 	[ "$try" -lt 4 ] || fail "hdiutil create failed $try times"
