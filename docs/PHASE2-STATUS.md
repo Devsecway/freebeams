@@ -646,6 +646,56 @@ the merge failed outside this work, `screenshot song-menu is not a PNG: {"ok":fa
   (`onEdit`, caret at the end), `monitor.go` (`OnDoubleClick`), `register.go`, `demo.go`.
 - `test/smoke.sh` (scripture block), `docs/UI-SPEC.md` §3.6, `CLAUDE.md` (gotchas appended).
 
+## Spell check in the song editor
+
+EasyWorship's Presentation Editor checks spelling as you type (a 250 ms timer), has a SpellCheck mini button with
+a ▾ (Check Spelling, Spelling Options…) and a Spelling dialog (`Form_SpellCheckDialog`, 337 × 237). FreeBeams
+does the same in the song editor.
+
+- **Engine** (`internal/spell`, pure Go apart from the darwin cgo): `Engine` implements `spell.Checker`
+  (`Check(text, lang) []Misspelling{Start, Len, Word, Line, Col}`, `Suggest`, `Learn`, `Ignore`) over a `Backend`
+  that judges single words. `Tokenize` skips section header lines in every form (`[Verse 1]`, `Chorus:`, `V1`,
+  `C2`: `models.IsSectionHeader`), bracketed text and any run with a digit, and keeps apostrophes inside words
+  (`I'll`, `Lord’s`). Personal words, session-ignored words and the worship vocabulary (`spell.Seed`: Hallelujah,
+  Hosanna, Emmanuel, Jehovah, Yahweh, Selah, Maranatha, Thee/Thy/Thine, …) never reach the backend; verdicts are
+  cached per word.
+- **macOS backend**: `NSSpellChecker` (`nsspell_darwin.go`). One `requestCheckingOfString` for all the words of a
+  check (joined by newlines), awaited on a semaphore, so it runs on a goroutine; guesses come from
+  `guessesForWordRange`. "Add to Dictionary" stays in FreeBeams's settings (`spell.personal`): the user's
+  system-wide dictionary is never written.
+- **Fallback (Windows, Linux, and the unit tests)**: the embedded SCOWL American English list up to size 60 (the
+  size of the usual en_US Hunspell dictionary; 123,000 words, 330 KB gzipped; licence in
+  `internal/spell/data/SCOWL-LICENSE`, generator in `internal/spell/gen`) with a Norvig-style suggester (one edit,
+  else two; transpositions first, then by word frequency rank). Chosen over "unavailable" because Windows and
+  Linux are release targets, the licence is permissive, the size is small, and it makes the checker testable
+  everywhere.
+- **Editor**: the lyrics TextEdit's own context menu is off; a right click opens ours (suggestions, Ignore, Add to
+  Dictionary, then Undo/Redo/Cut/Copy/Paste/Select All through `TextEdit.menu_option`). Underlines are a red wavy
+  polyline drawn from the TextEdit's `draw` signal (see CLAUDE.md). The Lyrics header has the SpellCheck split
+  button; its ▾ has Check Spelling…, Check Spelling as I Type (`spell.live`) and Language ▸ (`spell.language`,
+  the checker's languages). The Spelling dialog walks the lyrics with `spell.Session`: Change / Change All /
+  Ignore / Ignore All / Add to Dictionary / Close (Change All stands where EasyWorship has Find Next), editing the
+  TextEdit in place as undoable operations and selecting each misspelling.
+- **Control**: `spell-check {text}` (the misspellings), `spell-suggest`, `spell-learn`, `spell-forget`,
+  `spell-ignore`, `spell-live {on}`, `spell-language {name}`, `editor-lyrics {lyrics}`, `spell-menu {index}`,
+  `spell-menu-pick {item}`, `spell-dialog {mode, text}`; `dialog.spell` in `/state` while the editor is open
+  (flagged words, checking, personal words, menu entries, the dialog); screenshots `spelling` and `spell-menu`.
+- **Tests**: `internal/spell` unit tests (tokenizing, tags, apostrophes, personal and ignored words, the session,
+  the word list and its suggestions), a darwin test hitting `NSSpellChecker` ("recieve" → "receive"), and the
+  smoke block `# ---- spell check` (flagged, underline pixels, menu, dialog, learn / forget, tags not flagged).
+- **Limitations**: no grammar checking; NSSpellChecker accepts some typos it would autocorrect (e.g. "teh"); the
+  fallback has one language (en_US) and no affix rules beyond its expanded list; the dialog checks on the main
+  thread (a user-initiated, short check); a flag shifted by an edit earlier on its line disappears until the next
+  check (250 ms) rather than being drawn on the wrong letters.
+
+### Shared files touched (spell check)
+
+- `internal/models/lyrics.go` (`IsSectionHeader`), `internal/ui/dialogs.go` (SongEditor fields, header row, Open /
+  Close), `internal/ui/mainwindow.go` (the Spelling dialog in `dialogs()` and `dialogName`),
+  `internal/ui/uicore/icons.go` (`spellcheck`), `internal/app/app.go` (field, `initSpell`, `busy`),
+  `internal/app/control.go` (dispatch, screenshot, `dialog.Spell`), `internal/app/view.go` (`renderSpell`),
+  `internal/app/core/state.go` (`DialogState.Spell`), `test/smoke.sh`, `CLAUDE.md`.
+
 ## Remaining for Phase 2
 
 - **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the

@@ -329,6 +329,15 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - Focus on click: the viewport walks up from the clicked control to the first one whose focus mode is not None,
   stopping at a `MouseFilterStop` control. An overlay with `FocusNone` + `MouseFilterStop` (the reference field's
   suggestion list) can be clicked while the LineEdit keeps the focus and its caret.
+- Spelling underlines in a `TextEdit`: syntax-highlighter colours cannot underline, so draw over the TextEdit from
+  its `draw` signal (it fires after TextEdit's own drawing). `TextEdit.GetRectAtLineColumn(line, c)` is the box of
+  the character *before* caret column c (measured), so a word at col..col+len spans the rects of `col+1` and
+  `col+len`; it returns x = -1 for lines off screen. Redraw-check that the text under a flag still is its word.
+  The TextEdit's own context menu cannot be reordered (no insert API): turn it off (`SetContextMenuEnabled(false)`),
+  open your own PopupMenu from `OnGuiInput` and forward the edit entries' ids to `TextEdit.MenuOption`.
+- `NSSpellChecker requestCheckingOfString` answers on a queue of its own, so a goroutine can wait for it on a
+  semaphore (`internal/spell/nsspell_darwin.go`); never `learnWord:` from tests or automation (it writes the
+  user's system-wide dictionary).
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:
