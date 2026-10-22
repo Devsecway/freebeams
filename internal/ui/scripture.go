@@ -76,6 +76,7 @@ type ScripturePanel struct {
 	status   Label.Instance
 	menu     PopupMenu.Instance // verse context menu
 	gearMenu PopupMenu.Instance // footer gear: the context menu plus the import
+	libMenu  PopupMenu.Instance // translations footer gear: the imports
 	collapse *ticker            // waits out verseCollapseDelay
 
 	bibleList   []models.Bible
@@ -148,7 +149,7 @@ func NewScripturePanel() *ScripturePanel {
 	stack := Control.New()
 	s.bibles.AsControl().SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
 	add(stack, s.bibles.AsControl(), s.suggest.AsControl())
-	left := libraryPane(s.locator.root.AsControl(), stack, libraryFooter())
+	left := libraryPane(s.locator.root.AsControl(), stack, s.libraryFooter())
 
 	s.verses = Tree.New()
 	s.verses.SetHideRoot(true)
@@ -191,6 +192,30 @@ func NewScripturePanel() *ScripturePanel {
 	s.split.SetPanes(left, right)
 	s.render()
 	return s
+}
+
+// libraryFooter is the translations pane's footer: [+] adds a Bible from a
+// file or folder (Import Bible File…), [⚙▾] holds both imports.
+func (s *ScripturePanel) libraryFooter() Control.Instance {
+	footer := panel(vMiniBarTL)
+	footer.AsControl().SetCustomMinimumSize(Vector2.New(0, 28))
+	row := hbox(0)
+	plus := newMiniButton(miniPlain, "plus", 28, 24, "Add Bible…")
+	plus.AsBaseButton().OnPressed(func() {
+		if s.OnImportFile != nil {
+			s.OnImportFile()
+		}
+	})
+	s.libMenu = PopupMenu.New()
+	s.libMenu.MoreArgs().AddItem("Import Bible File…", scriptMenuImportFile, 0)
+	s.libMenu.MoreArgs().AddItem("Import Copyrighted Bibles from EasyWorship…", scriptMenuImportCopyrighted, 0)
+	s.libMenu.OnIdPressed(s.menuPressed)
+	gear := newMiniButton(miniDropdown, "gear", 40, 24, "Bible Actions")
+	gear.AsNode().AddChild(s.libMenu.AsNode())
+	gear.AsBaseButton().OnPressed(func() { popupBelow(s.libMenu, gear.AsControl()) })
+	add(row, plus.AsControl(), withMargins(newDivider(true).AsControl(), 2, 2), gear.AsControl())
+	add(footer, row.AsControl())
+	return footer.AsControl()
 }
 
 // referenceKey runs the suggestion keys typed into the reference field while
@@ -496,6 +521,7 @@ func (s *ScripturePanel) render() {
 		s.projectVerseSelection()
 	})
 	s.gearMenu.SetItemDisabled(s.gearMenu.GetItemIndex(scriptMenuImportCopyrighted), !s.importAvail)
+	s.libMenu.SetItemDisabled(s.libMenu.GetItemIndex(scriptMenuImportCopyrighted), !s.importAvail)
 	s.status.SetText(s.statusText)
 	if s.statusError {
 		s.status.AsControl().SetThemeTypeVariation(vError)
