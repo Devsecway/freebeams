@@ -164,6 +164,14 @@ var icons = map[string]IconSpec{
 	"loop":      {16, `<path d="M3.25 9.25V7.25a2.5 2.5 0 0 1 2.5-2.5h6"/><path d="M9.75 2.75l2 2-2 2"/><path d="M12.75 6.75v2a2.5 2.5 0 0 1-2.5 2.5h-6"/><path d="M6.25 13.25l-2-2 2-2"/>`},
 	"volume":    {16, `<path d="M2.75 6.25h2.5l3.5-3v9.5l-3.5-3h-2.5z" fill="{c}" stroke="{c}" stroke-linejoin="round"/><path d="M11.25 5.5a3.5 3.5 0 0 1 0 5"/><path d="M13.25 3.75a6 6 0 0 1 0 8.5"/>`},
 	"knob":      {16, `<circle cx="8" cy="8" r="5.5" fill="{c}" stroke="none"/>`},
+
+	// ---- audio playlist (16) ----
+	// The playlist transport under the schedule (ui/playlist.go): stop,
+	// shuffle and repeat-one (repeat all is "loop"; previous / next track are
+	// skip_back / skip_fwd).
+	"stop":       {16, `<rect x="3.75" y="3.75" width="8.5" height="8.5" rx="1" fill="{c}" stroke="none"/>`},
+	"shuffle":    {16, `<path d="M2.75 4.75h2.25l5 6.5h2.75"/><path d="M2.75 11.25h2.25l1.75-2.25"/><path d="M9.25 6.75l1-2h2.75"/><path d="M11.25 2.75l2 2-2 2"/><path d="M11.25 9.25l2 2-2 2"/>`},
+	"repeat_one": {16, `<path d="M3.25 9.25V7.25a2.5 2.5 0 0 1 2.5-2.5h6"/><path d="M9.75 2.75l2 2-2 2"/><path d="M12.75 6.75v2a2.5 2.5 0 0 1-2.5 2.5h-6"/><path d="M6.25 13.25l-2-2 2-2"/><path d="M7.25 7l1-0.75v3.5"/>`},
 }
 
 // gearPath builds the 16 px cog: 8 teeth between radii 4.9 and 6.5 and a hub.

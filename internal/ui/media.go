@@ -29,6 +29,9 @@ const (
 	mediaMenuRepeat // the Repeating ▸ entry
 	mediaMenuView   // the View ▸ entry
 	mediaMenuSort   // the Sort by ▸ entry
+
+	// The background audio (playlist.go): audio tiles only.
+	mediaMenuAddToPlaylist
 )
 
 // MediaRow is one tile of the media grid.
@@ -91,6 +94,9 @@ type MediaPanel struct {
 	OnView           func(view string)
 	OnSort           func(sort string)
 	OnRefresh        func()
+
+	// OnAddToPlaylist is Add to Audio Playlist (audio tiles only).
+	OnAddToPlaylist func(i int)
 
 	split   *Splitter
 	search  *searchLocator
@@ -214,6 +220,7 @@ func (p *MediaPanel) buildMenu() *mediaMenu {
 	pm.AddSeparator()
 	pm.MoreArgs().AddItem("Add to Schedule", mediaMenuAddToSchedule, 0)
 	pm.MoreArgs().AddItem("Go Live", mediaMenuGoLive, 0)
+	pm.MoreArgs().AddItem("Add to Audio Playlist", mediaMenuAddToPlaylist, 0)
 	pm.AddSeparator()
 	m.aspect = newRadioMenu(pm, "AspectRatio", "Aspect Ratio", mediaMenuAspect, aspectChoices, func(v string) {
 		p.withSelected(func(i int) {
@@ -414,6 +421,8 @@ func (p *MediaPanel) enableMenu(m *mediaMenu) {
 			m.menu.SetItemDisabled(idx, none)
 		case mediaMenuRepeat:
 			m.menu.SetItemDisabled(idx, !video)
+		case mediaMenuAddToPlaylist:
+			m.menu.SetItemDisabled(idx, none || p.rows[p.selected].Kind != models.MediaAudio)
 		}
 	}
 }
@@ -446,6 +455,8 @@ func (p *MediaPanel) menuPressed(id int) {
 		call(p.OnUpdateSchedule)
 	case mediaMenuReveal:
 		call(p.OnReveal)
+	case mediaMenuAddToPlaylist:
+		call(p.OnAddToPlaylist)
 	case mediaMenuRefresh:
 		if p.OnRefresh != nil {
 			p.OnRefresh()

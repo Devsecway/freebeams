@@ -85,6 +85,9 @@ type MainWindow struct {
 	// StageMessage is Live ▸ Stage Message… (stage_message.go).
 	StageMessage *StageMessageDialog `gd:"-"`
 
+	// AudioPlaylist is the background audio under the schedule (playlist.go).
+	AudioPlaylist *AudioPlaylist `gd:"-"`
+
 	// palette is plain Go data. The Theme is not kept in a field: a RefCounted
 	// held by an extension struct is never released (leaks at exit); it lives
 	// on the node (AsControl().Theme()).
@@ -368,6 +371,8 @@ func (w *MainWindow) buildSchedule() Control.Instance {
 	col := vbox(0)
 	expand(w.Schedule.AsControl())
 	add(col, header, w.Schedule.AsControl())
+	w.AudioPlaylist = NewAudioPlaylist()
+	add(col, w.AudioPlaylist.AsControl())
 	return col.AsControl()
 }
 
