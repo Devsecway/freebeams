@@ -53,7 +53,7 @@ func (s *Store) SearchSongs(ctx context.Context, query string, limit int) ([]mod
 // listSongs lists all songs by title.
 func (s *Store) listSongs(ctx context.Context, limit int) ([]models.SongSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, title, author, copyright, ccli FROM songs
+		SELECT id, title, author, copyright, ccli, theme_id FROM songs
 		ORDER BY title COLLATE NOCASE, id
 		LIMIT ?`, limit)
 	if err != nil {
@@ -63,7 +63,7 @@ func (s *Store) listSongs(ctx context.Context, limit int) ([]models.SongSummary,
 	out := []models.SongSummary{}
 	for rows.Next() {
 		var r models.SongSummary
-		if err := rows.Scan(&r.ID, &r.Title, &r.Author, &r.Copyright, &r.CCLI); err != nil {
+		if err := rows.Scan(&r.ID, &r.Title, &r.Author, &r.Copyright, &r.CCLI, &r.ThemeID); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -78,7 +78,7 @@ func (s *Store) listSongs(ctx context.Context, limit int) ([]models.SongSummary,
 // lyrics-only). snippet() excerpts the lyrics column around the matches.
 func (s *Store) searchSongsFTS(ctx context.Context, terms [][]string, limit int) ([]models.SongSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT s.id, s.title, s.author, s.copyright, s.ccli,
+		SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.theme_id,
 			s.id IN (SELECT rowid FROM songs_fts WHERE songs_fts MATCH ?2) AS in_title,
 			s.id IN (SELECT rowid FROM songs_fts WHERE songs_fts MATCH ?3) AS in_meta,
 			s.id IN (SELECT rowid FROM songs_fts WHERE songs_fts MATCH ?4) AS in_meta_any,
@@ -103,7 +103,7 @@ func (s *Store) searchSongsFTS(ctx context.Context, terms [][]string, limit int)
 			inTitle, inMeta, inMetaAny bool
 			snippet                    string
 		)
-		if err := rows.Scan(&r.ID, &r.Title, &r.Author, &r.Copyright, &r.CCLI, &inTitle, &inMeta, &inMetaAny, &snippet); err != nil {
+		if err := rows.Scan(&r.ID, &r.Title, &r.Author, &r.Copyright, &r.CCLI, &r.ThemeID, &inTitle, &inMeta, &inMetaAny, &snippet); err != nil {
 			return nil, err
 		}
 		switch {
