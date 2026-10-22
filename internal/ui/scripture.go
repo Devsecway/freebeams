@@ -77,6 +77,7 @@ type ScripturePanel struct {
 	OnManageBibles func()
 	OnRemoveBible  func(i int)
 	bibleMenu      PopupMenu.Instance // the translations list's context menu
+	menuBible      int                // the row bibleMenu was opened on
 
 	split    *Splitter
 	locator  *searchLocator
@@ -218,7 +219,9 @@ func (s *ScripturePanel) initBibleMenu() {
 	s.bibles.AsNode().AddChild(s.bibleMenu.AsNode())
 	s.bibles.OnItemMouseSelected(func(_ Vector2.XY, button int) {
 		if Input.MouseButton(button) == Input.MouseButtonRight {
-			s.bibleMenu.SetItemDisabled(s.bibleMenu.GetItemIndex(scriptMenuRemoveBible), s.bible < 0)
+			// The clicked row, whether or not item_selected has been handled yet.
+			s.menuBible = treeIndex(s.bibles.GetSelected())
+			s.bibleMenu.SetItemDisabled(s.bibleMenu.GetItemIndex(scriptMenuRemoveBible), s.menuBible < 0)
 			popupAtMouse(s.bibleMenu)
 		}
 	})
@@ -538,8 +541,8 @@ func (s *ScripturePanel) menuPressed(id int) {
 		s.OnImportFile()
 	case id == scriptMenuManageBibles && s.OnManageBibles != nil:
 		s.OnManageBibles()
-	case id == scriptMenuRemoveBible && s.OnRemoveBible != nil && s.bible >= 0:
-		s.OnRemoveBible(s.bible)
+	case id == scriptMenuRemoveBible && s.OnRemoveBible != nil && s.menuBible >= 0:
+		s.OnRemoveBible(s.menuBible)
 	}
 }
 

@@ -97,7 +97,11 @@ func Scan(dir string) (entries []Entry, problems []string, err error) {
 		}
 		e, err := info(path, kind)
 		if err != nil {
-			problems = append(problems, fmt.Sprintf("%s: %v", name, err))
+			msg := err.Error()
+			if !strings.HasPrefix(msg, name+": ") {
+				msg = name + ": " + msg
+			}
+			problems = append(problems, msg)
 			continue
 		}
 		key := strings.ToUpper(e.Bible.Abbrev)

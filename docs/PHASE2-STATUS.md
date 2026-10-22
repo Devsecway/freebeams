@@ -766,6 +766,37 @@ a click does.
   `selectSongAt`), `view.go` (`wireDragDrop`), `hooks.go` (`drag-to-schedule`), `control.go` (an `actionArgs` block: `at`).
 - `test/smoke.sh` (the `# ---- drag and drop` block, before Open File Location), `CLAUDE.md` (gotchas appended).
 
+## Bible Manager: add, remove and package Bibles
+
+Recorded 2026-10-22 on the same machine. Formats, policy and behaviour: [BIBLES.md](BIBLES.md) ("Bible packages",
+"The Bible Manager").
+
+| Criterion | Status | Verification |
+|---|---|---|
+| A one-file Bible package with metadata, small, with one reader for built-ins and user packages | **pass** | `internal/bibles/biblepkg`: `.fbbible` = gzip of the single-file Bible JSON with a first-line header (`format`, `version`, `abbrev`, `name`, `language`, `copyright`, `verses`). `TestRoundTrip` (accents, quotes, unsorted input, reproducible bytes), `TestReadErrors` (not gzip, plain JSON, other format, newer version, no abbrev, verse-count mismatch, broken JSON, truncated, corrupt byte), `TestEveryTruncationFails` (every prefix), `TestFiles`, `TestFileName`. The bundled data is packages too (`data/*.fbbible`; KJV and ASV re-packed losslessly). |
+| The RVA is bundled, public domain only, with correct accents | **pass** | `bundled.Translations` adds RVA (es, 31,102 verses, `Origin: OriginEWB`), generated from EasyWorship's `RVA.ewb` by `gen/main.go -ewb … -only RVA`; identical verse for verse to the RVA in the user's library; two source patches (`> ` before Proverbs 10:1, the closing `FIN.`). `TestBundledTranslations` (only KJV/ASV/RVA, all public domain, headers, sizes, `JEHOVÁ es mi pastor; nada me faltará.`, `amó Dios … unigénito`, `Châm`), `bundled.Version` 2. Size: 2,519,018 → 3,811,158 bytes (+1,292,140). |
+| The Bibles folder: per user, discoverable, created on first use, any supported file appears | **pass** | `appdirs.Bibles` (`~/Documents/FreeBeams/Bibles`, Windows/Linux equivalents, `FREEBEAMS_BIBLES_DIR`; `TestBiblesPath`, `TestBiblesCreatesTheFolder`). `biblefolder.Scan` lists packages and `.ewb` from their headers (`easyworship.ReadBibleInfo`), JSON and translation folders by decoding; duplicates and unreadable files become problems (`TestScan`, `TestRead`, `TestEWB`). |
+| The manager dialog: merged list, Add with progress off the main thread, licence question, Remove with confirm, Save as Package, Add from File…, Open Bibles Folder, Refresh | **pass** | `ui.BibleManager` (dumb view, 780 × 500, Name / Language / Source / Status / Size), state in `App.bm`, one projection `renderBibleManager`. `core.MergeBibleEntries` (`TestMergeBibleEntries`), texts (`TestBibleManagerTexts`). Add: `store.CreateBibleWithVersesProgress` in a goroutine, progress through the results queue. Remove: `store.DeleteBible` (row, verses and FTS rows in one transaction; `TestDeleteBible`). A removed built-in is recorded (`bundled.SetRemoved`, `TestInstallSkipsRemoved`). Save: `store.AllVerses` + `biblepkg.WriteFile` (atomic). |
+| Removing the selected / default Bible | **pass** | The tab falls back to `core.DefaultBible` (first installed built-in in bundle order, else the first; `TestDefaultBibleFallsBackInBundleOrder`) and re-runs the reference there. Schedule items keep their slides. |
+| Remove Bible… on the translations list (context menu, Delete / Backspace) | **pass** | `ScripturePanel.initBibleMenu`; both ask first. |
+| Control actions, `/state`, smoke | **pass** | `bibles-available`, `bible-manager {action}`, `bible-select`, `bible-add {abbrev\|path, confirm}`, `bible-remove {abbrev, confirm}`, `bible-save-package {abbrev}`, `bible-open-folder`; `/state.bibleManager`; screenshot window `bible-manager`; focus targets `bible-list`, `bible-manager-list`. The `# ---- bible manager` smoke block: SMOKE_RESULT |
+
+### Shared files touched (Bible Manager)
+
+- New: `internal/bibles/biblepkg`, `internal/bibles/biblefolder`, `internal/app/biblemanager.go`,
+  `internal/app/core/biblemanager.go` (+ tests), `internal/ui/biblemanager.go`, `internal/store/bibles_delete_test.go`,
+  `internal/bibles/bundled/data/{kjv,asv,rva}.fbbible` (replacing `*.json.gz`).
+- `internal/bibles/bundled` (packages, RVA, removed list; `gen/main.go` rewritten), `internal/importers/bibletext`
+  (`EncodeWithHeader`), `internal/importers/easyworship/ewb.go` (`ReadBibleInfo`), `internal/store/bibles.go`,
+  `internal/appdirs` (`Bibles`).
+- `internal/app/events.go` (`loadBibles` → `refreshBibles` / `applyBibles`), `biblefile.go` (`biblefolder.Read`,
+  `.fbbible` filter), `bundled.go` (texts), `app.go` / `view.go` / `control.go` (field, view-cache and `actionArgs`
+  blocks, dispatch, screenshot), `hooks.go` (focus targets), `core/deck.go` (`DefaultBible`), `core/state.go`.
+- `internal/ui/scripture.go` (+ opens the manager, gear ▸ Manage Bibles…, context menu, Delete key),
+  `mainwindow.go`, `theme.go` (ProgressBar).
+- `test/smoke.sh` (`FREEBEAMS_BIBLES_DIR`, the bundled checks now expect RVA, the `# ---- bible manager` block),
+  `docs/BIBLES.md`.
+
 ## Remaining for Phase 2
 
 - **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the

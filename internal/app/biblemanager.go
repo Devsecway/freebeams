@@ -110,7 +110,7 @@ func (a *App) applyBiblesFolder(entries []biblefolder.Entry, problems []string, 
 	for _, p := range problems {
 		log.Printf("[freebeams] Bibles folder: %s", p)
 	}
-	if a.bm.task == "" && (a.bm.status == "" || !a.bm.statusErr) {
+	if a.bm.task == "" && a.bm.status == "" {
 		switch n := len(problems); {
 		case n == 1:
 			a.bm.status, a.bm.statusErr = "1 file in the Bibles folder could not be read: "+problems[0], true
