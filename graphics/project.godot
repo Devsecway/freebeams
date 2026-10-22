@@ -7,7 +7,7 @@ config_version=5
 config/name="FreeBeams"
 ; The single source of truth for the release version (bin/version reads it;
 ; the exports fall back to it; internal/app/version.go shows it).
-config/version="0.1.0"
+config/version="0.2.0"
 config/icon="res://icon.svg"
 config/macos_native_icon="res://FreeBeams.icns"
 config/windows_native_icon="res://icon.ico"
