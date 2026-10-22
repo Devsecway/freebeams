@@ -21,8 +21,12 @@ type MediaCaps struct {
 	Theora bool // ffmpeg has the libtheora encoder: videos can be transcoded for playback
 
 	// Native means the renderer plays every video and audio file as it is
-	// (AVFoundation on macOS): nothing needs a transcode.
+	// (AVFoundation on macOS, the ffmpeg player elsewhere): nothing needs a
+	// transcode. False on the Theora fallback, where audio cannot play.
 	Native bool
+
+	// Player is the backend (PlayerAVFoundation, PlayerFFmpeg, PlayerTheora).
+	Player string
 }
 
 // CanPlay reports whether a video item can play on this machine: natively,
@@ -151,6 +155,9 @@ func FormatDuration(d time.Duration) string {
 func MediaBadge(m models.Media, playable bool, caps MediaCaps, progress float64, failed bool) string {
 	switch m.Kind {
 	case models.MediaAudio:
+		if !caps.Native {
+			return "Needs ffmpeg" // only a media player plays audio (the Theora fallback has none)
+		}
 		if d := FormatDuration(m.Duration); d != "" {
 			return d
 		}
@@ -199,12 +206,17 @@ func MediaFooter(c MediaCounts, kind models.MediaKind, caps MediaCaps, working b
 		}
 	}
 	videosListed := c.Videos > 0 && (kind == "" || kind == models.MediaVideo)
+	audioListed := c.Audio > 0 && (kind == "" || kind == models.MediaAudio)
 	switch {
 	case working:
 		parts = append(parts, "preparing media…")
 	case caps.Native:
+	case videosListed && audioListed && !caps.FFmpeg:
+		parts = append(parts, "ffmpeg not found: videos and audio cannot play")
 	case videosListed && !caps.FFmpeg:
 		parts = append(parts, "ffmpeg not found: videos cannot play")
+	case audioListed && !caps.FFmpeg:
+		parts = append(parts, "ffmpeg not found: audio cannot play")
 	case videosListed && !caps.Theora:
 		parts = append(parts, "ffmpeg has no Theora encoder: videos cannot play")
 	}

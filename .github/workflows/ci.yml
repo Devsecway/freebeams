@@ -41,6 +41,52 @@ jobs:
       - name: bin/version
         run: bin/version
 
+  # The ffmpeg media player's process and pipe code (internal/media/ffplayer)
+  # and the other pure-Go media packages, for real on Windows and Linux: the
+  # tests decode clips that the installed ffmpeg generates.
+  # FREEBEAMS_REQUIRE_FFMPEG=1 turns a missing ffmpeg into a failure, not a skip.
+  media:
+    name: media player tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      FREEBEAMS_REQUIRE_FFMPEG: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install ffmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          "C:\ProgramData\chocolatey\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: ffmpeg version
+        shell: bash
+        run: ffmpeg -hide_banner -version | head -n 1 && ffprobe -hide_banner -version | head -n 1
+
+      - name: go vet (pure-Go media packages)
+        shell: bash
+        run: go vet ./internal/media/... ./internal/sysproc/...
+
+      - name: go test (pure-Go media packages)
+        shell: bash
+        # -race needs cgo, which the Windows runner's Go has no compiler for.
+        run: go test -count=1 ${{ runner.os == 'Linux' && '-race' || '' }} ./internal/media/... ./internal/sysproc/...
+
   shellcheck:
     name: shellcheck
     runs-on: ubuntu-latest
@@ -50,6 +96,6 @@ jobs:
       - name: shellcheck the scripts
         run: |
           shellcheck --version | head -2
-          shellcheck bin/gd bin/version bin/release-dmg bin/sign-notarize \
+          shellcheck bin/gd bin/version bin/release-dmg bin/sign-notarize bin/build-ffmpeg \
             bin/build-windows bin/build-linux \
             packaging/linux/AppRun packaging/icons/make-icons.sh

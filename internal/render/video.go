@@ -140,9 +140,10 @@ func (v *videoLayer) Playing() bool { return v.playing }
 // applyVideo projects a video or audio background onto the layer: the poster
 // still on the texture rect (shown under the video while its first frame
 // decodes, and alone when the video cannot play; audio has none, so its
-// color shows) and the video on top. On a platform with a native player
-// (macOS) a layer with a role plays the file through it (videosource.go);
-// elsewhere Godot's Theora player takes a playable .ogv.
+// color shows) and the video on top. With a media player (AVFoundation on
+// macOS, ffmpeg elsewhere: player.go) a layer with a role plays the file
+// through it (videosource.go); on the Theora fallback (no ffmpeg) Godot's
+// Theora player takes a playable .ogv.
 func (l *layer) applyVideo(bg models.Background) {
 	if t, ok := imageTexture(bg.Poster); ok {
 		l.tex.SetTexture(t)
@@ -151,7 +152,7 @@ func (l *layer) applyVideo(bg models.Background) {
 	} else {
 		l.tex.AsCanvasItem().SetVisible(false)
 	}
-	if nativeVideoSupported {
+	if NativeVideoSupported() {
 		l.video.hide()
 		if l.native.role == RoleNone {
 			l.native.hide()

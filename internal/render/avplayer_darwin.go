@@ -223,19 +223,19 @@ import (
 	"unsafe"
 )
 
-// nativeVideoSupported reports that this platform plays videos and audio
+// avFoundationAvailable reports that this platform plays videos and audio
 // through its own media framework (AVFoundation): every format macOS plays
 // (H.264 / HEVC MP4 and MOV, MP3, AAC, WAV, AIFF, …) works without ffmpeg.
-const nativeVideoSupported = true
+const avFoundationAvailable = true
 
 // avPlayer is the AVFoundation player behind nativePlayer.
 type avPlayer struct {
 	h C.uintptr_t
 }
 
-// openNativePlayer opens path with AVFoundation. The player starts paused at
+// openAVPlayer opens path with AVFoundation. The player starts paused at
 // 0; its status becomes ready (or failed) a few frames later.
-func openNativePlayer(path string) (nativePlayer, error) {
+func openAVPlayer(path string) (nativePlayer, error) {
 	cs := C.CString(path)
 	defer C.free(unsafe.Pointer(cs))
 	h := C.fw_av_open(cs)

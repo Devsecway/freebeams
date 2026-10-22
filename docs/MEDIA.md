@@ -4,18 +4,28 @@ How videos and audio files in the Media tab play, per platform, and what the ope
 
 ## What plays where
 
-| Platform | Videos | Audio | Needs |
-|---|---|---|---|
-| macOS | every format AVFoundation decodes (H.264 / HEVC in `.mp4` `.mov` `.m4v`, and `.webm` / `.ogv` only where the OS has a decoder) | `.mp3` `.m4a` `.aac` `.wav` `.aiff` `.aif` `.flac` (`.ogg` only with an OS decoder) | nothing: the source file plays as it is (`core.MediaCaps.Native`, `/state.media.native`) |
-| Windows, Linux | Ogg Theora (`.ogv`) through Godot's `VideoStreamPlayer`; other containers after an ffmpeg + libtheora transcode (`internal/media`) | listed, not played yet | ffmpeg with `libtheora` for the transcode |
+| Platform | Player (`/state.media.player`) | Videos | Audio | Needs |
+|---|---|---|---|---|
+| macOS | `avfoundation` (`avplayer_darwin.go`) | every format AVFoundation decodes (H.264 / HEVC in `.mp4` `.mov` `.m4v`, and `.webm` / `.ogv` only where the OS has a decoder) | `.mp3` `.m4a` `.aac` `.wav` `.aiff` `.aif` `.flac` (`.ogg` only with an OS decoder) | nothing: the source file plays as it is |
+| Windows, Linux | `ffmpeg` (`ffplayer.go`, `internal/media/ffplayer`) | everything ffmpeg decodes (H.264, HEVC, VP8/9, AV1, MPEG-2/4, ProRes, Theora, … in any container), scaled to at most 1920×1080 | everything ffmpeg decodes (mp3, AAC, WAV, AIFF, FLAC, Ogg Vorbis / Opus, …) | ffmpeg + ffprobe: the releases bundle an LGPL build next to the executable, else PATH |
+| Windows, Linux without ffmpeg | `theora` (`video.go`) | Ogg Theora (`.ogv`) only, muted motion backgrounds through Godot's `VideoStreamPlayer` | not played (badge `Needs ffmpeg`) | — |
 
-ffmpeg / ffprobe are still used everywhere, when present, for metadata (`Describe`: size and duration) and poster frames
-(`Thumbnail`); without them videos show a plain tile and play all the same on macOS. The native path never
+`avfoundation` and `ffmpeg` are "native" (`core.MediaCaps.Native`, `/state.media.native`, `playback.*.native`):
+the source file plays as it is, with sound, and the transport works. The app picks the player once at startup
+(`App.selectMediaPlayer` → `core.ChoosePlayer` → `render.UseMediaPlayer`, logged as `[freebeams] media player:
+ffmpeg (<path>)`); **`FREEBEAMS_PLAYER=ffmpeg|avfoundation|theora`** forces one, which is how the ffmpeg player
+is verified on a Mac (`FREEBEAMS_PLAYER=ffmpeg test/smoke.sh`). **`FREEBEAMS_FFMPEG_DIR=<folder>`** makes
+`media.Locate` take ffmpeg / ffprobe from that folder before the bundled copy and PATH.
+
+ffmpeg / ffprobe are also used, when present, for metadata (`Describe`: size and duration) and poster frames
+(`Thumbnail`); without them videos show a plain tile and play all the same on macOS. A native player never
 transcodes (`media.Processor.Native`, set by the app from `render.NativeVideoSupported()`), so the "Needs libtheora"
-badge and the "videos cannot play" footer note are gone on macOS.
+badge and the "videos cannot play" footer note only appear on the Theora fallback, where audio items say
+`Needs ffmpeg` and the footer `ffmpeg not found: audio cannot play` (or `videos and audio`).
 
-Audio goes to the system's default output device at the player's volume (the transport's volume slider; it is not
-routed through Godot's audio bus). A video with a sound track plays its sound too.
+Audio goes to the system's default output device at the player's volume (the transport's volume slider). With
+AVFoundation it is not routed through Godot's audio bus; the ffmpeg player plays through Godot (an
+`AudioStreamPlayer` on the `Master` bus). A video with a sound track plays its sound too.
 
 ## macOS: AVFoundation (`internal/render/avplayer_darwin.go`)
 
@@ -36,6 +46,61 @@ pauses and sets the ended flag.
 
 `suppressesPlayerRendering = YES`: frames go to our texture only; `automaticallyWaitsToMinimizeStalling = NO`: local
 files start at once.
+
+## Windows and Linux: the ffmpeg player (`internal/media/ffplayer`, `internal/render/ffplayer.go`)
+
+PLAN §3 option B. The decoding is pure Go (`internal/media/ffplayer`, unit-tested with plain `go test` against
+clips ffmpeg generates, also on `windows-latest` / `ubuntu-latest` in CI); `render/ffplayer.go` is the thin
+adapter behind `nativePlayer`, so `MediaSource`, the transport, looping, seeking, volume, the crossfade and the
+audio playlist work unchanged.
+
+- **Open**: `ffprobe -show_streams -show_format -of json` (in a goroutine) finds the first video stream that is
+  not cover art (`disposition.attached_pic`), the first audio stream, the duration, the display size (sample
+  aspect ratio and rotation applied: `Tracks` reports it like AVFoundation's `presentationSize`) and the frame
+  rate (`avg_frame_rate`, capped at 60). `Status` is loading until the first frame (audio: the first samples)
+  is decoded, failed when ffprobe or the first decoder fails (logged as `the media player could not play the
+  file (<ffmpeg's last stderr line>)`).
+- **Two processes per position**, one pipe each (stdout), started at the same `-ss`: video `-map 0:<v> -vf
+  fps=fps=<r>:start_time=0,scale=<w>:<h>:flags=bicubic+accurate_rnd+full_chroma_int,setsar=1 -pix_fmt rgba -f
+  rawvideo pipe:1` (frame *n* is at *n* / fps; the frame size is fixed by the probe, so a frame is exactly
+  w·h·4 bytes) and audio `-map 0:<a> -af aresample=<mix rate>:async=1:first_pts=0 -ac 2 -f f32le pipe:1`
+  (sample *n* is at *n* / rate). Two processes because `exec.Cmd.ExtraFiles` does not exist on Windows and one
+  process writing two pipes stalls the sound whenever the video queue is full. Every process gets
+  `sysproc.HideWindow` (`CREATE_NO_WINDOW`) and a `WaitDelay`.
+- **Goroutines → main thread**: the video reader fills a queue of 2 frames from a free list of 4 RGBA buffers
+  (≈ 33 MB per player at 1080p); the audio reader fills a lock-protected ring of 1 s. `Update` (called from the
+  adapter's `Tick`, which `pumpSources` calls once per frame before `TakeEnded` / `CopyFrame`) advances the
+  clock, stops at the end and takes the frames whose time has come (the newest one is shown, older ones are
+  dropped, a future one is held). The first frame after an open or a seek is shown at once, playing or not
+  (the preview's frame 0).
+- **Clock**: with sound, the audio clock: the samples handed out minus what the `AudioStreamGenerator` still
+  holds (`SetAudioBacklog`, the generator's capacity minus `get_frames_available`); without sound, the wall
+  clock. A sound that does not move for 2 s and 30 frames (no audio device, a stuck decoder) hands over to the
+  wall clock until it moves again; one long hitch (a modal dialog) is not a stall. A sound track that cannot be
+  decoded at all plays the video silent on the wall clock (`[ffplayer] <path>: the sound cannot play: …`).
+- **Audio out**: an `AudioStreamGenerator` (the mix rate, 0.25 s buffer) on an `AudioStreamPlayer` under the
+  scene root (found through `Engine.GetMainLoop`, so the playlist's `RoleAudio` source with no view has sound
+  too). Pause is `stream_paused`; the volume is `volume_linear`. A seek or a restart is a new *audio epoch*:
+  the adapter stops the player and plays it again, which makes a new, empty generator playback
+  (`clear_buffer` errors while the playback is active).
+- **Seek** restarts both decoders at the new `-ss` (accurate input seeking); the position is the target at
+  once. **Play after the end** (looping off) starts again from 0.
+- **Looping, gapless**: every pass has the container's duration *D* (the first one *D* − `ss`): the audio reader
+  pads its pass with silence or cuts it to exactly that many samples, the video reader drops frames past it,
+  so the two timelines agree on every pass and nothing drifts. While looping, the video reader starts the next
+  pass's process as soon as the current one delivered its first frame, so the next pass's first frame is
+  already decoded when the current one ends; the audio has its 1 s ring ahead. Turning looping off mid-pass
+  ends at the end of that pass (`TakeEnded`, position = duration); turning it on after a reader reached its
+  end lets it carry on. A file without a duration ends when every stream is played out.
+- **Close** cancels the run's context (kills both processes through `exec.CommandContext`), closes the ring and
+  frees the audio node; `Player.Done()` is closed once every goroutine and process is gone
+  (`TestCloseStopsEverything` checks the goroutine count; the smoke's playlist block checks that no ffmpeg is
+  left decoding a track after Stop and after the fade).
+- Colour: the scale filter reads the frame's colour matrix / range; the smoke clip's BT.709 `#2a7f62` comes out
+  within 2 levels per channel (`#297d61` / `#297e62`; the smoke's pixel check allows 3);
+  `accurate_rnd+full_chroma_int` matter when scaling (without them a 320→64 downscale gave `#277c5f`).
+- Cost: two `ffmpeg` processes per open file (plus the next pass's, idle, while looping), one RGBA copy per new
+  frame into the source buffer, `Image.SetData` + `ImageTexture.Update` as with AVFoundation.
 
 ## Shared sources (`internal/render/videosource.go`)
 
@@ -168,19 +233,23 @@ failed`. Actions: `audio-play {index}`, `audio-pause`, `audio-toggle`, `audio-st
 
 ## Fallbacks
 
-- A file AVFoundation cannot open or play (`status failed`): the slide shows its poster (or black for audio), the
+- A file the player cannot open or play (`status failed`): the slide shows its poster (or black for audio), the
   transport is greyed out, `/state.playback.*.failed` is true, and `[render] <path>: the media player could not play
-  the file` is logged once.
-- Off macOS the native player does not exist: `.ogv` plays through Theora as before, other videos show their poster
-  until transcoded, audio shows black; `playback.*.failed` is true for those (nothing can play them), `native` is false.
-- The smoke test's playback block skips itself where ffmpeg (which makes the test clip) is absent or the player is not
-  native.
+  the file` is logged once (the ffmpeg player adds ffmpeg's error in parentheses).
+- Off macOS without ffmpeg (the `theora` player): `.ogv` plays through Theora as before, other videos show their
+  poster until transcoded, audio shows black; `playback.*.failed` is true for those (nothing can play them),
+  `native` is false.
+- The smoke test's playback and playlist blocks skip themselves where ffmpeg (which makes the test clips) is absent
+  or the player is not native.
 
 ## Not done
 
 - Poster frames through `AVAssetImageGenerator` (videos still need ffmpeg for a thumbnail on macOS).
 - A per-item Repeat / Aspect property on `models.Media`: `models.Background.Loop` is the hook (`Media.Background()`
   sets it; `PlaybackDefaults` reads it).
-- Audio playback off macOS (the audio playlist included: it plays through the same player layer).
+- The ffmpeg player on a real Windows or Linux machine: verified on macOS (`FREEBEAMS_PLAYER=ffmpeg`, Homebrew ffmpeg
+  and the bundled LGPL build), and its pure-Go tests run in CI on `windows-latest` / `ubuntu-latest`, but the app
+  itself has not run there yet. Hardware decoding (the bundled build has none: `--disable-autodetect`), a
+  YUV → RGB shader instead of the RGBA conversion in ffmpeg, and 4K output.
 - Audio playlist: drag-and-drop from the Media tab into the list, a crossfade between tracks, playlists kept in the
   library (reusable across services), routing the music to its own output device.

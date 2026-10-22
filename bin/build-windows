@@ -11,7 +11,9 @@
 #
 # Outputs (<v> = bin/version, <arch> = GOARCH, amd64 by default):
 #   releases/windows/<arch>/                    FreeBeams.exe, windows_<arch>.dll
-#                                               (+ runtime DLLs the .dll needs)
+#                                               (+ runtime DLLs the .dll needs),
+#                                               ffmpeg.exe, ffprobe.exe, FFMPEG-*.txt
+#                                               (LGPL, bin/build-ffmpeg; native builds)
 #   releases/FreeBeams-<v>-windows-<arch>.zip the portable bundle
 #   releases/FreeBeams-<v>-Setup.exe          the installer (Windows with Inno Setup)
 #
@@ -20,6 +22,7 @@
 #       runs on every PE file before it is packaged (Authenticode placeholder;
 #       no certificate is part of this repository)
 #   NO_INSTALLER=1   skip Inno Setup on Windows
+#   NO_FFMPEG=1      do not bundle ffmpeg / ffprobe
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -97,6 +100,27 @@ else
 	echo "    objdump not found: the DLL's runtime dependencies were not checked"
 fi
 
+# --- bundled ffmpeg (LGPL) -----------------------------------------------------
+# ffmpeg.exe + ffprobe.exe beside FreeBeams.exe: the media player, poster
+# frames and metadata (docs/MEDIA.md). bin/build-ffmpeg builds the pinned,
+# checksummed LGPL release once into its cache; NO_FFMPEG=1 skips it (the app
+# then uses an ffmpeg on PATH, or plays only Theora backgrounds).
+step "bundle ffmpeg"
+FFMPEG_FILES=()
+if [ "${NO_FFMPEG:-0}" = "1" ]; then
+	echo "    skipped (NO_FFMPEG=1)"
+elif [ "$native" != 1 ]; then
+	echo "    skipped: bin/build-ffmpeg builds on Windows (MSYS2 UCRT64) only; a cross build ships no ffmpeg"
+else
+	"$ROOT/bin/build-ffmpeg"
+	FF="$("$ROOT/bin/build-ffmpeg" --prefix)"
+	cp -f "$FF/bin/ffmpeg.exe" "$FF/bin/ffprobe.exe" "$OUT/"
+	cp -f "$FF/LICENSE.txt" "$OUT/FFMPEG-LICENSE.txt"
+	cp -f "$FF/NOTICE.txt" "$OUT/FFMPEG-NOTICE.txt"
+	FFMPEG_FILES=("$OUT/ffmpeg.exe" "$OUT/ffprobe.exe")
+	"$OUT/ffmpeg.exe" -hide_banner -version | head -n 1
+fi
+
 # --- brand the exe (icon + version resource) --------------------------------
 # Godot only applies application/icon and the version strings from the export
 # preset when rcedit is configured in its editor settings, so apply them here
@@ -134,7 +158,7 @@ sign_files() { # sign_files FILE...
 	done
 }
 step "sign the bundle"
-sign_files "$EXE" "$OUT/$(basename "$DLL")"
+sign_files "$EXE" "$OUT/$(basename "$DLL")" ${FFMPEG_FILES[@]+"${FFMPEG_FILES[@]}"}
 
 # --- portable zip ------------------------------------------------------------
 step "zip"

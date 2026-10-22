@@ -70,12 +70,15 @@ type PlaybackState struct {
 	HasVideo bool    `json:"hasVideo"`
 	HasAudio bool    `json:"hasAudio"`
 	Title    string  `json:"title,omitempty"` // the media item's title
-	Native   bool    `json:"native"`          // the platform player is in use (false: Theora / nothing)
+	Native   bool    `json:"native"`          // a media player is in use: AVFoundation or ffmpeg (false: Theora / nothing)
 	// Media reports whether the monitor shows a video or audio item at all
 	// (the transport bar is shown only then).
 	Media bool `json:"media"`
 	// Failed reports a file the player could not open (the poster is shown).
 	Failed bool `json:"failed,omitempty"`
+
+	// Player is the media player backend (avfoundation, ffmpeg, theora).
+	Player string `json:"player"`
 }
 
 // PlaybackStates is the /state document's "playback" object.

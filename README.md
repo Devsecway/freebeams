@@ -20,8 +20,8 @@ platform; Windows and Linux builds come from the same code.
   translations are never bundled, only imported from files you hold a licence for ([docs/BIBLES.md](docs/BIBLES.md)).
   Type a reference such as `jn 3:16-18` or `ps 23` and go live.
 - **Media**: images, videos and audio with thumbnails, aspect-ratio and loop options per item, and native playback
-  with sound on the projector (AVFoundation on macOS). A transport bar under each output monitor gives seek,
-  pause, loop and volume ([docs/MEDIA.md](docs/MEDIA.md)).
+  with sound on the projector (AVFoundation on macOS, the bundled ffmpeg on Windows and Linux). A transport bar
+  under each output monitor gives seek, pause, loop and volume ([docs/MEDIA.md](docs/MEDIA.md)).
 - **Presentations**: PDF, PowerPoint and Keynote files become image slides you can step through.
 - **Themes**: fonts, colours, outlines, shadows and backgrounds per song and per scripture, with a theme editor.
 - **Output**: a borderless projector window on a second display (or windowed on one screen), Black, Clear and
@@ -152,3 +152,8 @@ Conventions for contributors (state machine UI, package dependency rules, Godot 
   import, and you are responsible for holding a licence for them.
 - The logo and wordmark are original work for this project ([docs/branding/README.md](docs/branding/README.md)).
   EasyWorship is a trademark of Softouch Development; FreeBeams is not affiliated with it.
+- The Windows and Linux releases include `ffmpeg` and `ffprobe` from the [FFmpeg](https://ffmpeg.org/) project,
+  built from the unmodified 8.1.3 release without GPL or non-free parts, so they are licensed under the LGPL v2.1
+  or later. `FFMPEG-LICENSE.txt` and `FFMPEG-NOTICE.txt` (source URL, checksum, configure line) sit next to them,
+  and `bin/build-ffmpeg` reproduces the build ([docs/RELEASE.md](docs/RELEASE.md)). FreeBeams runs them as
+  separate programs; you may replace them with another build.

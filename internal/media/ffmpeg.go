@@ -8,17 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"freebeams/internal/models"
+	"freebeams/internal/sysproc"
 )
 
 // Tools runs ffprobe and ffmpeg. The zero value has no tools; Detect fills it
-// from PATH. It implements Prober, Thumbnailer and Transcoder; each method
+// (the bundled copy next to the executable, else PATH). It implements Prober, Thumbnailer and Transcoder; each method
 // returns ErrUnavailable (or ErrNoTheora) when the needed tool is missing,
 // so a Tools value can always be passed to a Processor.
 type Tools struct {
@@ -27,16 +27,11 @@ type Tools struct {
 	Theora  bool   // ffmpeg has the libtheora encoder (needed for transcodes)
 }
 
-// Detect looks for ffmpeg and ffprobe on PATH and checks ffmpeg's encoders.
-// It never fails: missing tools leave the fields empty.
+// Detect finds ffmpeg and ffprobe (Locate: the bundled copy, then PATH) and
+// checks ffmpeg's encoders. It never fails: missing tools leave the fields
+// empty.
 func Detect(ctx context.Context) Tools {
-	var t Tools
-	if p, err := exec.LookPath("ffmpeg"); err == nil {
-		t.FFmpeg = p
-	}
-	if p, err := exec.LookPath("ffprobe"); err == nil {
-		t.FFprobe = p
-	}
+	t := Locate()
 	if t.FFmpeg != "" {
 		out, err := t.run(ctx, t.FFmpeg, "-hide_banner", "-encoders")
 		if err == nil {
@@ -83,7 +78,7 @@ func (t Tools) Status() string {
 
 // run executes a tool and returns its stdout; stderr goes into the error.
 func (t Tools) run(ctx context.Context, bin string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd := sysproc.CommandContext(ctx, bin, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -233,7 +228,7 @@ func (t Tools) Transcode(ctx context.Context, src, dst string, progress func(flo
 	}
 	tmp := partFile(dst, ".ogv")
 	defer os.Remove(tmp)
-	cmd := exec.CommandContext(ctx, t.FFmpeg, "-v", "error", "-y", "-i", src, "-an",
+	cmd := sysproc.CommandContext(ctx, t.FFmpeg, "-v", "error", "-y", "-i", src, "-an",
 		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", maxTranscodeWidth),
 		"-c:v", "libtheora", "-q:v", "7", "-f", "ogg",
 		"-nostats", "-progress", "pipe:1", tmp)

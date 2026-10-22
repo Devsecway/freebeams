@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# Build the LGPL ffmpeg + ffprobe that the Windows and Linux releases bundle
+# next to the app (docs/RELEASE.md "Bundled ffmpeg", docs/MEDIA.md).
+#
+# The source is the pinned release tarball from ffmpeg.org, verified against
+# its SHA-256. It is configured without --enable-gpl / --enable-nonfree and
+# with no external libraries (--disable-autodetect, zlib aside), so the
+# programs are LGPL v2.1+, and linked statically, so they need no DLLs / .so
+# files beside them.
+#
+#   bin/build-ffmpeg            # builds once into the cache, prints nothing else on stdout
+#   bin/build-ffmpeg --prefix   # prints the install prefix (bin/ffmpeg[.exe], bin/ffprobe[.exe], LICENSE / NOTICE)
+#
+# Runs natively on Linux (gcc, make, nasm) and on Windows under MSYS2 UCRT64
+# (mingw-w64-ucrt-x86_64-gcc, make, nasm, zlib); also on macOS for a local
+# check. FFMPEG_CACHE (default ~/.cache/freebeams) holds the source and the
+# build; FFMPEG_PREFIX overrides the install prefix, FFMPEG_JOBS the make -j.
+set -euo pipefail
+
+FFMPEG_VERSION=8.1.3
+FFMPEG_SHA256=7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
+FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+fail() {
+	echo "build-ffmpeg: $*" >&2
+	exit 1
+}
+need() { command -v "$1" >/dev/null 2>&1 || fail "'$1' not found ($2)"; }
+step() { printf '\n==> %s\n' "$*" >&2; }
+
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*) os=windows exe=.exe ;;
+Linux) os=linux exe= ;;
+Darwin) os=macos exe= ;;
+*) fail "unsupported OS $(uname -s)" ;;
+esac
+arch="$(uname -m)"
+CACHE="${FFMPEG_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/freebeams}"
+# A Windows path from the workflow (D:\a\_temp\...) becomes /d/a/_temp/... under MSYS2.
+command -v cygpath >/dev/null 2>&1 && CACHE="$(cygpath -u "$CACHE")"
+PREFIX="${FFMPEG_PREFIX:-$CACHE/ffmpeg-$FFMPEG_VERSION-$os-$arch}"
+
+if [ "${1:-}" = "--prefix" ]; then
+	echo "$PREFIX"
+	exit 0
+fi
+
+if [ -x "$PREFIX/bin/ffmpeg$exe" ] && [ -x "$PREFIX/bin/ffprobe$exe" ] && [ -f "$PREFIX/NOTICE.txt" ]; then
+	step "ffmpeg $FFMPEG_VERSION already built in $PREFIX"
+	exit 0
+fi
+
+need curl "to download the source"
+need make "build tools"
+need tar "coreutils"
+case "$arch" in
+x86_64 | amd64 | i?86) need nasm "the x86 assembler ffmpeg's fast decoders need (apt install nasm / pacman -S nasm)" ;;
+esac
+if command -v sha256sum >/dev/null 2>&1; then
+	sha() { sha256sum "$1" | cut -d' ' -f1; }
+else
+	sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
+fi
+
+# --- source ------------------------------------------------------------------
+SRC="$CACHE/src"
+TARBALL="$SRC/ffmpeg-$FFMPEG_VERSION.tar.xz"
+mkdir -p "$SRC"
+if [ ! -f "$TARBALL" ] || [ "$(sha "$TARBALL")" != "$FFMPEG_SHA256" ]; then
+	step "download $FFMPEG_URL"
+	curl -fsSL -o "$TARBALL.part" "$FFMPEG_URL"
+	mv -f "$TARBALL.part" "$TARBALL"
+fi
+got="$(sha "$TARBALL")"
+[ "$got" = "$FFMPEG_SHA256" ] || fail "checksum mismatch for $TARBALL: $got, want $FFMPEG_SHA256"
+step "source verified (sha256 $FFMPEG_SHA256)"
+
+WORK="$(mktemp -d -t freebeams-ffmpeg.XXXXXX)"
+trap 'rm -rf "$WORK"' EXIT
+tar -C "$WORK" -xJf "$TARBALL"
+cd "$WORK/ffmpeg-$FFMPEG_VERSION"
+
+# --- configure ---------------------------------------------------------------
+# What FreeBeams runs: ffprobe (metadata), ffmpeg decoding to raw RGBA /
+# f32le pipes (the player), JPEG / PNG stills (posters). Every native decoder,
+# demuxer, parser and filter stays in; encoders and muxers are cut to those.
+flags=(
+	--prefix="$PREFIX"
+	--disable-debug --disable-doc --disable-ffplay
+	--enable-static --disable-shared
+	--disable-autodetect --enable-zlib
+	--disable-network --disable-devices
+	--disable-encoders --enable-encoder=mjpeg,png,rawvideo,wrapped_avframe,pcm_f32le,pcm_s16le
+	--disable-muxers --enable-muxer=image2,image2pipe,mjpeg,rawvideo,pcm_f32le,pcm_s16le,wav,null
+	--pkg-config-flags=--static
+)
+case "$os" in
+windows) flags+=(--extra-ldflags=-static) ;;
+linux) flags+=(--extra-ldflags=-static) ;;
+esac
+step "configure ${flags[*]}"
+./configure "${flags[@]}" >configure.out 2>&1 || {
+	cat configure.out >&2
+	tail -n 40 ffbuild/config.log >&2 || true
+	fail "configure failed"
+}
+cat configure.out >&2
+grep -q '^License: LGPL version 2.1 or later' configure.out || fail "configure did not produce an LGPL v2.1+ build"
+
+jobs="${FFMPEG_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+step "make -j$jobs"
+make -j"$jobs" >&2
+rm -rf "$PREFIX"
+make install >&2
+rm -rf "$PREFIX/include" "$PREFIX/lib" "$PREFIX/share"
+
+# configure ignores a component name it does not know: check that what the
+# app runs is there (ffmpeg -f rawvideo / f32le / image2, -c:v mjpeg).
+"$PREFIX/bin/ffmpeg$exe" -hide_banner -version | head -n 1 >&2
+muxers="$("$PREFIX/bin/ffmpeg$exe" -hide_banner -muxers 2>/dev/null)"
+encoders="$("$PREFIX/bin/ffmpeg$exe" -hide_banner -encoders 2>/dev/null)"
+for m in rawvideo f32le image2; do
+	grep -qE "^ +E +$m " <<<"$muxers" || {
+		rm -rf "$PREFIX"
+		fail "the build has no $m muxer"
+	}
+done
+for e in mjpeg rawvideo pcm_f32le; do
+	grep -qE "^ +[A-Z.]{6} $e " <<<"$encoders" || {
+		rm -rf "$PREFIX"
+		fail "the build has no $e encoder"
+	}
+done
+"$PREFIX/bin/ffprobe$exe" -hide_banner -version >/dev/null || {
+	rm -rf "$PREFIX"
+	fail "ffprobe does not run"
+}
+
+# --- licence and notice (NOTICE.txt last: it marks a finished build) ---------
+cp -f COPYING.LGPLv2.1 "$PREFIX/LICENSE.txt"
+{
+	cat "$ROOT/packaging/ffmpeg/NOTICE.txt"
+	echo
+	echo "Version:   FFmpeg $FFMPEG_VERSION"
+	echo "Source:    $FFMPEG_URL"
+	echo "SHA-256:   $FFMPEG_SHA256"
+	echo "Configure: ${flags[*]/--prefix=*/--prefix=<prefix>}"
+	echo "Built:     $(uname -s) $arch, $(date -u +%Y-%m-%d)"
+} >"$PREFIX/NOTICE.txt"
+step "ffmpeg $FFMPEG_VERSION installed in $PREFIX"

@@ -110,12 +110,32 @@ jobs:
           go-version-file: go.mod
 
       # UCRT64 gcc builds the Go c-shared DLL; path-type inherit keeps Go and
-      # Inno Setup (preinstalled on the runner image) visible.
+      # Inno Setup (preinstalled on the runner image) visible. make, nasm,
+      # diffutils, pkgconf and zlib build the bundled LGPL ffmpeg
+      # (bin/build-ffmpeg).
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
           path-type: inherit
-          install: mingw-w64-ucrt-x86_64-gcc zip
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc zip make diffutils nasm
+            mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-zlib
+
+      # The bundled ffmpeg is built from the pinned, checksummed release once
+      # per bin/build-ffmpeg change (a build takes a while under MSYS2).
+      - name: Cache the bundled ffmpeg build
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ffmpeg-cache
+          key: ffmpeg-${{ runner.os }}-${{ hashFiles('bin/build-ffmpeg', 'packaging/ffmpeg/NOTICE.txt') }}
+
+      # A full ffmpeg on PATH makes the test clips for the player tests run
+      # against the bundled build after the bundle is made.
+      - name: Install ffmpeg for the tests
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          "C:\ProgramData\chocolatey\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Let gd download Godot
         shell: msys2 {0}
@@ -133,7 +153,17 @@ jobs:
         shell: msys2 {0}
         env:
           SIGNTOOL_CMD: ${{ secrets.SIGNTOOL_CMD }}
+          FFMPEG_CACHE: ${{ runner.temp }}/ffmpeg-cache
         run: bin/build-windows
+
+      # The media player's tests, decoding with the ffmpeg.exe / ffprobe.exe
+      # that were just bundled (FREEBEAMS_FFMPEG_DIR).
+      - name: Test the player against the bundled ffmpeg
+        shell: bash
+        env:
+          FREEBEAMS_REQUIRE_FFMPEG: "1"
+          FREEBEAMS_FFMPEG_DIR: ${{ github.workspace }}/releases/windows/amd64
+        run: go test -count=1 ./internal/media/ffplayer/
 
       - uses: actions/upload-artifact@v7
         with:
@@ -161,10 +191,19 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # nasm and zlib build the bundled LGPL ffmpeg (bin/build-ffmpeg); the
+      # distribution's ffmpeg makes the test clips for the player tests.
       - name: Packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends file libfuse2 desktop-file-utils
+          sudo apt-get install -y --no-install-recommends file libfuse2 desktop-file-utils \
+            nasm zlib1g-dev pkg-config ffmpeg
+
+      - name: Cache the bundled ffmpeg build
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ffmpeg-cache
+          key: ffmpeg-${{ runner.os }}-${{ hashFiles('bin/build-ffmpeg', 'packaging/ffmpeg/NOTICE.txt') }}
 
       - name: Let gd download Godot
         run: echo "GOTOOLCHAIN=$(go env GOVERSION)" >> "$GITHUB_ENV"
@@ -178,7 +217,15 @@ jobs:
           key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
 
       - name: Build bundle, tar.gz and AppImage
+        env:
+          FFMPEG_CACHE: ${{ runner.temp }}/ffmpeg-cache
         run: bin/build-linux
+
+      - name: Test the player against the bundled ffmpeg
+        env:
+          FREEBEAMS_REQUIRE_FFMPEG: "1"
+          FREEBEAMS_FFMPEG_DIR: ${{ github.workspace }}/releases/linux/amd64
+        run: go test -count=1 ./internal/media/ffplayer/
 
       - uses: actions/upload-artifact@v7
         with:

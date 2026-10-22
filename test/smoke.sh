@@ -969,11 +969,13 @@ act "presentation search ignores case" search-presentations '{"q":"ZZZ-NOTHING"}
 act "all presentations again" search-presentations '{"q":""}' "s[\"presentations\"][\"results\"] == $PRES_COUNT"
 
 # ---- playback ----------------------------------------------------------------------------
-# Videos and audio play through the platform's media player (AVFoundation on
-# macOS, docs/MEDIA.md): a 4 s solid #2a7f62 clip with a 440 Hz tone and a 3 s
-# WAV, driven through the transport actions and /state.playback. Skipped
-# where the player is not native (nothing plays without a Theora transcode)
-# or ffmpeg (which makes the clip) is absent.
+# Videos and audio play through the media player (docs/MEDIA.md): AVFoundation
+# on macOS, the ffmpeg player on Windows / Linux, and here too with
+# FREEBEAMS_PLAYER=ffmpeg test/smoke.sh. A 4 s solid #2a7f62 clip with a
+# 440 Hz tone and a 3 s WAV, driven through the transport actions and
+# /state.playback. Skipped where there is no media player (the Theora
+# fallback plays nothing without a transcode) or ffmpeg (which makes the
+# clip) is absent.
 # pb_wait DESCRIPTION EXPR: polls /state (up to 10 s) until EXPR holds, then checks it.
 pb_wait() {
 	for _ in $(seq 1 40); do
@@ -986,6 +988,11 @@ pb_wait() {
 LAST="$(state)"
 check "playback state is present" "$LAST" '"live" in s["playback"] and "preview" in s["playback"] and not s["playback"]["live"]["media"]'
 PB_NATIVE="$(field "$LAST" playback.live.native)" # before the refusal below leaves an error reply in LAST
+PB_PLAYER="$(field "$LAST" playback.live.player)"
+log "media player: $PB_PLAYER"
+if [ -n "${FREEBEAMS_PLAYER:-}" ]; then
+	check "FREEBEAMS_PLAYER=$FREEBEAMS_PLAYER selects that player" "$LAST" "s[\"playback\"][\"live\"][\"player\"] == \"$FREEBEAMS_PLAYER\" and s[\"media\"][\"player\"] == \"$FREEBEAMS_PLAYER\""
+fi
 act "a monitor without media refuses play" play '' 'not r["ok"]'
 if [ "$FFMPEG" = "True" ] && [ "$PB_NATIVE" = "True" ]; then
 	PB_DIR="$OUT/playback"
@@ -1060,12 +1067,26 @@ PY
 	shot playback-audio-output output
 	shot playback-audio-main main
 	pixel "audio shows a black output" "$OUT/playback-audio-output.png" black
+	# The audio clock: it runs in real time, follows a seek while playing
+	# (the ffmpeg player restarts its decoder and drops the queued sound) and
+	# stops at the end.
+	PB_POS="$(field "$LAST" playback.live.position)"
+	sleep 0.5
+	LAST="$(state)"
+	check "the tone's position advances in real time" "$LAST" "s[\"playback\"][\"live\"][\"playing\"] and s[\"playback\"][\"live\"][\"position\"] > $PB_POS + 0.3 or s[\"playback\"][\"live\"][\"position\"] > 2.5"
+	act "seek the tone while it plays" seek '{"seconds":1.5}' 'r["ok"]'
+	pb_wait "the tone plays on from the seek" 's["playback"]["live"]["playing"] and 1.55 < s["playback"]["live"]["position"] < 2.8'
+	pb_wait "the tone stops at its end" 'not s["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 2.9'
+	if [ "$PB_PLAYER" = "ffmpeg" ]; then
+		grep -q 'the sound cannot play' "$LOG" && fail "the ffmpeg player could not decode a sound track"
+		log "ok: the ffmpeg player decoded every sound track"
+	fi
 	act "remove the clip" remove-media '{"title":"smoke-clip","confirm":true}' "s[\"media\"][\"count\"] == $PB_COUNT + 1"
 	act "remove the tone" remove-media '{"title":"smoke-tone","confirm":true}' "s[\"media\"][\"count\"] == $PB_COUNT and s[\"media\"][\"audio\"] == $PB_AUDIO"
 	check "the tone keeps playing from the live deck" "$LAST" 's["live"]["title"] == "smoke-tone" and s["playback"]["live"]["media"]'
 	act "Songs tab (playback)" tab '{"tab":"songs"}' 's["tab"] == 0'
 else
-	log "playback: skipped (ffmpeg=$FFMPEG native=$PB_NATIVE)"
+	log "playback: skipped (ffmpeg=$FFMPEG native=$PB_NATIVE player=$PB_PLAYER)"
 fi
 
 # ---- song themes -----------------------------------------------------------------------------
@@ -1505,6 +1526,26 @@ act "black off (alerts)" black '{"on":false}' 's["mode"] == "normal"'
 LAST="$(state)"
 check "the audio state is present (empty, stopped)" "$LAST" 's["audio"]["tracks"] == [] and s["audio"]["status"] == "stopped" and s["audio"]["track"] == -1 and s["audio"]["repeat"] == "off" and not s["audio"]["shuffle"]'
 AU_NATIVE="$(field "$LAST" audio.native)"
+# playlist_ffmpeg counts the app's ffmpeg processes decoding a playlist track
+# (the ffmpeg player, FREEBEAMS_PLAYER=ffmpeg; AVFoundation runs none).
+playlist_ffmpeg() {
+	local p n=0
+	for p in $(app_pids); do
+		ps -o command= -p "$p" 2>/dev/null | grep -q 'ffmpeg .*pl-[0-9]-' && n=$((n + 1))
+	done
+	echo "$n"
+}
+# no_playlist_ffmpeg DESCRIPTION: waits (up to 5 s) until none is left.
+no_playlist_ffmpeg() {
+	local n
+	for _ in $(seq 1 20); do
+		n="$(playlist_ffmpeg)"
+		[ "$n" = 0 ] && break
+		sleep 0.25
+	done
+	[ "$n" = 0 ] || fail "$1: $n ffmpeg process(es) still decode a playlist track"
+	log "ok: $1"
+}
 act "an empty playlist cannot play" audio-play '' 'not r["ok"] and "no track" in r["error"]'
 act "a seek needs a playing track" audio-seek '{"seconds":1}' 'not r["ok"]'
 act "a bad repeat mode is refused" audio-repeat '{"mode":"twice"}' 'not r["ok"]'
@@ -1586,6 +1627,7 @@ if [ "$FFMPEG" = "True" ] && [ "$AU_NATIVE" = "True" ]; then
 	act "stop fades out" audio-stop '' 's["audio"]["fading"] and s["audio"]["status"] == "playing"'
 	pb_wait "the volume ramps down" 's["audio"]["fading"] and 0 < s["audio"]["gain"] < 0.9'
 	pb_wait "the fade ends stopped" 's["audio"]["status"] == "stopped" and not s["audio"]["fading"] and s["audio"]["gain"] == 1 and not s["audio"]["loaded"]'
+	no_playlist_ffmpeg "the stopped playlist leaves no decoder running"
 	# The phone remote: play / pause, next and previous track (internal/remote/actions.go).
 	RPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 	RBASE="http://127.0.0.1:$RPORT"
@@ -1627,7 +1669,12 @@ PY
 	act "open the schedule again" open-schedule "{\"path\":\"$AU_SCHED\"}" '[t["title"] for t in s["audio"]["tracks"]] == ["pl-4-postlude", "pl-1-prelude", "pl-2-hymn"] and s["audio"]["repeat"] == "all" and s["audio"]["fadeOut"] == 2 and s["audio"]["status"] == "stopped" and s["audio"]["track"] == 0 and not s["schedule"]["dirty"]'
 	act "the reopened playlist plays" audio-play '' 's["audio"]["playing"] and s["audio"]["title"] == "pl-4-postlude"'
 	pb_wait "the reopened playlist's first track plays" 's["audio"]["loaded"] and s["audio"]["position"] > 0.1'
+	if [ "${PB_PLAYER:-}" = "ffmpeg" ]; then
+		[ "$(playlist_ffmpeg)" -ge 1 ] || fail "the ffmpeg player runs no decoder for the playing track"
+		log "ok: the ffmpeg player decodes the playing track"
+	fi
 	act "stop (audio)" audio-stop '{"fade":false}' 's["audio"]["status"] == "stopped"'
+	no_playlist_ffmpeg "stop kills the track's decoder"
 	act "Clear Playlist asks first" playlist-clear '' 'len(s["audio"]["tracks"]) == 3'
 	wait_idle
 	check "the clear question is up" "$LAST" 's["dialog"]["confirm"] == "Clear Playlist"'

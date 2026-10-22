@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"freebeams/internal/sysproc"
 )
 
 // Tools are the external renderers found on this machine. The zero value has
@@ -86,7 +88,7 @@ func (t Tools) Status() string {
 
 // run executes a tool and returns its stdout; stderr goes into the error.
 func run(ctx context.Context, dir, bin string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd := sysproc.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

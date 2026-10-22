@@ -32,8 +32,10 @@ type playbackState struct {
 // monitorRoles lists the monitors with a transport bar.
 var monitorRoles = []render.VideoRole{render.RoleLive, render.RolePreview}
 
-// initPlayback sets the starting volume. Called from Ready.
+// initPlayback picks the media player and sets the starting volume. Called
+// from Ready, before buildUI.
 func (a *App) initPlayback() {
+	a.selectMediaPlayer()
 	a.pb.live.Volume = 1
 	a.pb.preview.Volume = 1
 }
@@ -196,7 +198,7 @@ func (a *App) renderPlayback() {
 
 // playbackStateDoc is one monitor's playback for /state and the transport.
 func (a *App) playbackStateDoc(role render.VideoRole) core.PlaybackState {
-	st := core.PlaybackState{Native: render.NativeVideoSupported()}
+	st := core.PlaybackState{Native: render.NativeVideoSupported(), Player: render.MediaPlayer()}
 	frame := a.playbackFrame(role)
 	bg, ok := core.FrameMedia(frame)
 	if !ok {
