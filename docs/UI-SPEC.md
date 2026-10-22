@@ -164,6 +164,12 @@ its design-time value. Positions the user drags to are saved in the `ui.layout` 
   Schedule also has a **40 × 24** gear dropdown (`ScheduleAction`) before them, with a 2px divider.
 - Live header has an extra left **GoBack** button with a divider (`ToolBar_GoBackLeft`).
 - Under Preview's output: a 28px bar with the "Preview Output" label (margins 6). Live output's bar holds a foldback-select button and the "Live Output" label (62px wide).
+- **FreeBeams addition (no EasyWorship equivalent):** the Schedule column ends with the **Audio Playlist** panel
+  (background music that plays independently of the Live slide, docs/MEDIA.md "Audio playlist"): a 28px header
+  like the Schedule's ("Audio Playlist", `+▾` and `⚙▾` 40 × 24 dropdowns with a 2px divider), a four-row track list
+  (110px; ▶ / ❚❚ marks the current track, missing files at 45 % text alpha) and a transport on `window.bk1`: title +
+  `0:12 / 3:00`, the seek slider, ⏮ (24 × 24), a 30px round ⏯, ⏭, ⏹, repeat (`loop` / `repeat_one`, pressed while
+  on), shuffle, volume icon and slider.
 
 ### 3.4 Preview / Live content
 - Each column has two modes (a hidden tab control): **Slide Selector** (thumbnail grid, the default) and **Outline View** (text outline editor).
