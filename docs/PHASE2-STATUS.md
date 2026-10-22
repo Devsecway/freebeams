@@ -595,7 +595,10 @@ Recorded 2026-10-22 on the same machine (HDMI TV as the projector, no Screen Rec
 | A double-click on the Preview monitor is Go Live; single clicks unchanged | **pass** | `ui.MonitorHost.OnDoubleClick` (left double-click only, accepted; other clicks pass on). Smoke: `a single click on the Preview monitor does nothing`, `a double-click on the Preview monitor goes live`. |
 | Control actions and `/state` | **pass** | `reference {text, bible}` (also sets the field), `pick-suggestion {index}`, `select-verses {rows}`, `click {target: "verse"\|"suggestion"\|"preview-monitor", index, shift, meta, ctrl, double, button}`. `/state.scripture` adds `listed`, `rows`, `field`, `suggestions`, `suggestion`, `suggestionsShown`; `selected` is now the list row of the current verse and `verses` the listed rows. |
 
-SMOKE_RESULT_PLACEHOLDER
+Smoke on 2026-10-22, after merging main: `test/smoke.sh` **1017/1017 PASS**, log hygiene clean (the locator block
+adds 41 checks; five existing scripture checks now expect whole-chapter lists and list rows). One earlier run after
+the merge failed outside this work, `screenshot song-menu is not a PNG: {"ok":false,"error":"screenshot: viewport
+\"\" has no image yet"}`, while Slack was the frontmost app; it passed on the rerun.
 
 ### Shared files touched (scripture locator)
 
