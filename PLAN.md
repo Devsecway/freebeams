@@ -255,6 +255,8 @@ Each milestone ends with something you can run (`gd run`) and demo.
 1. **Stage display**: second output with current + next slide, clock, timer, and notes.
 2. **Remote control**: `net/http` + `gorilla/websocket`. The phone web UI shows the schedule, slide grid and next/prev/black.
    Reuse the control server's bearer key and show a QR code with the URL+key in the app.
+   Done (2026-10-22): pairing code + operator approval + per-device tokens instead of the shared key, see
+   [docs/REMOTE.md](docs/REMOTE.md).
 3. **Video items with audio + transport** (Video option B), plus audio playlists.
 4. Countdown timers, alerts/announcement ticker overlay.
 5. Presentations: PDF → images (via `pdftoppm`/MuPDF), PPTX via LibreOffice headless → PDF.

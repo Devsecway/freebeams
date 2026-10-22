@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 586 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback and tile-menu blocks)
+test/smoke.sh          # 688 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, remote-control and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -377,6 +377,41 @@ Recorded 2026-10-22 on the same machine. "smoke: X" names a check in the `# ----
   `internal/ui/songs.go` (`songMenuTheme`, the panel fields in their own block, one line each in the constructor and
   `showMenu`).
 - `test/smoke.sh`: the `# ---- song themes` block before `# ---- item menus`.
+
+## Remote control (PLAN v0.2 item 2)
+
+Recorded 2026-10-22 on the same machine (a full smoke run passed 688 checks, 41 of them in the remote block).
+"smoke: X" names a check in the `# ---- remote control` section of `test/smoke.sh` (before `# ---- item menus`).
+Design and security model: [REMOTE.md](REMOTE.md).
+
+| Criterion | Status | Verification |
+|---|---|---|
+| LAN server (`net/http` + `gorilla/websocket`) serving an embedded phone web app with no external resources, off until turned on | **pass** | `internal/remote` (pure Go): `server.go`, `ws.go`, `web/`. `TestWebAppIsSelfContained`. Smoke: `the remote is off by default`, `turn the remote on` (on a free port), `the remote serves the phone app`, `turn the remote off`, `nothing listens on the remote port any more`. |
+| Started / stopped from settings: `remote.enabled`, `remote.port` (Options ▸ Remote, toolbar Remote ▾ ▸ Remote Control On), persisted; Cancel in Options restores them | **pass** | `App.initRemote` / `syncRemoteServer` / `setRemoteEnabled` / `setRemotePort` (`internal/app/remote.go`); the Options page in `ui.SettingsDialog` (`SettingsPageRemote`). `ValidRemotePort` refuses ports below 1024. Smoke: `a port below 1024 is refused`, `the Options dialog has a Remote page` (`test/out/remote-options.png`). |
+| Pairing: six-digit code + operator approval by name; per-device 256-bit tokens stored as SHA-256 hashes (`remote.devices`); revocation closes the device's sockets at once | **pass** | `pairing.go`, `devices.go`. `TestPairingFlow`, `TestDenyAndExpiry`, `TestTokenAuth`, `TestRevocation`, `TestRateLimit`, `TestLimiter`. Smoke: `a wrong pairing code is refused` (403, 4 tries left), `the right code asks the operator`, `the phone waits for approval` (kind `phone` from the User-Agent), `approve the phone` (the code changes), `the approved phone collects its token`, `an unpaired phone gets no state (401)`, `the phone is told it was removed and disconnected`, `the revoked token no longer works (401)`. |
+| Network guards: local peers only, IP / localhost / `.local` Host (DNS rebinding), same-origin JSON POSTs and WebSocket upgrades, whitelisted phone actions only | **pass** | `net.go`, `actions.go`. `TestRequestGuards`, `TestAddressChecks`, `TestWebSocketOriginCheck`, `TestActionsAreWhitelisted`, `TestPermissions`. Smoke: `black off from the phone; control-only actions are unknown to it` (`quit`, `open-schedule` refused over the socket). |
+| The app shows a QR code with the URL and the pairing code; waiting phones are approved / denied and paired devices removed there (`ui.RemoteDialog`, a dumb view) | **pass** | `internal/ui/remote.go`; the QR is `remote.QRPixels` (one pixel per module, nearest filtering) in a `TextureRect`. `TestQRCode`. Screenshots `test/out/remote-dialog.png`, `remote-dialog-pending.png`. Smoke: `Remote ▸ Show Pairing Code…`, `the pairing dialog shows the QR code`, `the QR code has dark modules`, `close the pairing dialog`. |
+| The phone shows the schedule, the Live / Preview slide lists and the live text, pushed within a frame of every change | **pass** | `remote.BuildState` from the presenter and the schedule, published from `App.render` (`renderRemote`); `Server.Publish` sends only changed JSON. `TestBuildState`, `TestWebSocketStateAndCommands`. Checked once by hand in Chromium at phone size (Playwright): pair, approve, Schedule list, ▶ goes live, Slides tab follows Live, Next, Black, Songs search. |
+| Phone actions take the operator's event path: next / prev / black (set, not toggled), go live with a schedule item, add a library song | **pass** | Commands drained in `App.Process` → `handleCommand` (`processRemote`); `black`/`clear`/`logo` take `{on}` (`App.setMode`); `remote-live-item`, `remote-add-song`. Smoke: `the phone searches the song library`, `the phone adds a song and sends it live`, `the song is live in the app`, `next, next, prev from the phone`, `the app follows the phone (slide 2)`, `the output shows the live slide`, `black from the phone (set, not toggled)`, `the app is black`, `the output is black (phone)`, `the output shows the slide again`. |
+| Control actions and `/state` | **pass** | `remote {on, port}`, `remote-dialog {on}`, `remote-approve` / `remote-deny` / `remote-revoke {device \| name}`, `remote-new-code`, `set-setting remote.enabled \| remote.port`, `options {page: "remote"}`, `screenshot?window=remote`. `/state.remote`: `enabled, configuredPort, error, dialog, running, port, addresses, url, code, pending, devices, clients`. `test/remoteclient` is the smoke test's fake phone. |
+| TLS | **not done** | Plain HTTP on the LAN by design (a self-signed certificate means a warning page on every phone); see REMOTE.md "No TLS". |
+
+### Shared files touched (remote control)
+
+- New: `internal/remote/` (whole package), `internal/app/remote.go`, `internal/app/core/remote.go` (+ test),
+  `internal/ui/remote.go`, `test/remoteclient/`, `docs/REMOTE.md`. `go.mod`: `gorilla/websocket`, `rsc.io/qr` direct.
+- `internal/control/server.go` (`NewCommand`, `Command.Wait` at the end).
+- `internal/app/app.go` (`rm` field in its own block, `initRemote` after `loadSettings`, `processRemote` in
+  `Process`, `stopRemote` in `shutdown`), `view.go` (the `remote` view cache block, `wireRemote`, `renderRemote`
+  after `renderSettings`, the Remote button no longer disabled), `events.go` (`setMode`, two toolbar cases),
+  `control.go` (`black`/`clear`/`logo` take `{on}`, `actionArgs.Port`/`Device` in their own block,
+  `handleRemoteCommand` in the default chain, `Remote` in the state input, the `remote` screenshot window),
+  `settings.go` (the Options snapshot / Cancel, `settingsValues`, two `set-setting` keys), `core/state.go`
+  (`State.Remote`, own block).
+- `internal/ui/mainwindow.go` (`Remote` dialog field in its own block, `dialogs()`, `dialogName`),
+  `internal/ui/toolbar.go` (Remote ▾ menu, `ActionRemotePair` / `ActionRemoteToggle`, `SetRemoteOn`),
+  `internal/ui/settings.go` (the Remote page).
+- `test/smoke.sh`: the `# ---- remote control` block before `# ---- item menus`.
 
 ## Remaining for Phase 2
 
