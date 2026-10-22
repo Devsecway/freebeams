@@ -41,11 +41,16 @@ type TransitionFrame struct {
 	InAlpha float64 // opacity of the incoming layer (1 except for blend)
 	InOnTop bool    // the incoming layer is drawn above the outgoing one
 	Mask    Mask    // what part of the incoming layer shows
+
+	// InScale and OutScale scale each layer about the centre of the area
+	// (zoom); 1 is the rest size.
+	InScale  float64
+	OutScale float64
 }
 
 // Rest is the frame of a finished transition: the incoming layer in place,
-// opaque, unmasked and on top.
-var Rest = TransitionFrame{InAlpha: 1, InOnTop: true}
+// full size, opaque, unmasked and on top.
+var Rest = TransitionFrame{InAlpha: 1, InOnTop: true, InScale: 1, OutScale: 1}
 
 // unit returns the unit vector of a direction of motion (zero for DirNone).
 func unit(d models.Direction) Vec {
@@ -104,6 +109,15 @@ func Transition(kind models.TransitionKind, t, w, h float64) TransitionFrame {
 		fr.Mask = Mask{Kind: MaskRect, Rect: wipeRect(kind.Direction(), e, w, h)}
 	case models.FamilyIris:
 		fr.Mask = Mask{Kind: MaskCircle, Center: Vec{X: w / 2, Y: h / 2}, Radius: e * math.Hypot(w/2, h/2)}
+	case models.FamilyZoom:
+		if kind == models.TransitionZoomOut {
+			// The outgoing layer shrinks into the centre above the incoming one.
+			fr.OutScale = 1 - e
+			fr.InOnTop = false
+		} else {
+			// The incoming layer grows from the centre over the outgoing one.
+			fr.InScale = e
+		}
 	default: // blend
 		fr.InAlpha = e
 	}

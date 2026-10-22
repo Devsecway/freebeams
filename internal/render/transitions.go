@@ -22,7 +22,9 @@ import (
 //     reveal), so nothing shows over the letterbox bars;
 //   - the incoming layer's alpha is its root's modulate (blend);
 //   - the mask (wipe, iris) is drawn by the layer root itself, which clips its
-//     children to what it draws (CanvasItem.clip_children = only).
+//     children to what it draws (CanvasItem.clip_children = only);
+//   - the scale of each layer (zoom) scales its inner content holder about
+//     the centre, so text, images and video layers zoom together.
 //
 // Thumbnails keep cutting: their duration is 0, so show never animates.
 
@@ -75,7 +77,9 @@ func (v *SlideView) applyFrame(fr layout.TransitionFrame) {
 	v.cur.setOffset(fr.In)
 	v.cur.setAlpha(fr.InAlpha)
 	v.cur.setMask(fr.Mask)
+	v.cur.setScale(fr.InScale)
 	if v.prev != nil {
+		v.prev.setScale(fr.OutScale)
 		v.prev.setOffset(fr.Out)
 		v.prev.setAlpha(1)
 		v.prev.setMask(layout.Mask{})
@@ -105,6 +109,21 @@ func (l *layer) placeAt(r layout.Rect) {
 	place(l.root, r)
 	l.offset = layout.Vec{}
 	place(l.inner, layout.Rect{W: r.W, H: r.H})
+	l.inner.SetPivotOffset(Vector2.New(r.W/2, r.H/2)) // zoom about the centre
+}
+
+// minScale keeps a zoom's first frame invertible: a zero scale makes the
+// control's transform singular, which GUI picking cannot invert.
+const minScale = 1e-3
+
+// setScale scales the layer's content about its centre (1 = rest size).
+func (l *layer) setScale(k float64) {
+	k = max(k, minScale)
+	if l.scale == k {
+		return
+	}
+	l.scale = k
+	l.inner.SetScale(Vector2.New(k, k))
 }
 
 // setOffset moves the layer's content by d from its rest position.
