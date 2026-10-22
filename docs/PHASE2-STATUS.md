@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 688 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, remote-control and tile-menu blocks)
+test/smoke.sh          # 779 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, remote-control, alerts and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -412,6 +412,45 @@ Design and security model: [REMOTE.md](REMOTE.md).
   `internal/ui/toolbar.go` (Remote ▾ menu, `ActionRemotePair` / `ActionRemoteToggle`, `SetRemoteOn`),
   `internal/ui/settings.go` (the Remote page).
 - `test/smoke.sh`: the `# ---- remote control` block before `# ---- item menus`.
+
+## Alerts, countdown and nursery (PLAN v0.2 item 4)
+
+Recorded 2026-10-22 on the same machine (this run with the built-in display only: the output opened as a window).
+"smoke: X" names a check in the `# ---- alerts` section of `test/smoke.sh` (before `# ---- item menus`, 91
+checks; the full run passed with 779). The
+feature follows EasyWorship's Alerts (`Form_AlertMgr`, `Form_AlertEdit`, `Form_AlertTagFill`, the nursery half of
+`Frame_AlertsList`, the Options ▸ Alerts cards).
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Alert model: saved alerts with `{token}` placeholders, Display Method (Static / Scrolling / Scroll when needed), Display Count 1–9 / Until I Remove / Until Token Expiration / a duration, text alignment; tag fill; ticker (marquee) timeline; countdown and clock formats; the nursery queue | **pass** | `internal/models/alert.go`. `TestAlertNormalized`, `TestAlertTokens`, `TestFillAlertTokens`, `TestResolveDynamicTokens`, `TestMarquee`, `TestFormatCountdown`, `TestFormatClock`, `TestParseClockTime`, `TestNurseryQueue`, `TestParseAlertDisplayAndPosition`, `TestAlertStylesNormalized`. |
+| Live alert state is plain Go, ticked with an injected clock: a message queue (the first on screen, Next / clear), nursery codes (auto-remove), one countdown (to a time or for a length; hide / hold at 00:00 / overrun), the clock | **pass** | `core.Alerts` (`internal/app/core/alerts.go`): `Show`, `Next`, `Tick`, `Frame`, `State`. `TestAlertTickerTimeline` (exact x and passes at 0/5/10/19/20 s), `TestAlertQueueAndEnds`, `TestAlertScrollWhenNeeded`, `TestAlertClearRemovesOneRun`, `TestCountdown`, `TestCountdownToTimeAndTokenEnd`, `TestNurseryAutoRemoveAndHide`, `TestClockAndClearAll`, `TestBannerFits`. |
+| Saved alerts persist in SQLite (migration 6, three examples seeded) | **pass** | `internal/store/alerts.go`; `TestAlertCRUD`. Smoke: `three example alerts are saved`. |
+| Overlay drawn above the slide on the Live monitor and the output, through transitions, video and Black / Clear / Logo; the Preview monitor and thumbnails never show it | **pass** | `render.Overlay` (`internal/render/overlay.go`): a message band (ticker or banner, top or bottom), the nursery badge, the countdown (with caption) and the clock, laid out in canvas units by `layout.PlaceOverlay` (badges in one corner stack; `TestPlaceOverlayBand`, `TestPlaceOverlayBadges`, `TestPlaceOverlayCenterAndTopBand`) and scaled to each view. It is the SlideView's last child and is raised again after every layer reorder (`raiseOverlay`). A moving ticker costs one `SetPosition` per frame and holds `AcquireAnimating`. Smoke (exact colours over Black): `the output shows the message band`, `… the nursery badge top right`, `… the countdown in the centre`, `… the clock top left`, `the live monitor shows the band`, `the live monitor shows the nursery badge`, `the preview monitor has no alerts`, `the banner band is at the top`, `the countdown moved to the bottom left`, `Black hides the alerts`, `the output is black again`. Screenshots `alerts-output.png`, `alerts-main.png`, `alerts-banner-output.png`, `alerts-output-2.png`. |
+| Toolbar Alerts ▾ menu: the saved alerts, New Alert…, Alert Manager…, Nursery…, Countdown…, Clock (check), Clear All Alerts | **pass** | `MainToolbar.SetAlertsMenu` (`internal/ui/alerts.go`), projected from state in render. Smoke: `the Alerts menu opens` (entries and the Clock check), `Alerts ▸ Clock turns the clock off`, `Alerts ▸ Clear All Alerts`. Screenshot `alerts-menu.png`. |
+| Dialogs: Live Alert Editor (manager: list, Add, Delete, Use, Edit…), New / Edit Alert (Tokens ▾ menu, Show without saving), Fill Alert Text Tokens (live preview, refuses empty values), Nursery (code, Add, Remove, Clear All), Countdown (to a time / for a length, caption, position, at zero, Stop) | **pass** | Dumb views in `internal/ui/alerts.go`, wired in `internal/app/alerts.go`; dialogs over dialogs use `dialogHost`. Smoke: `Alerts ▸ Vehicle asks for the plate`, `USE with an empty plate is refused`, `type the plate`, `USE shows the alert`, `type a code and Add`, `Start with a bad time keeps the dialog`, `Start replaces the countdown`, `OK without a name is refused`, `OK saves it`, `Delete asks first`, `OK deletes the alert`. Screenshots `alert-fill.png`, `alerts-nursery.png`, `alert-manager.png`. |
+| Options ▸ Alerts: message location, size, scroll speed, banner time; nursery position and auto-remove; countdown format, position and end; clock format and position; hide on Black | **pass** | `SettingsDialog` Alerts page (`internal/ui/alertsettings.go`), `core.Settings.Alerts` persisted under `settings.alerts`, restored by Cancel. Smoke: `alert styles with opaque test colors`, `hide alerts on Black`, `restore the alert styles`. Screenshot `options-alerts.png`. |
+| A scrolling ticker does not keep the app busy | **pass** | The overlay is projected every frame after render (`App.renderOverlay`) without marking the app dirty. Smoke: `a scrolling ticker does not keep the app busy`, `the ticker moves left`. |
+| Control actions and `/state` | **pass** | `alert {text \| id \| name, values, display, location, align, count, seconds, end}`, `alert-next`, `alert-clear {run \| kind}`, `nursery {code}`, `nursery-remove {code}`, `countdown {seconds \| minutes \| time, caption, position, end}`, `countdown-stop`, `clock {on}`, `save-alert {alert}`, `delete-alert {id \| name, confirm}`, `alerts-menu {item, index \| name}`, and the dialog drivers `alert-manager {index, mode}`, `alert-editor {alert, mode}`, `alert-fill {values}`, `nursery-type {code}`, `countdown-form {…}` (OK / USE / Start is `accept`); `set-setting {key: "alerts"}` merges a partial style. `screenshot?window=alerts-menu\|alert-manager\|alert-editor\|alert-fill\|nursery\|countdown`. `/state.alerts`: `active[]` (run, text, style, location, pass, remainingPasses, remaining, x, showing), `message`, `nursery`, `countdown`, `clock`, `saved`, `showing`, `moving`, `hidden`; `/state.dialog.alertDialog`, `/state.dialog.alertsMenu`. |
+
+Known limits: alert text is one line in one font (no RTF formatting from EasyWorship's `Alerts.db`, which is not
+imported); the styles' font family has no picker yet (the JSON setting takes one); a ticker's speed is in canvas
+units per second rather than EasyWorship's slow / medium / fast; there is no hotkey for Next / Clear.
+
+### Shared files touched (alerts)
+
+- New files: `internal/models/alert.go`, `internal/app/core/alerts.go`, `internal/store/alerts.go`,
+  `internal/render/layout/overlay.go` (each + test), `internal/render/overlay.go`, `internal/ui/alerts.go`,
+  `internal/ui/alertsettings.go`, `internal/app/alerts.go`.
+- `internal/store/migrations.go` (migration 6), `internal/render/slideview.go` (the `overlay` field, two
+  `raiseOverlay` / `relayoutOverlay` lines), `internal/render/transitions.go` (one line), `internal/ui/toolbar.go`
+  (`OnAlertsMenu`, `alertsMenu`, the Alerts press), `internal/ui/mainwindow.go` (dialog fields in their own block,
+  `buildAlertDialogs`, `dialogs` / `dialogName`), `internal/ui/settings.go` (the Alerts page, `SettingsValues.Alerts`).
+- `internal/app/app.go` (`al` field, `initAlerts`, `tickAlerts` / `renderOverlay` in `Process`), `view.go` (view
+  memo block, `wireAlerts`, `renderAlerts`; the Alerts button is no longer disabled), `control.go` (`actionArgs`
+  block, `/state.alerts`, `dialog.alertDialog`, the screenshot windows, `handleAlertsCommand`), `settings.go`
+  (load / restore / `set-setting alerts`), `core/settings.go` (`Settings.Alerts`), `core/state.go` (own blocks).
+- `test/smoke.sh`: the `# ---- alerts` block before `# ---- item menus`.
 
 ## Remaining for Phase 2
 
