@@ -66,6 +66,17 @@ type ScriptureState struct {
 	// CopyrightedAvailable lists EasyWorship's copyrighted Bibles that an
 	// on-request import would add (CopyrightedBiblesToImport).
 	CopyrightedAvailable []string `json:"copyrightedAvailable"`
+
+	// The verse list lists whole chapters (Listed, Verses rows); Rows are the
+	// selected rows (Passage names them, Selected is the current one). Field
+	// is the reference field's text, Suggestions the books it offers for it
+	// (Suggestion highlighted), shown in the dropdown while it has the focus.
+	Listed           string   `json:"listed"`
+	Rows             []int    `json:"rows"`
+	Field            string   `json:"field"`
+	Suggestions      []string `json:"suggestions"`
+	Suggestion       int      `json:"suggestion"`
+	SuggestionsShown bool     `json:"suggestionsShown"`
 }
 
 // MediaState summarises the Media tab.
