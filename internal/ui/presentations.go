@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"freebeams/internal/ui/uicore"
+
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/GUI"
 	"graphics.gd/classdb/Label"
@@ -113,6 +115,7 @@ func NewPresentationPanel() *PresentationPanel {
 
 	// Right: the thumbnail grid.
 	p.grid = NewSlideGrid()
+	p.grid.DragSource = uicore.DragPresentation
 	p.grid.OnSelect = func(i int) {
 		p.selected = i
 		if p.OnSelect != nil {

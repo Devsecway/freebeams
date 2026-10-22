@@ -135,6 +135,8 @@ func NewSongLibraryPanel() *SongLibraryPanel {
 		}
 	})
 
+	s.initDrag()
+
 	s.menu = PopupMenu.New()
 	s.menu.MoreArgs().AddItem("Edit Song…", songMenuEdit, 0)
 	s.menu.MoreArgs().AddItem("Delete Song", songMenuDelete, 0)

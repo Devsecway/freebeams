@@ -191,6 +191,11 @@ type App struct {
 	idleRun  int
 	quitNext bool
 	quitting bool
+
+	// Drag and drop into the schedule (dragdrop.go): while drop.inserting,
+	// addToSchedule inserts at drop.at instead of appending; drop.held is
+	// the pointer of a drag-to-schedule hook left pressed (mode "hold").
+	drop dropState
 }
 
 // New returns the app node; add it to the scene tree (main.go does this).

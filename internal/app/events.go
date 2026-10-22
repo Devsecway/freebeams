@@ -193,6 +193,12 @@ func (a *App) moveScheduleItem(from, to int) bool {
 }
 
 func (a *App) addToSchedule(item models.ScheduleItem) int {
+	if a.drop.inserting { // a drop between rows (dragdrop.go)
+		i := a.sched.Insert(a.drop.at, item)
+		a.schedVer++
+		a.syncScheduleSelection()
+		return i
+	}
 	i := a.sched.Add(item)
 	a.schedVer++
 	return i
@@ -382,6 +388,12 @@ func (a *App) searchSongs(q string, cmd *control.Command) {
 // edit) are user actions and still happen, in order. cmd is answered once
 // this request's result has been applied.
 func (a *App) selectSong(i int, purpose songPurpose, cmd *control.Command) {
+	a.selectSongAt(i, purpose, -1, cmd)
+}
+
+// selectSongAt is selectSong; a songSchedule purpose inserts the song at
+// schedule index at (-1 appends: a drop between rows, dragdrop.go).
+func (a *App) selectSongAt(i int, purpose songPurpose, at int, cmd *control.Command) {
 	if i < 0 || i >= len(a.songs) {
 		a.answer(cmd, fmt.Errorf("no song at index %d", i))
 		return
@@ -403,7 +415,7 @@ func (a *App) selectSong(i int, purpose songPurpose, cmd *control.Command) {
 				err = fmt.Errorf("load song %d: panic: %v", id, r)
 			}
 			apply = func() error {
-				a.songSeq.Done(ticket, func() { a.applySong(ticket, song, err, purpose, cmd) })
+				a.songSeq.Done(ticket, func() { a.applySong(ticket, song, err, purpose, at, cmd) })
 				return nil
 			}
 		}()
@@ -413,7 +425,7 @@ func (a *App) selectSong(i int, purpose songPurpose, cmd *control.Command) {
 }
 
 // applySong applies one song load (in request order, see selectSong).
-func (a *App) applySong(ticket uint64, song models.Song, err error, purpose songPurpose, cmd *control.Command) {
+func (a *App) applySong(ticket uint64, song models.Song, err error, purpose songPurpose, at int, cmd *control.Command) {
 	if err != nil {
 		a.alert("Load Song", fmt.Errorf("Could not load the song.\n\n%w", err))
 		a.answer(cmd, err)
@@ -424,7 +436,7 @@ func (a *App) applySong(ticket uint64, song models.Song, err error, purpose song
 		return
 	}
 	a.song = &song
-	a.useSong(song, purpose)
+	a.insertingAt(at, func() { a.useSong(song, purpose) })
 	a.answer(cmd, nil)
 }
 

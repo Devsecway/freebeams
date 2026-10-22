@@ -217,6 +217,10 @@ type actionArgs struct {
 	// Hotkeys (hotkeys.go): set-hotkey {action, keys, reassign}.
 	Keys     []string `json:"keys"`
 	Reassign bool     `json:"reassign"`
+
+	// Drag and drop (dragdrop.go): drag-to-schedule {source, index|title,
+	// at | row | target "outside", mode "hold"|"release", steps}.
+	At *int `json:"at"`
 }
 
 var errArgs = errors.New("missing or invalid arguments")

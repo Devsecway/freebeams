@@ -157,6 +157,7 @@ func NewScripturePanel() *ScripturePanel {
 	// Clicks and the navigation keys are the app's (verseInput); the Tree
 	// only draws the projected selection and scrolls.
 	s.verses.AsControl().OnGuiInput(s.verseInput)
+	s.initDrag()
 	s.collapse = newTicker(s.pollCollapse)
 	s.verses.AsNode().AddChild(s.collapse.AsNode())
 	s.menu = PopupMenu.New()
