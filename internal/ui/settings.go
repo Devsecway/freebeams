@@ -10,6 +10,7 @@ import (
 	"graphics.gd/classdb/CheckBox"
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/GUI"
+	"graphics.gd/classdb/InputEvent"
 	"graphics.gd/classdb/Label"
 	"graphics.gd/classdb/MarginContainer"
 	"graphics.gd/classdb/OptionButton"
@@ -49,12 +50,6 @@ type ScreenRow struct {
 	Label string
 }
 
-// HotkeyRow is one row of the read-only hotkey table.
-type HotkeyRow struct {
-	Action string
-	Keys   string
-}
-
 // Settings dialog sections, in menu order.
 const (
 	SettingsPageOutput = iota
@@ -67,9 +62,13 @@ const (
 	SettingsPageStage
 	SettingsPageRemote
 	SettingsPageAlerts
+
+	// SettingsPageThemes is the default theme per item type (settings_themes.go).
+	SettingsPageThemes
 )
 
-var settingsPageNames = []string{"Output", "Transition", "Logo", "Library", "Hotkeys", "Stage Display", "Remote", "Alerts"}
+var settingsPageNames = []string{"Output", "Transition", "Logo", "Library", "Hotkeys", "Stage Display", "Remote", "Alerts",
+	"Themes"}
 
 // ParseSettingsPage finds a section by its (case-insensitive) name.
 func ParseSettingsPage(name string) (int, bool) {
@@ -113,6 +112,11 @@ type SettingsDialog struct {
 	// LogoPreview hosts the app's render of the logo screen (a SlideView).
 	LogoPreview *MonitorHost
 
+	// Hotkeys is the Hotkeys section (settings_hotkeys.go) and DefaultThemes
+	// the Themes section (settings_themes.go); each has its own callbacks.
+	Hotkeys       *HotkeysPage
+	DefaultThemes *DefaultThemesPage
+
 	dlg      *dialogWindow
 	sections Tree.Instance
 	pages    []Control.Instance
@@ -124,7 +128,6 @@ type SettingsDialog struct {
 	logoLbl   Label.Instance
 	libLbl    Label.Instance
 	importBtn Button.Instance
-	hotkeys   Tree.Instance
 
 	remoteOn     CheckBox.Instance
 	remotePort   SpinBox.Instance
@@ -134,7 +137,6 @@ type SettingsDialog struct {
 
 	values      SettingsValues
 	screens     []ScreenRow
-	hotkeyRows  []HotkeyRow
 	importAvail bool
 	kinds       []models.TransitionKind
 	rendering   bool
@@ -182,7 +184,7 @@ func NewSettingsDialog() *SettingsDialog {
 	host.SetClipContents(true)
 	expand(host)
 	d.pages = []Control.Instance{d.buildOutputPage(), d.buildTransitionPage(), d.buildLogoPage(), d.buildLibraryPage(), d.buildHotkeysPage(), d.buildStagePage(), d.buildRemotePage(),
-		d.buildAlertsPage()}
+		d.buildAlertsPage(), d.buildThemesPage()}
 	for _, p := range d.pages {
 		p.SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
 		host.AsNode().AddChild(p.AsNode())
@@ -194,6 +196,7 @@ func NewSettingsDialog() *SettingsDialog {
 	add(d.dlg.body, row.AsControl())
 	add(d.dlg.footer, spacer(), d.dlg.ok.AsControl(), d.dlg.cancel.AsControl())
 	d.dlg.win.AsNode().SetName("SettingsDialog")
+	d.dlg.keyHook = d.captureKey
 	d.render()
 	return d
 }
@@ -351,22 +354,25 @@ func (d *SettingsDialog) buildLibraryPage() Control.Instance {
 }
 
 func (d *SettingsDialog) buildHotkeysPage() Control.Instance {
-	d.hotkeys = Tree.New()
-	d.hotkeys.SetHideRoot(true)
-	d.hotkeys.SetColumns(2)
-	d.hotkeys.SetColumnTitlesVisible(true)
-	d.hotkeys.SetColumnTitle(0, "Action")
-	d.hotkeys.SetColumnTitle(1, "Keys")
-	d.hotkeys.SetColumnExpand(0, true)
-	d.hotkeys.SetColumnExpand(1, true)
-	d.hotkeys.SetColumnExpandRatio(0, 3)
-	d.hotkeys.SetColumnExpandRatio(1, 2)
-	d.hotkeys.AsControl().SetFocusMode(Control.FocusNone)
-	expand(d.hotkeys.AsControl())
-	col := vbox(6)
-	expand(col.AsControl())
-	add(col, d.hotkeys.AsControl(), hint("Hotkeys match EasyWorship and cannot be changed yet. They are off while a text field or a dialog has focus."))
-	return col.AsControl()
+	d.Hotkeys = newHotkeysPage()
+	return d.Hotkeys.build()
+}
+
+func (d *SettingsDialog) buildThemesPage() Control.Instance {
+	d.DefaultThemes = newDefaultThemesPage()
+	return d.DefaultThemes.build()
+}
+
+// captureKey hands a key press to the Hotkeys page while it captures one
+// (the dialog's key hook); true keeps the key from the dialog's controls.
+func (d *SettingsDialog) captureKey(ev InputEvent.Instance) bool {
+	if !d.Visible() || !d.Hotkeys.Capturing() {
+		return false
+	}
+	if d.Hotkeys.OnKey != nil {
+		d.Hotkeys.OnKey(ev)
+	}
+	return true
 }
 
 func (d *SettingsDialog) buildRemotePage() Control.Instance {
@@ -457,11 +463,8 @@ func (d *SettingsDialog) SetScreens(rows []ScreenRow) {
 	d.render()
 }
 
-// SetHotkeys fills the read-only hotkey table.
-func (d *SettingsDialog) SetHotkeys(rows []HotkeyRow) {
-	d.hotkeyRows = rows
-	d.render()
-}
+// SetHotkeys fills the hotkey table.
+func (d *SettingsDialog) SetHotkeys(rows []HotkeyRow) { d.Hotkeys.SetRows(rows) }
 
 // SetImportCopyrightedAvailable enables the Bible import button.
 func (d *SettingsDialog) SetImportCopyrightedAvailable(ok bool) {
@@ -511,17 +514,6 @@ func (d *SettingsDialog) render() {
 	flushCalls(d.remoteOn.AsControl())
 
 	d.renderAlerts()
-
-	// Hotkeys.
-	d.hotkeys.Clear()
-	root := d.hotkeys.CreateItem()
-	for _, r := range d.hotkeyRows {
-		it := d.hotkeys.MoreArgs().CreateItem(root, -1)
-		it.SetText(0, r.Action)
-		it.SetText(1, r.Keys)
-		it.SetSelectable(0, false)
-		it.SetSelectable(1, false)
-	}
 
 	d.renderStage()
 }

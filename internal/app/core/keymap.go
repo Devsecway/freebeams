@@ -603,3 +603,12 @@ func ewChord(s string) (Chord, bool) {
 		s = s[2:]
 	}
 }
+
+// OptionsState is the Options dialog's editor state in /state: the hotkey
+// action capturing a key ("" when none), the last outcome shown under the
+// table and whether it was a refusal.
+type OptionsState struct {
+	HotkeyCapture string `json:"hotkeyCapture"`
+	HotkeyStatus  string `json:"hotkeyStatus"`
+	HotkeyRefused bool   `json:"hotkeyRefused"`
+}

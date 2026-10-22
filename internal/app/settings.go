@@ -45,10 +45,12 @@ func (a *App) loadSettings() {
 		}
 		get(core.SettingInterfaceColor, &a.settings.InterfaceColor)
 		get(core.SettingAlertStyles, &a.settings.Alerts)
+		get(core.SettingHotkeys, &a.settings.Hotkeys) // hotkeys.go
 		get(core.SettingRecent, &a.recent)
 	}
 	a.settings = a.settings.Normalized(a.logoDir)
 	a.pres.SetLogo(a.settings.Logo)
+	a.keys.SetKeymap(a.settings.Hotkeys)
 	log.Printf("[freebeams] settings: transition %s; output screen %d; logo %s; %s interface",
 		a.settings.Transition, a.settings.OutputScreen, core.LogoDescription(a.settings.Logo), a.settings.InterfaceColor)
 }
@@ -155,6 +157,7 @@ func (a *App) openSettings(page int) {
 	a.settingsSnap = a.settings
 	a.stage.snap, a.stage.warning = a.stage.settings, "" // stage.go
 	a.rm.snapEnabled, a.rm.snapPort = a.rm.enabled, a.rm.port
+	a.checkEWHotkeys() // hotkeys.go
 	a.settingsOpen = true
 	a.settingsVer++ // the displays may have changed since the last time
 }
@@ -163,6 +166,7 @@ func (a *App) openSettings(page int) {
 // opened (changes applied live meanwhile are undone through the same setters).
 func (a *App) closeSettings(cancel bool) {
 	a.settingsOpen = false
+	a.endHotkeyCapture() // hotkeys.go
 	if !cancel {
 		return
 	}
@@ -181,6 +185,7 @@ func (a *App) closeSettings(cancel bool) {
 		a.setRemoteEnabled(a.rm.snapEnabled)
 	}
 	a.setAlertStyles(s.Alerts)
+	a.setHotkeys(s.Hotkeys)
 }
 
 // logoFilters are the native dialog filters for Choose Image….
@@ -268,6 +273,8 @@ func (a *App) wireSettings() {
 	d.OnOK = func() { a.event(func() { a.closeSettings(false) }) }
 	d.OnCancel = func() { a.event(func() { a.closeSettings(true) }) }
 
+	a.wireOptions() // Hotkeys and Themes (hotkeys.go)
+
 	m := a.win.Menus
 	m.OnAction = func(act ui.MenuAction) { a.event(func() { a.onMenu(act) }) }
 	m.OnOpenRecent = func(path string) { a.event(func() { a.openRecent(path) }) }
@@ -311,13 +318,7 @@ func (a *App) renderSettings(v *viewCache) {
 		w.Settings.SetImportCopyrightedAvailable(len(core.CopyrightedBiblesToImport(a.ewBibles, a.bibles)) > 0)
 		w.Menus.SetInterfaceColor(a.settings.InterfaceColor == core.ColorDark)
 	}
-	if !v.init {
-		rows := make([]ui.HotkeyRow, 0)
-		for _, b := range core.Bindings() {
-			rows = append(rows, ui.HotkeyRow{Action: b.Action, Keys: b.Keys})
-		}
-		w.Settings.SetHotkeys(rows)
-	}
+	a.renderOptions() // Hotkeys and Themes (hotkeys.go)
 	a.logoView.SetFrame(models.Frame{Mode: models.ModeLogo, Logo: a.settings.Logo})
 	if a.settings.InterfaceColor != v.color {
 		v.color = a.settings.InterfaceColor
@@ -406,7 +407,7 @@ func (a *App) handleSettingsCommand(cmd *control.Command, args actionArgs) bool 
 		a.onMenu(act)
 		a.answer(cmd, nil)
 	default:
-		return false
+		return a.handleOptionsCommand(cmd, args) // hotkeys.go
 	}
 	return true
 }

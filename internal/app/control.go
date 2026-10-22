@@ -95,6 +95,7 @@ func (a *App) state() core.State {
 		Remote:        a.remoteStateDoc(),
 		Alerts:        a.alertsStateDoc(),
 		Audio:         a.audioStateDoc(),
+		Options:       a.optionsStateDoc(),
 		LastError:     a.lastError,
 		Dialog:        dialog,
 		WindowTitle:   a.win.WindowTitle(),
@@ -104,6 +105,8 @@ func (a *App) state() core.State {
 		Pending:       a.pending,
 		Transitioning: a.transitioning(),
 		Idle:          !a.busy(),
+
+		TransitionProgress: a.transitionProgress(),
 	})
 }
 
@@ -209,6 +212,10 @@ type actionArgs struct {
 	// The audio playlist (audio.go): audio-stop {fade}; the other actions
 	// reuse Index, Title, Path(s), Seconds, Value, Mode, On, From, To, Confirm.
 	Fade *bool `json:"fade"`
+
+	// Hotkeys (hotkeys.go): set-hotkey {action, keys, reassign}.
+	Keys     []string `json:"keys"`
+	Reassign bool     `json:"reassign"`
 }
 
 var errArgs = errors.New("missing or invalid arguments")

@@ -242,6 +242,14 @@ type State struct {
 
 	// Audio is the schedule's background audio playlist and its player (audio.go).
 	Audio AudioState `json:"audio"`
+
+	// Options is the Options dialog's editors (keymap.go): a hotkey capture
+	// and its outcome.
+	Options OptionsState `json:"options"`
+
+	// TransitionProgress is the output's running transition, 0..1 (0 when
+	// none; the live monitor when the output is closed).
+	TransitionProgress float64 `json:"transitionProgress"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -286,6 +294,10 @@ type StateInput struct {
 	Alerts AlertsState
 
 	Audio AudioState
+
+	Options OptionsState
+
+	TransitionProgress float64
 }
 
 // deckState summarises deck d with slide i selected.
@@ -353,6 +365,8 @@ func BuildState(in StateInput) State {
 	st.Remote = in.Remote.normalized()
 	st.Alerts = in.Alerts
 	st.Audio = in.Audio
+	st.Options = in.Options
+	st.TransitionProgress = in.TransitionProgress
 	if st.Audio.Tracks == nil {
 		st.Audio.Tracks = []AudioTrackState{}
 	}
