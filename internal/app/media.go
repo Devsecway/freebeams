@@ -415,7 +415,7 @@ func (a *App) startMediaImport() {
 		return
 	}
 	var done bool
-	if ok, err := a.st.GetSetting(a.ctx, core.SettingMediaImportDone, &done); err != nil {
+	if ok, err := a.st.GetSetting(a.ctx(), core.SettingMediaImportDone, &done); err != nil {
 		a.fail("read media import setting", err)
 	} else if ok && done {
 		return
@@ -473,7 +473,7 @@ func (a *App) startMediaWork() {
 	}
 	a.md.working = true
 	a.md.status = a.mediaFooter()
-	st, ctx := a.st, a.ctx
+	st, ctx := a.st, a.ctx()
 	proc := media.NewProcessor(a.md.tools, a.md.cache)
 	proc.Native = render.NativeVideoSupported() // no transcodes: the sources play as they are
 	skip := make(map[int64]bool, len(a.md.failed))

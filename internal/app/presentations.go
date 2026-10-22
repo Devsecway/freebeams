@@ -398,7 +398,7 @@ func (a *App) startPresentationImport() {
 		return
 	}
 	var done bool
-	if ok, err := a.st.GetSetting(a.ctx, core.SettingPresentationsImportDone, &done); err != nil {
+	if ok, err := a.st.GetSetting(a.ctx(), core.SettingPresentationsImportDone, &done); err != nil {
 		a.fail("read presentations import setting", err)
 	} else if ok && done {
 		return
@@ -457,7 +457,7 @@ func (a *App) startPresentationWork() {
 	}
 	a.pr.working = true
 	a.pr.status = a.presentationsFooter()
-	st, ctx := a.st, a.ctx
+	st, ctx := a.st, a.ctx()
 	svc := presentations.NewService(a.pr.tools, a.pr.cache)
 	skip := make(map[int64]bool, len(a.pr.failed))
 	for id := range a.pr.failed {

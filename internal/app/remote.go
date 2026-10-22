@@ -70,7 +70,7 @@ func (a *App) initRemote() {
 	a.rm.port = remote.DefaultPort
 	if a.st != nil {
 		get := func(key string, dst any) {
-			if _, err := a.st.GetSetting(a.ctx, key, dst); err != nil {
+			if _, err := a.st.GetSetting(a.ctx(), key, dst); err != nil {
 				a.fail("read setting "+key, err)
 			}
 		}

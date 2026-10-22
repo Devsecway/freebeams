@@ -298,6 +298,11 @@ internal/app               Godot: the App node that wires store + presenter + ui
   `SetSamplerVisible(false)` in dialogs.
 - A context menu on a widget another feature also clicks: connect `OnGuiInput` on the instance (a signal) instead of
   defining `GuiInput` on the extension type, so the handlers coexist (`ui.PreviewMenu` on `MonitorHost`).
+- graphics.gd's per-frame keepalive walk (`keep_reachable_instances_alive`) follows every pointer, interface and map
+  reachable from an extension instance, even unexported plain-Go ones. A map a goroutine writes there is a
+  `fatal error: concurrent map iteration and map write` (the app dies). `App.ctx` was one: a `*cancelCtx` whose
+  `children` map every async job's derived context writes; it is now a `func() context.Context` (func, chan and
+  `unsafe.Pointer` fields are not walked). `App.st` (`*sql.DB`: `dep`, `openStmt` maps) is the same shape.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

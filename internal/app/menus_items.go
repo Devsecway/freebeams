@@ -61,10 +61,10 @@ func (a *App) wirePresentationMenu() {
 func (a *App) loadItemPrefs(viewKey, sortKey string) (core.ItemView, core.ItemSort) {
 	var view, sort string
 	if a.st != nil {
-		if _, err := a.st.GetSetting(a.ctx, viewKey, &view); err != nil {
+		if _, err := a.st.GetSetting(a.ctx(), viewKey, &view); err != nil {
 			a.fail("read setting "+viewKey, err)
 		}
-		if _, err := a.st.GetSetting(a.ctx, sortKey, &sort); err != nil {
+		if _, err := a.st.GetSetting(a.ctx(), sortKey, &sort); err != nil {
 			a.fail("read setting "+sortKey, err)
 		}
 	}
