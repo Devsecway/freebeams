@@ -258,6 +258,14 @@ internal/app               Godot: the App node that wires store + presenter + ui
   one), so re-read `remote.code` from `/state` before every pairing.
 - The Playwright MCP browser saves screenshots only under the main checkout's `.playwright-mcp/` (git-ignored),
   even from a worktree. It is how the phone web app was checked at phone size (390 × 844).
+- graphics.gd names setters after the Godot *property*, not the C++ setter: `TextEdit.SetWrapMode` (`wrap_mode`), not
+  `SetLineWrappingMode`. An `OptionButton` has no `SetDisabled` of its own: it is `AsBaseButton().SetDisabled`.
+- A SlideView child that must stay on top (the alert overlay, `render/overlay.go`) has to be moved back to the end
+  after every `MoveChild(layer, -1)` a transition makes (`raiseOverlay` in `show` and `orderLayers`); a layer
+  created later with `AddChild` also lands above it.
+- Anything projected every frame (the alert ticker, the countdown) must not set `a.dirty`: `busy()` includes it,
+  so a ticker that runs for minutes would keep `wait-idle` from ever answering. Tick authoritative state before
+  `render` (dirty only when it changed) and project the per-frame part after it (`App.renderOverlay`).
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

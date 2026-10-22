@@ -119,6 +119,8 @@ type App struct {
 
 	rm remoteApp // the LAN remote control (remote.go)
 
+	al alertsState // the alert overlay and the saved alerts (alerts.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
@@ -205,6 +207,7 @@ func (a *App) Ready() {
 	a.loadBibles(nil)
 	a.initMedia()
 	a.initPresentations()
+	a.initAlerts()
 	a.dirty = true
 }
 
@@ -418,6 +421,7 @@ func (a *App) Process(delta Float.X) {
 	if a.playbackEvents() { // a file ended, a new item arrived on a monitor (playback.go)
 		a.dirty = true
 	}
+	a.tickAlerts() // a finished alert gives way to the next (alerts.go)
 	if a.dirty || a.pres.State.Seq != a.view.seq {
 		a.render()
 		a.dirty = false
@@ -425,6 +429,8 @@ func (a *App) Process(delta Float.X) {
 		a.renderPlayback() // the transport follows the player every frame
 	}
 	a.tickStage() // the stage display's clock and timer (stage.go)
+
+	a.renderOverlay() // the alert layer moves every frame (alerts.go)
 	a.flushReplies()
 	a.serveWaiters()
 }

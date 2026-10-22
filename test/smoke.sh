@@ -1376,6 +1376,126 @@ act "turn the remote off" remote '{"on":false}' 'not s["remote"]["enabled"] and 
 curl -sS --max-time 5 -o /dev/null "$RBASE/" 2>/dev/null && fail "the remote still answers after it was turned off"
 log "ok: nothing listens on the remote port any more"
 
+# ---- alerts: ticker, nursery, countdown, clock (Alerts ▾) ----------------------------------------
+# Alerts are an overlay above the live slide on the Live monitor and the output (render/overlay.go),
+# projected every frame from core.Alerts. The styles get opaque test colors so the pixels are exact:
+# message band #2a7f62, nursery badge #bf5f2a, countdown #2a5fbf, clock #991a80, over Black.
+LAST="$(state)"
+ALERT_STYLES="$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["data"]["settings"]["alerts"]))' "$LAST")"
+check "three example alerts are saved" "$LAST" '[a["name"] for a in s["alerts"]["saved"]] == ["Parent Needed", "Service Starting", "Vehicle"] and not s["alerts"]["showing"]'
+check "the Alerts menu starts closed" "$LAST" 'not s["dialog"].get("alertsMenu")'
+act "alert styles with opaque test colors" set-setting '{"key":"alerts","value":{
+ "message":{"size":54,"bold":true,"color":{"R":1,"G":1,"B":1,"A":1},"background":{"R":0.1647,"G":0.498,"B":0.3843,"A":1}},
+ "nursery":{"size":64,"bold":true,"color":{"R":1,"G":1,"B":1,"A":1},"background":{"R":0.749,"G":0.3725,"B":0.1647,"A":1}},
+ "countdown":{"size":72,"bold":true,"color":{"R":1,"G":1,"B":1,"A":1},"background":{"R":0.1647,"G":0.3725,"B":0.749,"A":1}},
+ "clock":{"size":44,"bold":true,"color":{"R":1,"G":1,"B":1,"A":1},"background":{"R":0.6,"G":0.102,"B":0.502,"A":1}}}}' \
+	's["settings"]["alerts"]["nursery"]["background"]["A"] == 1 and s["settings"]["alerts"]["nurseryPosition"] == "top-right" and s["settings"]["alerts"]["countdownPosition"] == "center"'
+act "black under the alerts" black '{"on":true}' 's["mode"] == "black"'
+act "a ticker" alert '{"text":"The owner of the blue van, please move it.","display":"ticker","count":3}' 's["alerts"]["showing"] and s["alerts"]["moving"] and s["alerts"]["active"][0]["style"] == "ticker" and s["alerts"]["active"][0]["location"] == "bottom" and s["alerts"]["active"][0]["passes"] == 3 and s["alerts"]["message"].startswith("The owner")'
+TICK_X="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["alerts"]["active"][0]["x"])' "$LAST")"
+act "a nursery code" nursery '{"code":"A12"}' 's["alerts"]["nursery"] == ["A12"]'
+act "the same code is refused" nursery '{"code":"a12"}' 'not r["ok"]'
+act "a five-minute countdown" countdown '{"minutes":5,"caption":"Service starts in"}' 's["alerts"]["countdown"]["active"] and s["alerts"]["countdown"]["text"] in ("05:00", "04:59") and s["alerts"]["countdown"]["position"] == "center"'
+act "the clock" clock '{"on":true}' 's["alerts"]["clock"]["on"] and s["alerts"]["clock"]["position"] == "top-left" and ":" in s["alerts"]["clock"]["text"]'
+wait_idle
+check "a scrolling ticker does not keep the app busy" "$LAST" 's["idle"] and s["alerts"]["moving"]'
+check "the ticker moves left" "$LAST" "s[\"alerts\"][\"active\"][0][\"x\"] < $TICK_X"
+shot alerts-output output
+shot alerts-main main
+pixel "the output shows the message band" "$OUT/alerts-output.png" has 2a7f62 0.0 0.93 1.0 1.0 5000
+pixel "the output shows the nursery badge top right" "$OUT/alerts-output.png" has bf5f2a 0.8 0.0 1.0 0.15 2000
+pixel "the output shows the countdown in the centre" "$OUT/alerts-output.png" has 2a5fbf 0.3 0.3 0.7 0.7 5000
+pixel "the output shows the clock top left" "$OUT/alerts-output.png" has 991a80 0.0 0.0 0.25 0.15 2000
+pixel "no badge where none belongs" "$OUT/alerts-output.png" lacks bf5f2a 0.0 0.0 0.5 0.5 50
+pixel "the live monitor shows the band" "$OUT/alerts-main.png" has 2a7f62 0.6 0.3 1.0 0.75 300
+pixel "the live monitor shows the nursery badge" "$OUT/alerts-main.png" has bf5f2a 0.6 0.3 1.0 0.75 100
+pixel "the preview monitor has no alerts" "$OUT/alerts-main.png" lacks bf5f2a 0.15 0.3 0.6 0.75 20
+act "Next ends the ticker" alert-next '' 's["alerts"]["active"] == [] and s["alerts"]["nursery"] == ["A12"]'
+act "a banner at the top" alert '{"text":"Welcome","display":"static","location":"top","seconds":60}' 's["alerts"]["active"][0]["style"] == "static" and s["alerts"]["active"][0]["location"] == "top" and s["alerts"]["active"][0]["end"] == "duration" and not s["alerts"]["moving"]'
+wait_idle
+shot alerts-banner-output output
+pixel "the banner band is at the top" "$OUT/alerts-banner-output.png" has 2a7f62 0.0 0.0 1.0 0.08 5000
+pixel "no band at the bottom" "$OUT/alerts-banner-output.png" lacks 2a7f62 0.0 0.92 1.0 1.0 50
+act "a second message waits its turn" alert '{"text":"Second","display":"static"}' 'len(s["alerts"]["active"]) == 2 and s["alerts"]["active"][0]["showing"] and not s["alerts"]["active"][1]["showing"]'
+act "clear the messages" alert-clear '{"kind":"messages"}' 's["alerts"]["active"] == [] and s["alerts"]["nursery"] == ["A12"] and s["alerts"]["countdown"]["active"]'
+# A saved alert with a token: refused without its value, filled from {values}, or asked for by the menu.
+act "a token alert needs its value" alert '{"name":"Vehicle"}' 'not r["ok"] and "plate" in r["error"]'
+act "a saved alert with its token filled" alert '{"name":"Vehicle","values":{"plate":"XYZ 123"}}' 's["alerts"]["active"][0]["text"] == "The owner of the vehicle with plate XYZ 123, please move it." and s["alerts"]["active"][0]["name"] == "Vehicle"'
+act "a {countdown} token follows the countdown" alert '{"name":"Service Starting"}' 's["alerts"]["active"][1]["end"] == "token"'
+act "clear the messages again" alert-clear '{"kind":"messages"}' 's["alerts"]["active"] == []'
+act "the Alerts menu opens" alerts-menu '{"item":"open"}' 'd["open"] and d["entries"][:3] == ["Parent Needed", "Service Starting", "Vehicle"] and "Nursery…" in d["entries"] and d["clock"]'
+wait_idle
+shot alerts-menu alerts-menu
+pixel "the Alerts menu has content" "$OUT/alerts-menu.png" notblank
+act "close the Alerts menu" alerts-menu '{"item":"close"}' 'not d["open"]'
+act "Alerts ▸ Vehicle asks for the plate" alerts-menu '{"item":"alert","name":"Vehicle"}' 'd["state"]["dialog"]["alertDialog"] == "alert-fill"'
+act "USE with an empty plate is refused" accept '' 's["dialog"]["alertDialog"] == "alert-fill" and s["alerts"]["active"] == []'
+act "type the plate" alert-fill '{"values":{"plate":"FB 2026"}}' 'd["tokens"] == ["plate"] and d["preview"] == "The owner of the vehicle with plate FB 2026, please move it." and d["error"] == ""'
+wait_idle
+shot alert-fill alert-fill
+pixel "the token dialog has content" "$OUT/alert-fill.png" notblank
+act "USE shows the alert" accept '' 'not s["dialog"].get("alertDialog") and s["alerts"]["active"][0]["text"].endswith("plate FB 2026, please move it.")'
+act "clear the vehicle alert" alert-clear '{"kind":"messages"}' 's["alerts"]["active"] == []'
+# The nursery and countdown dialogs.
+act "Alerts ▸ Nursery…" alerts-menu '{"item":"nursery"}' 'd["state"]["dialog"]["alertDialog"] == "nursery"'
+act "type a code and Add" nursery-type '{"code":"B7"}' 's["alerts"]["nursery"] == ["A12", "B7"]'
+wait_idle
+shot alerts-nursery nursery
+pixel "the nursery dialog has content" "$OUT/alerts-nursery.png" notblank
+act "close the nursery dialog" dismiss '' 'not s["dialog"].get("alertDialog")'
+act "Alerts ▸ Countdown…" alerts-menu '{"item":"countdown"}' 'd["state"]["dialog"]["alertDialog"] == "countdown"'
+act "type a bad time" countdown-form '{"time":"half past"}' 'd["error"] == ""'
+act "Start with a bad time keeps the dialog" accept '' 's["dialog"]["alertDialog"] == "countdown"'
+act "2:30 in the dialog" countdown-form '{"minutes":2,"seconds":30,"caption":"Back in","position":"bottom-left","end":"hold"}' 'r["ok"]'
+act "Start replaces the countdown" accept '' 'not s["dialog"].get("alertDialog") and s["alerts"]["countdown"]["text"] in ("02:30", "02:29") and s["alerts"]["countdown"]["caption"] == "Back in" and s["alerts"]["countdown"]["position"] == "bottom-left" and s["alerts"]["countdown"]["end"] == "hold"'
+act "Alerts ▸ Clock turns the clock off" alerts-menu '{"item":"clock"}' 'not d["state"]["alerts"]["clock"]["on"] and not d["clock"]'
+wait_idle
+shot alerts-output-2 output
+pixel "the countdown moved to the bottom left" "$OUT/alerts-output-2.png" has 2a5fbf 0.0 0.8 0.3 1.0 2000
+pixel "the clock is gone" "$OUT/alerts-output-2.png" lacks 991a80 0.0 0.0 1.0 1.0 50
+pixel "both nursery codes show" "$OUT/alerts-output-2.png" has bf5f2a 0.7 0.0 1.0 0.15 3000
+act "remove a code" nursery-remove '{"code":"A12"}' 's["alerts"]["nursery"] == ["B7"]'
+# Options ▸ Alerts: hide on Black, then everything goes.
+act "Options ▸ Alerts" options '{"page":"alerts"}' 's["dialog"]["settings"]'
+wait_idle
+shot options-alerts settings
+pixel "the Alerts options page has content" "$OUT/options-alerts.png" notblank
+act "close the Options dialog (alerts)" options '{"on":false}' 'not s["dialog"]["settings"]'
+act "hide alerts on Black" set-setting '{"key":"alerts","value":{"hideOnBlack":true}}' 's["settings"]["alerts"]["hideOnBlack"] and s["alerts"]["hidden"] and not s["alerts"]["showing"] and s["alerts"]["nursery"] == ["B7"]'
+wait_idle
+shot alerts-hidden-output output
+pixel "Black hides the alerts" "$OUT/alerts-hidden-output.png" black
+act "show alerts on Black again" set-setting '{"key":"alerts","value":{"hideOnBlack":false}}' 's["alerts"]["showing"]'
+# Saved alerts: the editor's OK path, then delete.
+act "Alerts ▸ New Alert…" alerts-menu '{"item":"new"}' 'd["state"]["dialog"]["alertDialog"] == "alert-editor"'
+act "type a message without a name" alert-editor '{"alert":{"message":"Parking lot full"}}' 'r["ok"]'
+act "OK without a name is refused" accept '' 's["dialog"]["alertDialog"] == "alert-editor"'
+act "name the alert" alert-editor '{"alert":{"name":"Smoke Parking","message":"Parking lot {lot} is full","display":"static","end":"manual"}}' 'd["error"] == ""'
+act "OK saves it" accept '' 'r["ok"]'
+wait_idle
+check "the saved alert is listed" "$LAST" '"Smoke Parking" in [a["name"] for a in s["alerts"]["saved"]] and not s["dialog"].get("alertDialog")'
+act "the menu lists it" alerts-menu '{"item":"close"}' '"Smoke Parking" in d["entries"]'
+act "show it until removed" alert '{"name":"Smoke Parking","values":{"lot":"B"}}' 's["alerts"]["active"][0]["text"] == "Parking lot B is full" and s["alerts"]["active"][0]["remaining"] == -1'
+act "Alerts ▸ Alert Manager…" alerts-menu '{"item":"manager"}' 'd["state"]["dialog"]["alertDialog"] == "alert-manager"'
+SMOKE_ALERT="$(python3 -c 'import json,sys; print([a["name"] for a in json.loads(sys.argv[1])["data"]["state"]["alerts"]["saved"]].index("Smoke Parking"))' "$LAST")"
+act "select it in the manager" alert-manager "{\"index\":$SMOKE_ALERT}" 'r["ok"]'
+wait_idle
+shot alert-manager alert-manager
+pixel "the Alert Manager has content" "$OUT/alert-manager.png" notblank
+act "Delete asks first" alert-manager "{\"index\":$SMOKE_ALERT,\"mode\":\"delete\"}" 'r["ok"]'
+wait_idle
+check "the delete question is up (alerts)" "$LAST" 's["dialog"]["confirm"] == "Delete Alert"'
+act "OK deletes the alert" accept '' 'r["ok"]'
+wait_idle
+check "the alert is gone" "$LAST" '"Smoke Parking" not in [a["name"] for a in s["alerts"]["saved"]] and len(s["alerts"]["saved"]) == 3'
+act "close the manager" dismiss '' 'not s["dialog"].get("alertDialog")'
+act "Alerts ▸ Clear All Alerts" alerts-menu '{"item":"clear"}' 'not d["state"]["alerts"]["showing"] and d["state"]["alerts"]["active"] == [] and d["state"]["alerts"]["nursery"] == [] and not d["state"]["alerts"]["countdown"]["active"]'
+wait_idle
+shot alerts-cleared-output output
+pixel "the output is black again" "$OUT/alerts-cleared-output.png" black
+act "restore the alert styles" set-setting "{\"key\":\"alerts\",\"value\":$ALERT_STYLES}" 's["settings"]["alerts"]["nursery"]["background"]["A"] < 1'
+act "black off (alerts)" black '{"on":false}' 's["mode"] == "normal"'
+
 # ---- item menus (media and presentation tile menus) --------------------------------------------
 # The right-click / gear menus of the media and presentation tiles (UI-SPEC §3.6), driven
 # through `media-menu {item}` / `presentation-menu {item}`. A square image whose top quarter

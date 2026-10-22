@@ -68,12 +68,22 @@ type viewCache struct {
 
 	// The remote control's dialog and toolbar menu (remote.go).
 	remote remoteView
+
+	// Alerts (alerts.go): what the Alerts ▾ menu, the manager and the
+	// nursery dialog show, and whether a moving ticker holds the animation.
+	alertsVer       int
+	alertsClock     bool
+	alertsMgrSel    int
+	alertsNursery   []string
+	alertsAnim      bool
+	alertsCdRunning bool
+	alertsCdStatus  string
 }
 
 func newViewCache() viewCache {
 	return viewCache{previewSel: -2, liveSel: -2, songSel: -2, songsVer: -1, biblesVer: -1, bibleSel: -2,
 		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2, presVer: -1, presSel: -2, themesVer: -1, themeSel: -2,
-		settingsVer: -1, color: core.ColorDark}
+		settingsVer: -1, color: core.ColorDark, alertsVer: -1, alertsMgrSel: -2}
 }
 
 // buildUI creates the main window, the monitors and the output, and connects
@@ -108,7 +118,6 @@ func (a *App) buildUI() {
 
 	tb := a.win.Toolbar
 	tb.SetEnabled(ui.ActionWeb, false)
-	tb.SetEnabled(ui.ActionAlerts, false)
 	tb.OnAction = func(act ui.ToolbarAction) { a.event(func() { a.onToolbar(act) }) }
 
 	a.win.OnGoBack = func() { a.event(a.goBack) }
@@ -179,6 +188,7 @@ func (a *App) buildUI() {
 	a.wirePlayback() // monitor player roles and the transport bars (playback.go)
 	a.wireStage()    // the stage display (stage.go)
 	a.wireRemote()   // the remote control's pairing dialog and Options page (remote.go)
+	a.wireAlerts()   // the Alerts ▾ menu and its dialogs (alerts.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -409,6 +419,9 @@ func (a *App) render() {
 
 	// The remote control: its dialog, the toolbar menu and the phones' view.
 	a.renderRemote(&v.remote)
+
+	// The Alerts ▾ menu and the alert dialogs' lists (alerts.go).
+	a.renderAlerts(v)
 
 	// Error messages: the first queued alert is on screen.
 	switch {

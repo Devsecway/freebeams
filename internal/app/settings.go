@@ -44,6 +44,7 @@ func (a *App) loadSettings() {
 			a.settings.Logo = logo
 		}
 		get(core.SettingInterfaceColor, &a.settings.InterfaceColor)
+		get(core.SettingAlertStyles, &a.settings.Alerts)
 		get(core.SettingRecent, &a.recent)
 	}
 	a.settings = a.settings.Normalized(a.logoDir)
@@ -179,6 +180,7 @@ func (a *App) closeSettings(cancel bool) {
 		a.fail("restore remote port", a.setRemotePort(a.rm.snapPort))
 		a.setRemoteEnabled(a.rm.snapEnabled)
 	}
+	a.setAlertStyles(s.Alerts)
 }
 
 // logoFilters are the native dialog filters for Choose Image….
@@ -278,6 +280,7 @@ func (a *App) settingsValues() ui.SettingsValues {
 		OutputScreen: a.settings.OutputScreen,
 		Logo:         core.LogoDescription(a.settings.Logo),
 		LibraryPath:  "Library unavailable",
+		Alerts:       a.settings.Alerts,
 	}
 	if a.st != nil {
 		v.LibraryPath = a.st.Path()
@@ -461,8 +464,10 @@ func (a *App) applySetting(key string, raw json.RawMessage) error {
 		return a.setInterfaceColor(c)
 	case core.SettingStage, "stage":
 		return a.applyStageSetting(raw) // stage.go
+	case core.SettingAlertStyles, "alerts":
+		return a.applyAlertStyles(key, raw)
 	default:
-		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, stage, remote.enabled, remote.port)", key)
+		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, stage, remote.enabled, remote.port, alerts)", key)
 	}
 	return nil
 }

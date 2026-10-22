@@ -53,6 +53,13 @@ type MainWindow struct {
 	// Remote is the remote control's pairing dialog (remote.go).
 	Remote *RemoteDialog `gd:"-"`
 
+	// Alerts ▾ dialogs (alerts.go).
+	AlertManager *AlertManager    `gd:"-"`
+	AlertEditor  *AlertEditor     `gd:"-"`
+	AlertFill    *AlertTagFill    `gd:"-"`
+	Nursery      *NurseryDialog   `gd:"-"`
+	Countdown    *CountdownDialog `gd:"-"`
+
 	// Transport bars under the output monitors, shown while the monitor's
 	// slide is a video or an audio file (transport.go).
 	PreviewTransport *Transport `gd:"-"`
@@ -135,6 +142,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.Message = NewMessageDialog()
 	w.StageMessage = NewStageMessageDialog()
 	w.Remote = NewRemoteDialog()
+	w.buildAlertDialogs()
 	for _, d := range w.dialogs() {
 		d.host = w.dialogHost
 		d.setTheme(theme)
@@ -146,7 +154,8 @@ func NewMainWindow(p Palette) *MainWindow {
 
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
-	return []*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg, w.Remote.dlg}
+	return append([]*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg, w.Remote.dlg},
+		w.alertDialogs()...)
 }
 
 // dialogName names a dialog window node for TopDialogHost.
@@ -166,6 +175,9 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 		return "stage-message"
 	case w.Remote.dlg.win.AsNode().ID():
 		return "remote"
+	}
+	if name := w.alertDialogName(n); name != "" {
+		return name
 	}
 	return "other"
 }
