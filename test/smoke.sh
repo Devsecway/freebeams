@@ -1148,6 +1148,146 @@ act "delete the themed song" delete-song '{"index":0,"confirm":true}' 'r["ok"]'
 wait_idle
 act "clear the song search (song themes)" search-songs '{"q":""}' 's["songs"]["results"] == s["songs"]["count"]'
 
+# ---- stage display (v0.2) ----------------------------------------------------------------------
+# The stage display (EasyWorship's Foldback output): the live slide's text in white, the next slide
+# in amber (#ffd15c), item title, clock, service timer, the output-mode badge (BLACK #d32f2f) and the
+# operator's stage message on a teal band (#00796b), white on black. On this machine the TV (when
+# connected) carries the output, so Automatic puts the stage in a window on the primary display.
+act "Songs tab (stage)" tab '{"tab":"songs"}' 's["tab"] == 0'
+act "save a first stage song" save-song '{"title":"Smoke Stage One","author":"FreeBeams","lyrics":"[Verse 1]\nstage one verse\n\n[Chorus]\nstage one chorus"}' 's["songs"]["current"] == "Smoke Stage One"'
+act "save a second stage song" save-song '{"title":"Smoke Stage Two","author":"FreeBeams","lyrics":"[Verse 1]\nstage two verse"}' 's["songs"]["current"] == "Smoke Stage Two"'
+wait_idle
+STAGE_ROW=$(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$(state)")
+act "find the stage songs" search-songs '{"q":"smoke stage"}' 's["songs"]["results"] == 2'
+act "select the first stage song" select-song '{"title":"Smoke Stage One"}' 's["preview"]["title"] == "Smoke Stage One"'
+act "add it to the schedule (stage)" add-to-schedule '{"source":"song"}' 's["schedule"]["items"][-1] == "Smoke Stage One"'
+act "select the second stage song" select-song '{"title":"Smoke Stage Two"}' 's["preview"]["title"] == "Smoke Stage Two"'
+act "add it to the schedule too (stage)" add-to-schedule '{"source":"song"}' 's["schedule"]["items"][-1] == "Smoke Stage Two"'
+LAST="$(state)"
+check "the stage display is off by default" "$LAST" 'not s["stage"]["settings"]["enabled"] and not s["stage"]["open"] and s["stage"]["screen"] == -1 and s["stage"]["monitor"] == "live"'
+act "a stage screenshot needs the stage display" stage '{"on":false}' 'not s["stage"]["open"]'
+curl -sS --max-time 60 -H "Authorization: Bearer $KEY" "$BASE/screenshot?window=stage" | grep -q 'not open' || fail "a closed stage display's screenshot is not an error"
+log "ok: a closed stage display's screenshot is an error"
+act "the first stage item goes live" select-schedule "{\"index\":$STAGE_ROW}" 's["preview"]["title"] == "Smoke Stage One"'
+act "go live (stage)" go-live '' 's["live"]["title"] == "Smoke Stage One" and s["live"]["label"] == "Verse 1"'
+act "Live ▸ Stage Display turns it on" menu '{"item":"stage-display"}' 's["stage"]["settings"]["enabled"] and s["stage"]["open"] and s["stage"]["screen"] >= 0 and not s["stage"]["conflict"] and (s["screens"] > 2 or not s["stage"]["fullscreen"])'
+check "the stage shows the live slide and the next one" "$LAST" 's["stage"]["title"] == "Smoke Stage One" and s["stage"]["label"] == "Verse 1" and s["stage"]["current"] == "stage one verse" and s["stage"]["next"] == "stage one chorus" and s["stage"]["nextHeader"] == "NEXT · Chorus" and s["stage"]["badge"] == ""'
+check "the stage has a clock and a stopped timer" "$LAST" 's["stage"]["clock"].endswith(("AM","PM")) and s["stage"]["timer"] == "00:00" and not s["stage"]["timerRunning"]'
+wait_idle
+check "the windowed stage gives the keyboard back to the operator window" "$LAST" 'not s["stage"]["focused"]'
+shot stage-display stage
+pixel "the stage is black" "$OUT/stage-display.png" has 000000 0.0 0.0 1.0 1.0 200000
+pixel "the stage shows the live text in white" "$OUT/stage-display.png" has ffffff 0.1 0.15 0.9 0.55 500
+pixel "the stage shows the next slide in amber" "$OUT/stage-display.png" has ffd15c 0.1 0.6 0.9 1.0 200
+# Across the item boundary the next slide is the next schedule item's first.
+act "End on the stage item (last slide)" key '{"name":"End"}' 's["live"]["label"] == "Chorus"'
+check "the stage announces the next item" "$LAST" 's["stage"]["nextTitle"] == "Smoke Stage Two" and s["stage"]["next"] == "stage two verse" and s["stage"]["nextHeader"].startswith("NEXT ITEM · Smoke Stage Two")'
+# Keys typed while the windowed stage display has the focus are the hotkeys, as on the output.
+act "Left in the stage window is Prev" native-key '{"name":"left","window":"stage"}' 's["live"]["label"] == "Verse 1" and s["stage"]["label"] == "Verse 1"'
+act "Right in the stage window is Next" native-key '{"name":"right","window":"stage"}' 's["live"]["label"] == "Chorus"'
+# Black: the room sees black, the musicians keep the text and see a badge.
+act "black (stage)" black '' 's["mode"] == "black" and s["stage"]["badge"] == "BLACK" and s["stage"]["current"] == "stage one chorus"'
+wait_idle
+shot stage-black stage
+pixel "the stage shows the BLACK badge" "$OUT/stage-black.png" has d32f2f 0.5 0.0 1.0 0.15 500
+pixel "the stage keeps the text during Black" "$OUT/stage-black.png" has ffffff 0.1 0.15 0.9 0.55 300
+act "Live ▸ Black Output turns it off" menu '{"item":"black"}' 's["mode"] == "normal" and s["stage"]["badge"] == ""'
+act "logo (stage)" logo '' 's["stage"]["badge"] == "LOGO"'
+act "logo off (stage)" logo '' 's["mode"] == "normal" and s["stage"]["badge"] == ""'
+# The service timer.
+act "start the service timer" stage-timer '{"action":"start"}' 's["stage"]["timerRunning"]'
+sleep 2.2
+LAST="$(state)"
+check "the timer runs" "$LAST" 's["stage"]["timerSeconds"] >= 2 and s["stage"]["timer"] != "00:00" and s["stage"]["timerRunning"]'
+act "stop the timer" stage-timer '{"action":"stop"}' 'not s["stage"]["timerRunning"] and s["stage"]["timerSeconds"] >= 2'
+STAGE_T="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["data"]["stage"]["timerSeconds"])' "$LAST")"
+sleep 1.2
+LAST="$(state)"
+check "a stopped timer holds" "$LAST" "s[\"stage\"][\"timerSeconds\"] == $STAGE_T"
+act "reset the timer" stage-timer '{"action":"reset"}' 's["stage"]["timerSeconds"] == 0 and s["stage"]["timer"] == "00:00"'
+act "toggle starts it" stage-timer '{"action":"toggle"}' 's["stage"]["timerRunning"]'
+act "toggle stops it" stage-timer '{"action":"toggle"}' 'not s["stage"]["timerRunning"]'
+act "an unknown timer action is refused" stage-timer '{"action":"rewind"}' 'not r["ok"]'
+act "reset the timer again" stage-timer '{"action":"reset"}' 's["stage"]["timerSeconds"] == 0'
+# The stage message: control API, then Live ▸ Stage Message… typed into with real keys.
+act "a stage message" stage-note '{"text":"  Repeat the\nchorus  "}' 's["stage"]["note"] == "Repeat the chorus"'
+wait_idle
+shot stage-note stage
+pixel "the stage shows the message band" "$OUT/stage-note.png" has 00796b 0.0 0.8 1.0 1.0 5000
+pixel "the message is white on the band" "$OUT/stage-note.png" has ffffff 0.1 0.85 0.9 1.0 100
+pixel "the live text stays above the band" "$OUT/stage-note.png" has ffffff 0.1 0.15 0.9 0.5 300
+shot stage-note-output output
+pixel "the message never reaches the output" "$OUT/stage-note-output.png" lacks 00796b 0.0 0.0 1.0 1.0 50
+act "take the message down" stage-note '{"text":""}' 's["stage"]["note"] == ""'
+wait_idle
+shot stage-no-note stage
+pixel "the band is gone" "$OUT/stage-no-note.png" lacks 00796b 0.0 0.0 1.0 1.0 50
+act "Live ▸ Stage Message… opens the dialog" menu '{"item":"stage-message"}' 's["dialog"]["stageMessage"] and s["dialog"]["host"] == "main" and s["focus"] == "dialog"'
+wait_idle
+for k in o k; do LAST="$(post native-key "{\"name\":\"$k\",\"window\":\"stage-message\"}")"; done
+check "typing in the dialog" "$LAST" 'r["ok"] and s["dialog"]["stageMessage"] and s["stage"]["note"] == ""'
+shot stage-message stage-message
+pixel "the stage message dialog has content" "$OUT/stage-message.png" notblank
+act "Enter shows the typed message" native-key '{"name":"enter","window":"stage-message"}' 'not s["dialog"].get("stageMessage") and s["stage"]["note"] == "ok"'
+act "the dialog opens with the current message" stage-note '{"mode":"open"}' 's["dialog"]["stageMessage"]'
+act "Cancel changes nothing" dismiss '' 'not s["dialog"].get("stageMessage") and s["stage"]["note"] == "ok"'
+act "open it with a new message" stage-note '{"mode":"open","text":"Five minutes"}' 's["dialog"]["stageMessage"]'
+act "Show (OK) puts it up" accept '' 'not s["dialog"].get("stageMessage") and s["stage"]["note"] == "Five minutes"'
+act "open it again" stage-note '{"mode":"open"}' 's["dialog"]["stageMessage"]'
+act "Clear takes it down" stage-note '{"mode":"clear"}' 'not s["dialog"].get("stageMessage") and s["stage"]["note"] == ""'
+act "an unknown stage-note mode is refused" stage-note '{"mode":"bogus"}' 'not r["ok"]'
+# The Live Output monitor's output selector previews the Foldback output.
+act "the Live Output monitor shows Foldback" stage-monitor '{"on":true}' 's["stage"]["monitor"] == "foldback"'
+wait_idle
+shot stage-monitor main
+pixel "the live monitor shows the stage's amber next slide" "$OUT/stage-monitor.png" has ffd15c 0.6 0.35 1.0 0.7 30
+act "back to the Live Output" stage-monitor '{"on":false}' 's["stage"]["monitor"] == "live"'
+wait_idle
+shot stage-monitor-live main
+pixel "the live monitor no longer shows the stage" "$OUT/stage-monitor-live.png" lacks ffd15c 0.6 0.35 1.0 0.7 30
+# Settings: set-setting persists; the Options section's Cancel restores the stage settings.
+act "a 24-hour clock and bigger text" set-setting '{"key":"stage","value":{"clock24h":true,"fontScale":1.5}}' 's["stage"]["settings"]["clock24h"] and s["stage"]["settings"]["fontScale"] == 1.5 and ":" in s["stage"]["clock"] and not s["stage"]["clock"].endswith(("AM","PM"))'
+wait_idle
+python3 - "$LIB" <<'PY' || fail "the stage settings were not persisted"
+import json, sqlite3, sys
+db = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
+row = db.execute("select value from settings where key = 'stage.settings'").fetchone()
+v = json.loads(row[0]) if row else {}
+sys.exit(0 if v.get("enabled") and v.get("clock24h") and v.get("fontScale") == 1.5 and v.get("screen") == -1 else 1)
+PY
+log "ok: the stage settings are persisted"
+shot stage-big stage
+pixel "the bigger stage text still has its next slide" "$OUT/stage-big.png" has ffd15c 0.05 0.5 0.95 1.0 200
+act "no next slide, no timer" set-setting '{"key":"stage","value":{"showNext":false,"showTimer":false,"fontScale":1}}' 's["stage"]["next"] == "" and s["stage"]["timer"] == "" and s["stage"]["clock"] != ""'
+wait_idle
+shot stage-plain stage
+pixel "without the next slide there is no amber" "$OUT/stage-plain.png" lacks ffd15c 0.0 0.0 1.0 1.0 20
+# The header shrinks back from 150 %: a label must not keep the bigger text's minimum size (StageView.replace).
+pixel "the clock stays inside the right margin" "$OUT/stage-plain.png" lacks ffffff 0.985 0.0 1.0 0.15 1
+act "an unconnected stage display is refused" stage '{"screen":99}' 'not r["ok"] and "not connected" in r["error"]'
+check "the stage keeps its display" "$(state)" 's["stage"]["settings"]["screen"] == -1 and s["stage"]["open"]'
+act "the Stage Display options page" options '{"page":"stage"}' 's["dialog"]["settings"]'
+wait_idle
+shot stage-options settings
+pixel "the Stage Display page has content" "$OUT/stage-options.png" notblank
+act "change the stage in the dialog" set-setting '{"key":"stage","value":{"showNext":true,"showTimer":true}}' 's["stage"]["settings"]["showNext"] and s["stage"]["next"] != ""'
+act "Cancel restores the stage settings" dismiss '' 'not s["dialog"]["settings"] and not s["stage"]["settings"]["showNext"] and not s["stage"]["settings"]["showTimer"]'
+act "the defaults back" set-setting '{"key":"stage","value":{"showNext":true,"showTimer":true,"clock24h":false,"fontScale":1}}' 's["stage"]["settings"]["showNext"] and s["stage"]["settings"]["showTimer"] and not s["stage"]["settings"]["clock24h"]'
+# Off again (the Live menu toggles it), and the stage songs are removed.
+act "stage {on:false} closes it" stage '{"on":false}' 'not s["stage"]["settings"]["enabled"] and not s["stage"]["open"] and s["stage"]["screen"] == -1'
+act "stage toggles it on" stage '' 's["stage"]["open"]'
+act "Live ▸ Stage Display turns it off" menu '{"item":"stage-display"}' 'not s["stage"]["open"]'
+act "remove the second stage item" remove-schedule "{\"index\":$((STAGE_ROW + 1))}" "len(s[\"schedule\"][\"items\"]) == $STAGE_ROW + 1"
+act "remove the first stage item" remove-schedule "{\"index\":$STAGE_ROW}" "len(s[\"schedule\"][\"items\"]) == $STAGE_ROW"
+act "save the schedule (stage)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+act "find the stage songs again" search-songs '{"q":"smoke stage"}' 's["songs"]["results"] == 2'
+act "delete a stage song" delete-song '{"index":0,"confirm":true}' 'r["ok"]'
+wait_idle
+act "find the last stage song" search-songs '{"q":"smoke stage"}' 's["songs"]["results"] == 1'
+act "delete the other stage song" delete-song '{"index":0,"confirm":true}' 'r["ok"]'
+wait_idle
+act "clear the song search (stage)" search-songs '{"q":""}' 's["songs"]["results"] == s["songs"]["count"]'
+
 # ---- remote control (v0.2) -------------------------------------------------------------------
 # The LAN remote (internal/remote, docs/REMOTE.md) on a free port, driven by a fake phone
 # (test/remoteclient: the phone app's own pairing calls and WebSocket): a wrong code is refused,

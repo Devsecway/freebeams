@@ -240,6 +240,10 @@ internal/app               Godot: the App node that wires store + presenter + ui
   (set `processName`, retitle the submenu, re-install the main menu before `buildUI` adds ours); the Dock and Cmd-Tab
   names only change in the exported bundle. The app was FreeWorship until 2026-10-20: `internal/appdirs` moves a
   `FreeWorship` config/cache directory to `FreeBeams` once, and `.fws` schedules still open (`models.IsScheduleFile`).
+- A `Label` takes a `LabelSettings` font-size change through a deferred update: in the frame its text shrinks, its
+  minimum size is still the old, bigger text's, so a `SetSize` smaller than that is clamped and the label grows past
+  its box (down, or right for a right-aligned `OverrunNoTrimming` clock). A getter does not help. Place it again
+  one `Callable.Defer` later, after a flush (`render.StageView.deferReplace`).
 - gorilla/websocket: once a read deadline passes the connection is unusable ("all future reads return an error").
   Wait with a timeout on a channel fed by a reader goroutine instead (`test/remoteclient`), never with
   `SetReadDeadline` between messages.

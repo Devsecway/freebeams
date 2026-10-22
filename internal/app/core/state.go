@@ -147,6 +147,9 @@ type DialogState struct {
 	// output window. "" when no dialog is open.
 	Host string `json:"host,omitempty"`
 
+	// StageMessage reports Live ▸ Stage Message… being open.
+	StageMessage bool `json:"stageMessage,omitempty"`
+
 	// AlertDialog names the topmost open alert dialog: alert-manager,
 	// alert-editor, alert-fill, nursery or countdown ("" when none).
 	AlertDialog string `json:"alertDialog,omitempty"`
@@ -204,6 +207,9 @@ type State struct {
 	// monitors (playback.go).
 	Playback PlaybackStates `json:"playback"`
 
+	// Stage is the stage display / Foldback output (stage.go).
+	Stage StageState `json:"stage"`
+
 	// Remote is the LAN remote control (remote.go).
 	Remote RemoteState `json:"remote"`
 
@@ -247,6 +253,8 @@ type StateInput struct {
 	Bundled BundledState
 
 	Playback PlaybackStates
+
+	Stage StageState
 
 	Remote RemoteState
 	Alerts AlertsState
@@ -311,6 +319,7 @@ func BuildState(in StateInput) State {
 		st.Scripture.CopyrightedAvailable = []string{}
 	}
 	st.Playback = in.Playback
+	st.Stage = in.Stage
 	st.Remote = in.Remote.normalized()
 	st.Alerts = in.Alerts
 	if st.Alerts.Active == nil {

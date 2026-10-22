@@ -77,6 +77,14 @@ type MainWindow struct {
 	// OnGoBack is the Live header's Go Back button.
 	OnGoBack func() `gd:"-"`
 
+	// OnMonitorOutput is the Live Output monitor's output selector: Live
+	// Output or Foldback Output (output_select.go).
+	OnMonitorOutput func(foldback bool) `gd:"-"`
+	outSel          *outputSelect
+
+	// StageMessage is Live ▸ Stage Message… (stage_message.go).
+	StageMessage *StageMessageDialog `gd:"-"`
+
 	// palette is plain Go data. The Theme is not kept in a field: a RefCounted
 	// held by an extension struct is never released (leaks at exit); it lives
 	// on the node (AsControl().Theme()).
@@ -132,6 +140,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.Settings = NewSettingsDialog()
 	w.Confirm = NewConfirmDialog()
 	w.Message = NewMessageDialog()
+	w.StageMessage = NewStageMessageDialog()
 	w.Remote = NewRemoteDialog()
 	w.buildAlertDialogs()
 	for _, d := range w.dialogs() {
@@ -145,7 +154,7 @@ func NewMainWindow(p Palette) *MainWindow {
 
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
-	return append([]*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.Remote.dlg},
+	return append([]*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg, w.Remote.dlg},
 		w.alertDialogs()...)
 }
 
@@ -162,6 +171,8 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 		return "confirm"
 	case w.Message.dlg.win.AsNode().ID():
 		return "message"
+	case w.StageMessage.dlg.win.AsNode().ID():
+		return "stage-message"
 	case w.Remote.dlg.win.AsNode().ID():
 		return "remote"
 	}
@@ -387,13 +398,15 @@ func (w *MainWindow) buildPreviewLive() Control.Instance {
 		goBack.AsControl(), withMargins(newDivider(true).AsControl(), 0, 6),
 	}, gridSizer(w.LiveGrid))
 	swap := newMiniButton(miniPlain, "swap", 24, 24, "Output: Live / Foldback")
+	liveCaption := label("Live Output", "")
+	w.wireOutputSelect(swap, liveCaption)
 	w.LiveTransport = NewTransport()
 	w.LiveTransport.AsControl().AsCanvasItem().SetVisible(false)
 	w.LiveSplit = NewSplitter(SplitVertical, SlideGridPercent, 150, 0, 0, 200)
 	w.LiveSplit.SetPanes(
 		column(liveHeader, surface(vGridBk, w.LiveGrid.AsControl())),
 		columnFooter(w.LiveMonitor.AsControl(), w.LiveTransport.AsControl(),
-			outputBar(swap.AsControl(), fixed(4, 0), hexpand(label("Live Output", "").AsControl()))),
+			outputBar(swap.AsControl(), fixed(4, 0), hexpand(liveCaption.AsControl()))),
 	)
 
 	w.PreviewLiveSplit = NewSplitter(SplitHorizontal, PreviewLivePercent, 50, 50, 0, 0)

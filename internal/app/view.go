@@ -97,7 +97,7 @@ func (a *App) buildUI() {
 	a.resView = render.NewSlideView()
 	a.resView.SetTransitionDuration(0) // cut
 	a.win.PreviewMonitor.SetContent(a.previewView.AsControl())
-	a.win.LiveMonitor.SetContent(a.liveView.AsControl())
+	a.win.LiveMonitor.SetContent(a.liveMonitorContent()) // the live view and the Foldback view (stage.go)
 	a.win.ResourcePreview.SetContent(a.resView.AsControl())
 
 	a.out = render.NewOutput(a.AsNode())
@@ -186,6 +186,7 @@ func (a *App) buildUI() {
 	a.wireThemes()
 	a.wireSettings() // the Options dialog and the menus (settings.go)
 	a.wirePlayback() // monitor player roles and the transport bars (playback.go)
+	a.wireStage()    // the stage display (stage.go)
 	a.wireRemote()   // the remote control's pairing dialog and Options page (remote.go)
 	a.wireAlerts()   // the Alerts ▾ menu and its dialogs (alerts.go)
 }
@@ -414,6 +415,7 @@ func (a *App) render() {
 
 	// Settings: the Options dialog, the menus and the interface theme.
 	a.renderSettings(v)
+	a.renderStage() // the stage display, the output selector and the Live menu (stage.go)
 
 	// The remote control: its dialog, the toolbar menu and the phones' view.
 	a.renderRemote(&v.remote)

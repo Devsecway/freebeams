@@ -49,6 +49,7 @@ func (a *App) state() core.State {
 	if a.win.Editor.Visible() {
 		dialog.SongEditorTheme = a.win.Editor.ThemeName()
 	}
+	dialog.StageMessage = a.win.StageMessage.Visible()
 	if m := a.win.Message; m.Visible() {
 		dialog.Message = &core.Alert{Title: m.Title(), Message: m.Text()}
 	}
@@ -83,6 +84,7 @@ func (a *App) state() core.State {
 		Import:        a.importDoc(),
 		Bundled:       a.bundled,
 		Playback:      a.playbackStates(),
+		Stage:         a.stageStateDoc(),
 		Remote:        a.remoteStateDoc(),
 		Alerts:        a.alertsStateDoc(),
 		LastError:     a.lastError,
@@ -165,6 +167,10 @@ type actionArgs struct {
 
 	// Playback (playback.go); volume takes Value, loop takes On, all take Target.
 	Seconds *float64 `json:"seconds"` // seek: the position in seconds; countdown / alert: a length
+
+	// Stage display (stage.go).
+	Screen *int   `json:"screen"` // stage: the display (-1 automatic)
+	Action string `json:"action"` // stage-timer: start | stop | reset | toggle
 
 	// The remote control (remote.go): the server's port and a pairing
 	// request's or a paired device's id (Name matches by name).
@@ -515,7 +521,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		a.quitNext = true
 		cmd.RespondJSON(map[string]bool{"quitting": true})
 	default:
-		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleStageCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}
@@ -550,13 +556,17 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(w)
 	case "output":
 		png, err = a.out.Screenshot()
+	case "stage":
+		png, err = a.stage.win.Screenshot()
+	case "stage-message":
+		png, err = render.WindowScreenshot(a.win.StageMessage.AsWindow())
 	case "alert-manager", "alert-editor", "alert-fill", "nursery", "countdown":
 		w, _ := a.win.AlertWindow(cmd.Query["window"])
 		png, err = render.WindowScreenshot(w)
 	case "alerts-menu":
 		png, err = render.WindowScreenshot(a.win.Toolbar.AlertsMenuWindow())
 	default:
-		err = fmt.Errorf("screenshot: unknown window %q (main|output|editor|settings|dialog|message)", cmd.Query["window"])
+		err = fmt.Errorf("screenshot: unknown window %q (main|output|stage|stage-message|editor|settings|dialog|message)", cmd.Query["window"])
 	}
 	if err != nil {
 		cmd.RespondErr(err)
