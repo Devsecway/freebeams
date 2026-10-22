@@ -1124,13 +1124,11 @@ PY
 	pb_wait "the live player plays the tone (audio only)" 's["playback"]["live"]["position"] > 0.2 and s["playback"]["live"]["duration"] > 2.9 and s["playback"]["live"]["hasAudio"] and not s["playback"]["live"]["hasVideo"]'
 	act "volume" volume '{"value":0.5}' 's["playback"]["live"]["volume"] == 0.5'
 	act "a volume that is not a number is refused" volume '{"value":"loud"}' 'not r["ok"]'
-	wait_idle
-	shot playback-audio-output output
-	shot playback-audio-main main
-	pixel "audio shows a black output" "$OUT/playback-audio-output.png" black
 	# The audio clock: it runs in real time, follows a seek while playing
 	# (the ffmpeg player restarts its decoder and drops the queued sound) and
-	# stops at the end.
+	# stops at the end. The tone lasts 3 s: the screenshots come after it, or
+	# it has ended before the seek (which then leaves it paused at 1.5).
+	LAST="$(state)"
 	PB_POS="$(field "$LAST" playback.live.position)"
 	sleep 0.5
 	LAST="$(state)"
@@ -1138,6 +1136,10 @@ PY
 	act "seek the tone while it plays" seek '{"seconds":1.5}' 'r["ok"]'
 	pb_wait "the tone plays on from the seek" 's["playback"]["live"]["playing"] and 1.55 < s["playback"]["live"]["position"] < 2.8'
 	pb_wait "the tone stops at its end" 'not s["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 2.9'
+	wait_idle
+	shot playback-audio-output output
+	shot playback-audio-main main
+	pixel "audio shows a black output" "$OUT/playback-audio-output.png" black
 	if [ "$PB_PLAYER" = "ffmpeg" ]; then
 		grep -q 'the sound cannot play' "$LOG" && fail "the ffmpeg player could not decode a sound track"
 		log "ok: the ffmpeg player decoded every sound track"
