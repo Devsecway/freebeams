@@ -12,6 +12,7 @@ import (
 
 	"freebeams/internal/app/core"
 	"freebeams/internal/control"
+	"freebeams/internal/keepalive"
 	"freebeams/internal/remote"
 	"freebeams/internal/ui"
 )
@@ -27,7 +28,10 @@ import (
 
 // remoteApp is the App's remote control state.
 type remoteApp struct {
-	srv     *remote.Server
+	// srv is hidden from graphics.gd's keepalive walk: goroutines serve it
+	// (HTTP, WebSocket hub, clients). See internal/keepalive.
+	srv keepalive.Hidden[remote.Server]
+
 	name    string // what phones show as this computer ("FreeBeams on …")
 	enabled bool   // the setting: run the server
 	port    int    // the setting: its port
@@ -53,7 +57,7 @@ func (a *App) initRemote() {
 	host, _ := os.Hostname()
 	a.rm.name = core.RemoteServerName(host)
 	opt := remote.Options{Name: a.rm.name}
-	if st := a.st; st != nil {
+	if st := a.st(); st != nil {
 		opt.SearchSongs = func(ctx context.Context, q string) ([]remote.SongHit, error) {
 			rows, err := st.SearchSongs(ctx, q, 50)
 			if err != nil {
@@ -66,11 +70,11 @@ func (a *App) initRemote() {
 			return hits, nil
 		}
 	}
-	a.rm.srv = remote.New(opt)
+	a.rm.srv = keepalive.Hide(remote.New(opt))
 	a.rm.port = remote.DefaultPort
-	if a.st != nil {
+	if a.st() != nil {
 		get := func(key string, dst any) {
-			if _, err := a.st.GetSetting(a.ctx(), key, dst); err != nil {
+			if _, err := a.st().GetSetting(a.ctx(), key, dst); err != nil {
 				a.fail("read setting "+key, err)
 			}
 		}
@@ -78,14 +82,14 @@ func (a *App) initRemote() {
 		get(core.SettingRemotePort, &a.rm.port)
 		var devices []remote.Device
 		get(core.SettingRemoteDevices, &devices)
-		a.rm.srv.SetDevices(devices)
-		a.rm.saved, _ = json.Marshal(a.rm.srv.StoredDevices())
+		a.rm.srv.Get().SetDevices(devices)
+		a.rm.saved, _ = json.Marshal(a.rm.srv.Get().StoredDevices())
 	}
 	if core.ValidRemotePort(a.rm.port) != nil {
 		a.rm.port = remote.DefaultPort
 	}
 	a.syncRemoteServer()
-	a.rm.status = a.rm.srv.Status()
+	a.rm.status = a.rm.srv.Get().Status()
 	log.Printf("[freebeams] remote control %s (port %d, %d paired device(s))",
 		map[bool]string{true: "on", false: "off"}[a.rm.enabled], a.rm.port, len(a.rm.status.Devices))
 }
@@ -93,7 +97,7 @@ func (a *App) initRemote() {
 // syncRemoteServer starts or stops the server to match the setting. A port
 // change restarts it.
 func (a *App) syncRemoteServer() {
-	srv := a.rm.srv
+	srv := a.rm.srv.Get()
 	if srv == nil {
 		return
 	}
@@ -117,18 +121,18 @@ func (a *App) syncRemoteServer() {
 // stopRemote stops the server and persists the devices (shutdown, before the
 // library closes; the async save path is already cancelled).
 func (a *App) stopRemote() {
-	if a.rm.srv == nil {
+	if a.rm.srv.Get() == nil {
 		return
 	}
-	a.rm.srv.Stop()
-	if a.st == nil {
+	a.rm.srv.Get().Stop()
+	if a.st() == nil {
 		return
 	}
-	devices := a.rm.srv.StoredDevices()
+	devices := a.rm.srv.Get().StoredDevices()
 	if b, _ := json.Marshal(devices); string(b) != string(a.rm.saved) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		if err := a.st.SetSetting(ctx, core.SettingRemoteDevices, devices); err != nil {
+		if err := a.st().SetSetting(ctx, core.SettingRemoteDevices, devices); err != nil {
 			log.Printf("[freebeams] save remote devices: %v", err)
 		}
 	}
@@ -137,7 +141,7 @@ func (a *App) stopRemote() {
 // processRemote drains the phones' commands and the server's change signal
 // (Process, every frame).
 func (a *App) processRemote() {
-	srv := a.rm.srv
+	srv := a.rm.srv.Get()
 	if srv == nil {
 		return
 	}
@@ -164,7 +168,7 @@ func (a *App) processRemote() {
 
 // refreshRemoteStatus re-reads the server's status; a change re-renders.
 func (a *App) refreshRemoteStatus() {
-	st := a.rm.srv.Status()
+	st := a.rm.srv.Get().Status()
 	if !reflect.DeepEqual(st, a.rm.status) {
 		a.rm.status = st
 		a.settingsVer++ // the Options page shows the status line
@@ -174,7 +178,7 @@ func (a *App) refreshRemoteStatus() {
 
 // saveRemoteDevices persists the approved devices when they changed.
 func (a *App) saveRemoteDevices() {
-	devices := a.rm.srv.StoredDevices()
+	devices := a.rm.srv.Get().StoredDevices()
 	b, err := json.Marshal(devices)
 	if err != nil || string(b) == string(a.rm.saved) {
 		return
@@ -215,14 +219,14 @@ func (a *App) setRemotePort(port int) error {
 // the Wi-Fi may have changed since the server started).
 func (a *App) openRemoteDialog() {
 	a.rm.dialog = true
-	if a.rm.srv != nil {
-		a.rm.srv.RefreshAddresses()
+	if a.rm.srv.Get() != nil {
+		a.rm.srv.Get().RefreshAddresses()
 		a.refreshRemoteStatus()
 	}
 }
 
 func (a *App) remoteApprove(id string) error {
-	if _, err := a.rm.srv.Approve(id); err != nil {
+	if _, err := a.rm.srv.Get().Approve(id); err != nil {
 		return err
 	}
 	a.refreshRemoteStatus()
@@ -230,7 +234,7 @@ func (a *App) remoteApprove(id string) error {
 }
 
 func (a *App) remoteDeny(id string) error {
-	if err := a.rm.srv.Deny(id); err != nil {
+	if err := a.rm.srv.Get().Deny(id); err != nil {
 		return err
 	}
 	a.refreshRemoteStatus()
@@ -238,7 +242,7 @@ func (a *App) remoteDeny(id string) error {
 }
 
 func (a *App) remoteRevoke(id string) error {
-	if err := a.rm.srv.Revoke(id); err != nil {
+	if err := a.rm.srv.Get().Revoke(id); err != nil {
 		return err
 	}
 	a.saveRemoteDevices()
@@ -247,7 +251,7 @@ func (a *App) remoteRevoke(id string) error {
 }
 
 func (a *App) remoteNewCode() {
-	a.rm.srv.NewCode()
+	a.rm.srv.Get().NewCode()
 	a.refreshRemoteStatus()
 }
 
@@ -307,7 +311,7 @@ type remoteView struct {
 // renderRemote projects the remote state onto the pairing dialog and the
 // toolbar menu, and publishes the phone's state (part of render).
 func (a *App) renderRemote(v *remoteView) {
-	if a.rm.srv == nil {
+	if a.rm.srv.Get() == nil {
 		return
 	}
 	w := a.win
@@ -330,7 +334,7 @@ func (a *App) renderRemote(v *remoteView) {
 		w.Toolbar.SetRemoteOn(on)
 	}
 	if a.rm.status.Running {
-		a.rm.srv.Publish(remote.BuildState(remote.StateInput{
+		a.rm.srv.Get().Publish(remote.BuildState(remote.StateInput{
 			Name: a.rm.name, Presenter: a.pres.State, Schedule: a.sched, Selected: a.schedSel,
 			Audio: a.audioPhoneDoc(),
 		}))
@@ -343,8 +347,8 @@ func (a *App) remoteStateDoc() core.RemoteState {
 	if a.rm.dialog {
 		r.Dialog = "pairing"
 	}
-	if a.rm.srv != nil {
-		r.Status = a.rm.srv.Status()
+	if a.rm.srv.Get() != nil {
+		r.Status = a.rm.srv.Get().Status()
 	}
 	return r
 }
@@ -363,7 +367,7 @@ func (a *App) remoteStateDoc() core.RemoteState {
 //	remote-live-item {index}     (phones) preview schedule row index and go live
 //	remote-add-song {id}         (phones) add library song id to the schedule
 func (a *App) handleRemoteCommand(cmd *control.Command, args actionArgs) bool {
-	if a.rm.srv == nil {
+	if a.rm.srv.Get() == nil {
 		switch cmd.Action {
 		case "remote", "remote-dialog", "remote-approve", "remote-deny", "remote-revoke", "remote-new-code",
 			"remote-live-item", "remote-add-song":
@@ -396,7 +400,7 @@ func (a *App) handleRemoteCommand(cmd *control.Command, args actionArgs) bool {
 		}
 		a.answer(cmd, nil)
 	case "remote-approve", "remote-deny":
-		st := a.rm.srv.Status()
+		st := a.rm.srv.Get().Status()
 		i := core.FindRemoteRequest(st.Pending, args.Device, args.Name)
 		if i < 0 {
 			cmd.RespondErr(fmt.Errorf("%s: no device is waiting that matches %s", cmd.Action, string(cmd.Data)))
@@ -408,7 +412,7 @@ func (a *App) handleRemoteCommand(cmd *control.Command, args actionArgs) bool {
 			a.answer(cmd, a.remoteDeny(st.Pending[i].ID))
 		}
 	case "remote-revoke":
-		st := a.rm.srv.Status()
+		st := a.rm.srv.Get().Status()
 		i := core.FindRemoteDevice(st.Devices, args.Device, args.Name)
 		if i < 0 {
 			cmd.RespondErr(fmt.Errorf("remote-revoke: no paired device matches %s", string(cmd.Data)))
@@ -436,7 +440,7 @@ func (a *App) handleRemoteCommand(cmd *control.Command, args actionArgs) bool {
 
 // remoteAddSong loads library song id and adds it to the end of the schedule.
 func (a *App) remoteAddSong(cmd *control.Command, id int64) {
-	if a.st == nil {
+	if a.st() == nil {
 		cmd.RespondErr(errNoLibrary)
 		return
 	}
@@ -444,7 +448,7 @@ func (a *App) remoteAddSong(cmd *control.Command, id int64) {
 		cmd.RespondErr(errArgs)
 		return
 	}
-	st := a.st
+	st := a.st()
 	a.async(cmd, func(ctx context.Context) func() error {
 		song, err := st.GetSong(ctx, id)
 		return func() error {

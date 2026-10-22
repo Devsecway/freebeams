@@ -47,10 +47,10 @@ var themeImageFilters = []string{"*.png, *.jpg, *.jpeg, *.webp, *.bmp ; Images"}
 func (a *App) initThemes() {
 	a.th.sel = -1
 	a.th.defaults = map[models.ItemKind]int64{}
-	if a.st == nil {
+	if a.st() == nil {
 		return
 	}
-	st := a.st
+	st := a.st()
 	ticket := a.th.gen.Next()
 	a.async(nil, func(ctx context.Context) func() error {
 		wrote, err := st.EnsureDefaultThemes(ctx)
@@ -205,7 +205,7 @@ func editorFrame(t models.Theme) models.Frame {
 
 // loadThemes reloads the list and the defaults in the background.
 func (a *App) loadThemes(cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -265,7 +265,7 @@ func (a *App) editTheme(i int) {
 // fresh list and defaults into the state and runs then (main thread). cmd is
 // answered after that, so the reply reflects the new list.
 func (a *App) mutateThemes(cmd *control.Command, title string, change func(ctx context.Context, st *store.Store) error, then func()) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -362,7 +362,7 @@ func (a *App) duplicateTheme(i int, cmd *control.Command) {
 
 // deleteTheme asks for confirmation, then deletes theme i.
 func (a *App) deleteTheme(i int) {
-	if i < 0 || i >= len(a.th.list) || a.st == nil {
+	if i < 0 || i >= len(a.th.list) || a.st() == nil {
 		return
 	}
 	t := a.th.list[i]

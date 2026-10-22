@@ -103,8 +103,8 @@ func (a *App) openStageMessage(text string) {
 // loadStageSettings reads the persisted stage settings (startup).
 func (a *App) loadStageSettings() {
 	st := core.DefaultStageSettings()
-	if a.st != nil {
-		if _, err := a.st.GetSetting(a.ctx(), core.SettingStage, &st); err != nil {
+	if a.st() != nil {
+		if _, err := a.st().GetSetting(a.ctx(), core.SettingStage, &st); err != nil {
 			a.fail("read setting "+core.SettingStage, err)
 		}
 	}

@@ -64,13 +64,13 @@ func (a *App) lookupReference(text string, cmd *control.Command) {
 		a.answer(cmd, errors.New("no Bible installed"))
 		return
 	}
-	if a.st == nil {
+	if a.st() == nil {
 		a.clearPassage()
 		a.answer(cmd, errNoLibrary)
 		return
 	}
 	bible := a.bibles[a.bibleSel]
-	st := a.st
+	st := a.st()
 	listed := p.Chapters()
 	a.async(cmd, func(ctx context.Context) func() error {
 		verses, err := st.Verses(ctx, bible.ID, listed)

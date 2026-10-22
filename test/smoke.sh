@@ -18,6 +18,8 @@ LOG="$OUT/app.log"
 
 LIB="$(mktemp -t freebeams-smoke)"
 SCHED="$OUT/smoke-schedule.fbs"
+KEEPALIVE_TYPES="$OUT/keepalive-types.txt"
+rm -f "$KEEPALIVE_TYPES"
 KEY="testkey"
 EW_SONGS="/Users/Shared/Softouch/Easyworship/Default/v6.1/Databases/Data/Songs.db"
 APP_PID=""
@@ -129,6 +131,10 @@ log "launching: FREEBEAMS_LIBRARY=$LIB bin/gd run"
 (
 	cd "$ROOT" || exit 1
 	export FREEBEAMS_LIBRARY="$LIB" FREEBEAMS_CONTROL_KEY="$KEY"
+	# The keepalive check (internal/app/keepalivecheck.go) logs every type
+	# graphics.gd's per-frame walk reaches that goroutines mutate, and lists
+	# the walked types in $KEEPALIVE_TYPES at shutdown (see "keepalive walk").
+	export FREEBEAMS_KEEPALIVE_CHECK="$KEEPALIVE_TYPES"
 	exec "$ROOT/bin/gd" run
 ) >"$LOG" 2>&1 &
 APP_PID=$!
@@ -1118,13 +1124,11 @@ PY
 	pb_wait "the live player plays the tone (audio only)" 's["playback"]["live"]["position"] > 0.2 and s["playback"]["live"]["duration"] > 2.9 and s["playback"]["live"]["hasAudio"] and not s["playback"]["live"]["hasVideo"]'
 	act "volume" volume '{"value":0.5}' 's["playback"]["live"]["volume"] == 0.5'
 	act "a volume that is not a number is refused" volume '{"value":"loud"}' 'not r["ok"]'
-	wait_idle
-	shot playback-audio-output output
-	shot playback-audio-main main
-	pixel "audio shows a black output" "$OUT/playback-audio-output.png" black
 	# The audio clock: it runs in real time, follows a seek while playing
 	# (the ffmpeg player restarts its decoder and drops the queued sound) and
-	# stops at the end.
+	# stops at the end. The tone lasts 3 s: the screenshots come after it, or
+	# it has ended before the seek (which then leaves it paused at 1.5).
+	LAST="$(state)"
 	PB_POS="$(field "$LAST" playback.live.position)"
 	sleep 0.5
 	LAST="$(state)"
@@ -1132,6 +1136,10 @@ PY
 	act "seek the tone while it plays" seek '{"seconds":1.5}' 'r["ok"]'
 	pb_wait "the tone plays on from the seek" 's["playback"]["live"]["playing"] and 1.55 < s["playback"]["live"]["position"] < 2.8'
 	pb_wait "the tone stops at its end" 'not s["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 2.9'
+	wait_idle
+	shot playback-audio-output output
+	shot playback-audio-main main
+	pixel "audio shows a black output" "$OUT/playback-audio-output.png" black
 	if [ "$PB_PLAYER" = "ffmpeg" ]; then
 		grep -q 'the sound cannot play' "$LOG" && fail "the ffmpeg player could not decode a sound track"
 		log "ok: the ffmpeg player decoded every sound track"
@@ -2070,6 +2078,21 @@ for _ in $(seq 1 60); do
 	sleep 0.5
 done
 app_running && fail "the app did not exit after quit"
+
+# ---- keepalive walk ---------------------------------------------------------------------
+# graphics.gd walks every extension instance's fields each frame, on the main
+# thread and without a lock, following pointers, maps, slices and interfaces.
+# A map a goroutine writes meanwhile kills the app ("concurrent map iteration
+# and map write"), so services must sit behind a keepalive.Hidden. The check
+# reports what the walk actually compiled during this run, including the
+# dynamic types it found behind interfaces.
+KA="$(grep -E '\[keepalive-check\]' "$LOG" || true)"
+if [ -n "$KA" ]; then
+	printf '%s\n' "$KA" >&2
+	fail "graphics.gd's keepalive walk reaches state that goroutines mutate (hide it with keepalive.Hidden; see internal/keepalive)"
+fi
+[ -s "$KEEPALIVE_TYPES" ] || fail "the keepalive check wrote no type list to $KEEPALIVE_TYPES"
+log "ok: the keepalive walk reaches nothing goroutines mutate ($(wc -l <"$KEEPALIVE_TYPES" | tr -d ' ') walked types in $KEEPALIVE_TYPES)"
 
 # ---- log hygiene ------------------------------------------------------------------------
 BAD="$(grep -nE 'ERROR|WARNING|leaked|Leaked|panic:|SCRIPT ERROR' "$LOG" || true)"

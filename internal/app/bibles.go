@@ -15,7 +15,7 @@ import (
 // Scriptures tab can offer the copyrighted ones (which the first-run import
 // leaves out) for import.
 func (a *App) scanEWBibles() {
-	if a.st == nil || !easyworship.Installed() {
+	if a.st() == nil || !easyworship.Installed() {
 		return
 	}
 	a.async(nil, func(ctx context.Context) func() error {
@@ -37,7 +37,7 @@ func (a *App) scanEWBibles() {
 // for holding the licenses. cmd is answered once the translations list has
 // been refreshed.
 func (a *App) importCopyrightedBibles(cmd *control.Command, confirmed bool) {
-	if a.st == nil {
+	if a.st() == nil {
 		a.answer(cmd, errNoLibrary)
 		return
 	}
@@ -55,7 +55,7 @@ func (a *App) importCopyrightedBibles(cmd *control.Command, confirmed bool) {
 		a.answer(cmd, nil)
 		return
 	}
-	st := a.st
+	st := a.st()
 	a.setScriptStatus("Importing Bibles…", false)
 	a.async(nil, func(ctx context.Context) func() error {
 		rep, err := easyworship.ImportInto(ctx, st, easyworship.Options{BiblesOnly: true, IncludeCopyrightedBibles: true})

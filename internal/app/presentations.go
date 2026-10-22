@@ -183,12 +183,12 @@ func (a *App) presentationsStateDoc() core.PresentationsState {
 func (a *App) loadPresentations(q string, cmd *control.Command) {
 	a.pr.query = q
 	a.pr.status = a.presentationsFooter()
-	if a.st == nil {
+	if a.st() == nil {
 		a.answer(cmd, errNoLibrary)
 		return
 	}
 	ticket := a.pr.gen.Next()
-	st := a.st
+	st := a.st()
 	a.async(cmd, func(ctx context.Context) func() error {
 		rows, err := st.SearchPresentations(ctx, q, 0)
 		count, cerr := st.CountPresentations(ctx)
@@ -285,7 +285,7 @@ func (a *App) presentationGoLive() {
 
 // removePresentation asks for confirmation, then removes tile i from the library.
 func (a *App) removePresentation(i int) {
-	if i < 0 || i >= len(a.pr.list) || a.st == nil {
+	if i < 0 || i >= len(a.pr.list) || a.st() == nil {
 		return
 	}
 	p := a.pr.list[i]
@@ -296,7 +296,7 @@ func (a *App) removePresentation(i int) {
 
 // doRemovePresentation removes an item from the library (after confirmation).
 func (a *App) doRemovePresentation(p models.Presentation, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -327,7 +327,7 @@ func (a *App) addPresentationPaths(paths []string, cmd *control.Command) {
 		a.answer(cmd, errArgs)
 		return
 	}
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -394,16 +394,16 @@ func (a *App) addPresentationDialog() {
 // startPresentationImport registers the presentation files of an
 // EasyWorship install once (Resources/Presentations; a stock install has none).
 func (a *App) startPresentationImport() {
-	if a.st == nil || !easyworship.Installed() {
+	if a.st() == nil || !easyworship.Installed() {
 		return
 	}
 	var done bool
-	if ok, err := a.st.GetSetting(a.ctx(), core.SettingPresentationsImportDone, &done); err != nil {
+	if ok, err := a.st().GetSetting(a.ctx(), core.SettingPresentationsImportDone, &done); err != nil {
 		a.fail("read presentations import setting", err)
 	} else if ok && done {
 		return
 	}
-	st := a.st
+	st := a.st()
 	a.async(nil, func(ctx context.Context) func() error {
 		rep, err := easyworship.ImportPresentations(ctx, st, easyworship.Options{})
 		if err == nil {
@@ -448,7 +448,7 @@ func (a *App) presentationsNeedWork() bool {
 // job is tracked for shutdown but not counted as pending work: LibreOffice
 // can take a while.
 func (a *App) startPresentationWork() {
-	if a.st == nil || a.pr.cache == "" || !a.pr.toolsKnown {
+	if a.st() == nil || a.pr.cache == "" || !a.pr.toolsKnown {
 		return
 	}
 	if a.pr.working {
@@ -457,7 +457,7 @@ func (a *App) startPresentationWork() {
 	}
 	a.pr.working = true
 	a.pr.status = a.presentationsFooter()
-	st, ctx := a.st, a.ctx()
+	st, ctx := a.st(), a.ctx()
 	svc := presentations.NewService(a.pr.tools, a.pr.cache)
 	skip := make(map[int64]bool, len(a.pr.failed))
 	for id := range a.pr.failed {

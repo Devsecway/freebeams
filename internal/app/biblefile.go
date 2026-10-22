@@ -79,7 +79,7 @@ func readBibleFile(path string) (*bibleFileImport, error) {
 // message dialog. cmd is answered when the import is done, or with the
 // question on screen.
 func (a *App) importBibleFile(cmd *control.Command, path string, confirmed bool) {
-	if a.st == nil {
+	if a.st() == nil {
 		a.answer(cmd, errNoLibrary)
 		return
 	}
@@ -128,7 +128,7 @@ func (a *App) confirmOrImportBibleFile(cmd *control.Command, f *bibleFileImport,
 		a.answer(cmd, nil)
 		return
 	}
-	st := a.st
+	st := a.st()
 	a.setScriptStatus("Importing "+f.bible.Abbrev+"…", false)
 	a.async(nil, func(ctx context.Context) func() error {
 		_, err := st.CreateBibleWithVerses(ctx, f.bible, f.verses)

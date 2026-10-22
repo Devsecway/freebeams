@@ -298,7 +298,7 @@ func (a *App) openSchedule(path string) error {
 
 // rememberRecent records path in the recent schedules setting (background).
 func (a *App) rememberRecent(path string) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		return
 	}
@@ -336,12 +336,12 @@ const (
 // search was started) are dropped.
 func (a *App) searchSongs(q string, cmd *control.Command) {
 	a.songQuery = q
-	if a.st == nil {
+	if a.st() == nil {
 		a.answer(cmd, errNoLibrary)
 		return
 	}
 	ticket := a.searchGen.Next()
-	st := a.st
+	st := a.st()
 	a.async(cmd, func(ctx context.Context) func() error {
 		rows, err := st.SearchSongs(ctx, q, 0)
 		n, cerr := st.CountSongs(ctx)
@@ -386,14 +386,14 @@ func (a *App) selectSong(i int, purpose songPurpose, cmd *control.Command) {
 		a.answer(cmd, fmt.Errorf("no song at index %d", i))
 		return
 	}
-	if a.st == nil {
+	if a.st() == nil {
 		a.answer(cmd, errNoLibrary)
 		return
 	}
 	a.songSel = i
 	id := a.songs[i].ID
 	ticket := a.songSeq.Next()
-	st := a.st
+	st := a.st()
 	a.async(nil, func(ctx context.Context) (apply func() error) {
 		song, err := models.Song{}, error(nil)
 		// Every ticket must reach the sequencer, even if the load panics,
@@ -461,7 +461,7 @@ func (a *App) newSong() { a.win.Editor.Open(models.Song{}, "") }
 // saveSong persists an edited or new song (the editor's OK button). cmd, when
 // not nil, is answered once the song is saved.
 func (a *App) saveSong(song models.Song, lyrics string, cmd *control.Command) {
-	if a.st == nil {
+	if a.st() == nil {
 		a.fail("save song", errNoLibrary)
 		a.answer(cmd, errNoLibrary)
 		return
@@ -469,7 +469,7 @@ func (a *App) saveSong(song models.Song, lyrics string, cmd *control.Command) {
 	song.Sections = models.ParseLyrics(lyrics)
 	isNew := song.ID == 0
 	current := a.song != nil && a.song.ID == song.ID
-	st := a.st
+	st := a.st()
 	a.async(cmd, func(ctx context.Context) func() error {
 		err := st.SaveSong(ctx, &song)
 		return func() error {
@@ -492,7 +492,7 @@ func (a *App) saveSong(song models.Song, lyrics string, cmd *control.Command) {
 
 // deleteSong asks for confirmation, then deletes song row i.
 func (a *App) deleteSong(i int) {
-	if i < 0 || i >= len(a.songs) || a.st == nil {
+	if i < 0 || i >= len(a.songs) || a.st() == nil {
 		return
 	}
 	row := a.songs[i]
@@ -503,7 +503,7 @@ func (a *App) deleteSong(i int) {
 
 // doDeleteSong deletes a song from the library (after confirmation).
 func (a *App) doDeleteSong(row models.SongSummary, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errNoLibrary)
 		return
@@ -546,11 +546,11 @@ func (a *App) resourceGoLive() {
 
 // loadBibles refreshes the installed translations.
 func (a *App) loadBibles(cmd *control.Command) {
-	if a.st == nil {
+	if a.st() == nil {
 		a.answer(cmd, errNoLibrary)
 		return
 	}
-	st := a.st
+	st := a.st()
 	a.async(cmd, func(ctx context.Context) func() error {
 		bibles, err := st.ListBibles(ctx)
 		return func() error {

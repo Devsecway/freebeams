@@ -25,6 +25,7 @@ import (
 	"freebeams/internal/app/core"
 	"freebeams/internal/control"
 	"freebeams/internal/importers/easyworship"
+	"freebeams/internal/keepalive"
 	"freebeams/internal/models"
 	"freebeams/internal/render"
 	"freebeams/internal/store"
@@ -60,16 +61,21 @@ type App struct {
 	Node.Extension[App] `gd:"FwApp"`
 
 	// ---- services
-	inputRec *inputRecorder `gd:"-"` // FREEBEAMS_INPUT_LOG debugging aid
-	st       *store.Store
-	ctrl     *control.Server
-	// ctx is behind a func: graphics.gd's per-frame keepalive walk follows
-	// every interface field of an extension instance, and a live
-	// context.Context is a *cancelCtx whose children map the background jobs
-	// write (every query and command derives from it): "concurrent map
-	// iteration and map write" in keep_reachable_instances_alive.
-	ctx    func() context.Context
-	cancel context.CancelFunc
+	//
+	// graphics.gd walks every field of an extension instance each frame (on
+	// the main thread, without a lock) and follows pointers, maps, slices and
+	// interfaces. Whatever a goroutine mutates must stay out of that walk, or
+	// a map written meanwhile is "concurrent map iteration and map write"
+	// (the app dies): services sit behind a keepalive.Hidden (see
+	// internal/keepalive; read them through st() / ctrl()), and the context
+	// behind a func (a *cancelCtx's children map is written by every derived
+	// context). test/smoke.sh fails when the walk reaches such a type
+	// (FREEBEAMS_KEEPALIVE_CHECK, keepalivecheck.go).
+	inputRec keepalive.Hidden[inputRecorder]  // FREEBEAMS_INPUT_LOG debugging aid (*os.File, *bufio.Writer)
+	lib      keepalive.Hidden[store.Store]    // the library: *sql.DB, used from every async job
+	ctrlSrv  keepalive.Hidden[control.Server] // the control HTTP server
+	ctx      func() context.Context
+	cancel   context.CancelFunc
 
 	// results carries main-thread continuations of async work.
 	results chan func()
@@ -185,17 +191,24 @@ type App struct {
 // New returns the app node; add it to the scene tree (main.go does this).
 func New() *App { return new(App) }
 
+// st is the library (nil when it could not be opened).
+func (a *App) st() *store.Store { return a.lib.Get() }
+
+// ctrl is the control server (nil when it could not start).
+func (a *App) ctrl() *control.Server { return a.ctrlSrv.Get() }
+
 // Ready builds the UI and starts the services.
 func (a *App) Ready() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.ctx, a.cancel = func() context.Context { return ctx }, cancel
+	initKeepaliveCheck() // FREEBEAMS_KEEPALIVE_CHECK (keepalivecheck.go)
 	a.results = make(chan func(), 64)
 	a.pres = models.NewPresenter()
 	a.sched = models.NewSchedule()
 	a.schedSel, a.songSel, a.bibleSel = -1, -1, -1
 	a.verseSel = core.NewRowSelection(nil)
 	a.view = newViewCache()
-	a.inputRec = openInputRecorder()
+	a.inputRec = keepalive.Hide(openInputRecorder())
 	a.initPlayback()
 
 	SceneTree.Get(a.AsNode()).SetAutoAcceptQuit(false)
@@ -250,25 +263,26 @@ func (a *App) openLibrary() {
 		a.songsStatus = "Library unavailable: " + err.Error()
 		return
 	}
-	a.st = st
+	a.lib = keepalive.Hide(st)
 	log.Printf("[freebeams] library: %s", st.Path())
 }
 
 func (a *App) startControl() {
-	a.ctrl = control.New(0)
-	if err := a.ctrl.Start(); err != nil {
+	ctrl := control.New(0)
+	if err := ctrl.Start(); err != nil {
 		a.fail("start control server", err)
-		a.ctrl = nil
+		return
 	}
+	a.ctrlSrv = keepalive.Hide(ctrl)
 }
 
 // startImport runs the first-run EasyWorship import in the background.
 func (a *App) startImport() {
-	if a.st == nil {
+	if a.st() == nil {
 		return
 	}
 	var rec core.ImportRecord
-	done, err := a.st.GetSetting(a.ctx(), core.SettingImportDone, &rec)
+	done, err := a.st().GetSetting(a.ctx(), core.SettingImportDone, &rec)
 	if err != nil {
 		a.fail("read import setting", err)
 	}
@@ -284,7 +298,7 @@ func (a *App) startImport() {
 	}
 	a.importState = core.ImportState{Running: true}
 	a.songsStatus = core.SongsFooter(0, a.importState)
-	st := a.st
+	st := a.st()
 	opt := a.ewImportOptions()
 	log.Printf("[freebeams] importing from EasyWorship…")
 	a.async(nil, func(ctx context.Context) func() error {
@@ -414,6 +428,7 @@ func (a *App) Process(delta Float.X) {
 	if a.quitting {
 		return
 	}
+	checkKeepalive() // FREEBEAMS_KEEPALIVE_CHECK: nothing goroutine-shared is walked
 	for drained := false; !drained; {
 		select {
 		case fn := <-a.results:
@@ -422,10 +437,10 @@ func (a *App) Process(delta Float.X) {
 			drained = true
 		}
 	}
-	if a.ctrl != nil {
+	if a.ctrl() != nil {
 		for drained := false; !drained; {
 			select {
-			case cmd := <-a.ctrl.Commands():
+			case cmd := <-a.ctrl().Commands():
 				a.event(func() { a.handleCommand(cmd) })
 			default:
 				drained = true
@@ -596,11 +611,12 @@ func (a *App) shutdown() {
 	if !core.WaitTimeout(&a.jobs, shutdownWait) {
 		log.Printf("[freebeams] background jobs still running after %v; closing anyway", shutdownWait)
 	}
-	if a.st != nil {
-		if err := a.st.Close(); err != nil {
+	if a.st() != nil {
+		if err := a.st().Close(); err != nil {
 			log.Printf("[freebeams] close library: %v", err)
 		}
-		a.st = nil
+		a.lib = keepalive.Hidden[store.Store]{}
 	}
+	writeKeepaliveTypes()
 	SceneTree.Get(a.AsNode()).Quit()
 }

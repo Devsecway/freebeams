@@ -45,7 +45,7 @@ func (a *App) initAlerts() {
 
 // loadSavedAlerts reads the saved alerts off the main thread.
 func (a *App) loadSavedAlerts(cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, nil)
 		return
@@ -102,7 +102,7 @@ func (a *App) findAlert(id int64, name string) int {
 
 // saveAlert inserts or updates a saved alert (the editor's OK).
 func (a *App) saveAlert(al models.Alert, cmd *control.Command) {
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errors.New("save alert: the library is unavailable"))
 		return
@@ -142,7 +142,7 @@ func (a *App) deleteAlert(i int, confirm bool, cmd *control.Command) {
 		a.answer(cmd, nil)
 		return
 	}
-	st := a.st
+	st := a.st()
 	if st == nil {
 		a.answer(cmd, errors.New("delete alert: the library is unavailable"))
 		return
