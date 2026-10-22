@@ -17,6 +17,7 @@ func RegisterAll() {
 	classdb.Register[SlideGrid]()
 	classdb.Register[scheduleRowView]()
 	classdb.Register[ScheduleList]()
+	classdb.Register[dragPreview]()
 	classdb.Register[tabStrip]()
 	classdb.Register[tabButton]()
 	classdb.Register[PresentationPanel]()

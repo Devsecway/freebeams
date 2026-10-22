@@ -2,6 +2,7 @@ package ui
 
 import (
 	"freebeams/internal/models"
+	"freebeams/internal/ui/uicore"
 
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/GUI"
@@ -81,6 +82,7 @@ func NewThemePanel() *ThemePanel {
 
 	// Right: the thumbnail grid.
 	p.grid = NewSlideGrid()
+	p.grid.DragSource = uicore.DragTheme
 	p.grid.OnSelect = func(i int) {
 		p.selected = i
 		if p.OnSelect != nil {

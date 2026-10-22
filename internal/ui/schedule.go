@@ -71,6 +71,16 @@ type ScheduleList struct {
 	themeMenu PopupMenu.Instance
 	menuRow   int
 	built     bool
+
+	// Drag and drop (dragdrop.go): a song, the selected verses, a media or
+	// presentation tile dropped into gap at (0..len(rows)) is OnDropInsert; a
+	// theme dropped onto a row is OnDropOnto; a row dragged to another gap is
+	// OnMove. index is the source's row or tile.
+	OnDropInsert func(source string, index, at int)  `gd:"-"`
+	OnDropOnto   func(source string, index, row int) `gd:"-"`
+	drop         schedDrop
+	dropOverlay  Control.Instance
+	dropTicker   *ticker
 }
 
 // NewScheduleList creates an empty schedule list.
@@ -112,6 +122,7 @@ func NewScheduleList() *ScheduleList {
 	s.menu.MoreArgs().AddItem("Remove Item from Schedule", schedMenuRemove, 0)
 	s.menu.OnIdPressed(s.menuPressed)
 	s.AsNode().AddChild(s.menu.AsNode())
+	s.initDrop()
 	return s
 }
 

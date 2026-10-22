@@ -68,6 +68,11 @@ type SlideGrid struct {
 	flow   *tileFlow
 	tiles  []*slideTile
 	built  bool // tiles reflect items/factory
+
+	// DragSource makes the tiles draggable into the schedule as this
+	// uicore.DragPayload source (media, presentation, theme); "" (the
+	// Preview and Live grids) does not drag (dragdrop.go).
+	DragSource string `gd:"-"`
 }
 
 // NewSlideGrid creates an empty grid.

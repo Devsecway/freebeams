@@ -142,6 +142,10 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 			return true
 		}
 		a.dragSplit(cmd, sp, args.Delta, args.Steps, max(args.Burst, 1))
+	case "drag-to-schedule":
+		// A real drag through Godot's input pipeline into (or within) the
+		// schedule list (dragdrop.go).
+		a.dragToSchedule(cmd, args)
 	case "output-native":
 		// What the OS says about the projector window (macOS): on screen, level,
 		// hidden while the app is inactive. For the smoke test's app-switch check.

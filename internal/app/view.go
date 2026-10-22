@@ -220,6 +220,8 @@ func (a *App) buildUI() {
 	a.wireAudio()    // the audio playlist under the schedule (audio.go)
 
 	a.wirePreviewStyle() // the Preview Output monitor's context menu (previewstyle.go)
+
+	a.wireDragDrop() // drag and drop into and within the schedule (dragdrop.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A

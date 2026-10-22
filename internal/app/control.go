@@ -209,6 +209,10 @@ type actionArgs struct {
 	// The audio playlist (audio.go): audio-stop {fade}; the other actions
 	// reuse Index, Title, Path(s), Seconds, Value, Mode, On, From, To, Confirm.
 	Fade *bool `json:"fade"`
+
+	// Drag and drop (dragdrop.go): drag-to-schedule {source, index|title,
+	// at | row | target "outside", mode "hold"|"release", steps}.
+	At *int `json:"at"`
 }
 
 var errArgs = errors.New("missing or invalid arguments")
