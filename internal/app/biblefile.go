@@ -11,8 +11,8 @@ import (
 	"graphics.gd/classdb/DisplayServer"
 
 	"freebeams/internal/app/core"
-	"freebeams/internal/control"
 	"freebeams/internal/bibles/biblefolder"
+	"freebeams/internal/control"
 	"freebeams/internal/models"
 	"freebeams/internal/store"
 )
