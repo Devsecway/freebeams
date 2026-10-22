@@ -2,6 +2,7 @@ package app
 
 import (
 	"reflect"
+	"slices"
 
 	"freebeams/internal/app/core"
 	"freebeams/internal/models"
@@ -25,7 +26,6 @@ type viewCache struct {
 	biblesVer   int
 	bibleSel    int
 	versesVer   int
-	verseSel    int
 	status      string
 	statusErr   bool
 	mediaVer    int
@@ -79,6 +79,14 @@ type viewCache struct {
 	alertsCdRunning bool
 	alertsCdStatus  string
 
+	// The verse list's selection, the reference field and its suggestions
+	// (scripture.go).
+	verseRows   []int
+	verseCursor int
+	refVer      int
+	suggest     []string
+	suggestSel  int
+
 	// The background audio (audio.go): the open player, the seek last
 	// applied to it and the rows the track list shows.
 	audioSrc  *render.MediaSource
@@ -88,8 +96,9 @@ type viewCache struct {
 
 func newViewCache() viewCache {
 	return viewCache{previewSel: -2, liveSel: -2, songSel: -2, songsVer: -1, biblesVer: -1, bibleSel: -2,
-		versesVer: -1, verseSel: -2, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2, presVer: -1, presSel: -2, themesVer: -1, themeSel: -2,
-		settingsVer: -1, color: core.ColorDark, alertsVer: -1, alertsMgrSel: -2}
+		versesVer: -1, mediaVer: -1, mediaSel: -2, schedVer: -1, schedSel: -2, presVer: -1, presSel: -2, themesVer: -1, themeSel: -2,
+		settingsVer: -1, color: core.ColorDark, alertsVer: -1, alertsMgrSel: -2,
+		verseCursor: -2, refVer: -1}
 }
 
 // buildUI creates the main window, the monitors and the output, and connects
@@ -128,7 +137,8 @@ func (a *App) buildUI() {
 
 	a.win.OnGoBack = func() { a.event(a.goBack) }
 
-	// Presenting.
+	// Presenting. A double-click on the Preview monitor is Go Live.
+	a.win.PreviewMonitor.OnDoubleClick = func() { a.event(a.goLive) }
 	a.win.PreviewGrid.OnSelect = func(i int) { a.event(func() { a.pres.SelectPreviewSlide(i) }) }
 	a.win.PreviewGrid.OnActivate = func(i int) { a.event(func() { a.liveChange(func() { a.pres.GoLiveSlide(i) }) }) }
 	a.win.LiveGrid.OnSelect = func(i int) { a.event(func() { a.pres.SelectLiveSlide(i) }) }
@@ -174,8 +184,15 @@ func (a *App) buildUI() {
 		})
 	}
 	sc.OnReference = func(text string) { a.event(func() { a.lookupReference(text, nil) }) }
-	sc.OnSelect = func(i int) { a.event(func() { a.selectVerse(i, false) }) }
-	sc.OnActivate = func(i int) { a.event(func() { a.selectVerse(i, true) }) }
+	sc.OnReferenceEdited = func(text string) { a.event(func() { a.refEdited(text) }) }
+	sc.OnReferenceFocus = func(focused bool) { a.event(func() { a.refFocused = focused }) }
+	sc.OnSuggestionMove = func(delta int) { a.event(func() { a.moveSuggestion(delta) }) }
+	sc.OnSuggestionPick = func(i int) { a.event(func() { a.pickSuggestion(i, nil) }) }
+	sc.OnSuggestionDismiss = func() { a.event(a.dismissSuggestions) }
+	sc.OnVerseClick = func(row int, extend, toggle bool) { a.event(func() { a.verseClick(row, extend, toggle) }) }
+	sc.OnVerseStep = func(delta int, extend bool) { a.event(func() { a.verseStep(delta, extend) }) }
+	sc.OnSelectAll = func() { a.event(a.selectAllVerses) }
+	sc.OnActivate = func(i int) { a.event(func() { a.activateVerse(i) }) }
 	sc.OnAddToSchedule = func() { a.event(func() { a.addScriptureToSchedule(nil) }) }
 	sc.OnGoLive = func() { a.event(a.goLiveVerse) }
 	sc.OnImportCopyrighted = func() { a.event(func() { a.importCopyrightedBibles(nil, false) }) }
@@ -318,13 +335,29 @@ func (a *App) render() {
 		w.Scriptures.SetBibles(a.bibles, a.bibleSel)
 		w.Scriptures.SetImportCopyrightedAvailable(len(core.CopyrightedBiblesToImport(a.ewBibles, a.bibles)) > 0)
 	}
-	verseSel := a.verseSelection()
 	if a.versesVer != v.versesVer {
-		v.versesVer, v.verseSel = a.versesVer, verseSel
-		w.Scriptures.SetVerses(a.verseRows, verseSel)
-	} else if verseSel != v.verseSel {
-		v.verseSel = verseSel
-		w.Scriptures.SetSelected(verseSel)
+		// A new list: centre the first selected verse ("john 3:16").
+		v.versesVer, v.verseRows, v.verseCursor = a.versesVer, slices.Clone(a.verseSel.Rows), a.verseSel.Cursor
+		w.Scriptures.SetVerses(a.verseRows)
+		w.Scriptures.SetVerseSelection(a.verseSel.Rows, a.verseSel.Cursor, true, true)
+	} else if !slices.Equal(a.verseSel.Rows, v.verseRows) || a.verseSel.Cursor != v.verseCursor {
+		scroll := a.verseSel.Cursor != v.verseCursor
+		v.verseRows, v.verseCursor = slices.Clone(a.verseSel.Rows), a.verseSel.Cursor
+		w.Scriptures.SetVerseSelection(a.verseSel.Rows, a.verseSel.Cursor, scroll, false)
+	}
+	if a.refVer != v.refVer {
+		v.refVer = a.refVer
+		w.Scriptures.SetReferenceText(a.refText)
+	}
+	var suggest []string
+	if a.suggestionsShown() {
+		for _, b := range a.bookSuggestions() {
+			suggest = append(suggest, b.Name)
+		}
+	}
+	if !slices.Equal(suggest, v.suggest) || a.suggestSel != v.suggestSel || !v.init {
+		v.suggest, v.suggestSel = suggest, a.suggestSel
+		w.Scriptures.SetSuggestions(suggest, a.suggestSel)
 	}
 	if a.scriptStatus != v.status || a.scriptErr != v.statusErr {
 		v.status, v.statusErr = a.scriptStatus, a.scriptErr
@@ -448,8 +481,8 @@ func (a *App) render() {
 }
 
 // resourcePreview returns what the resource preview shows for the visible
-// tab: the loaded song, or the selected verse of the looked-up passage (the
-// same verse the list highlights and Go Live sends).
+// tab: the loaded song, or the current verse of the selected passage (the
+// verse Go Live starts at).
 func (a *App) resourcePreview() resourcePreview {
 	switch a.win.Resources.Tab() {
 	case ui.TabSongs:
