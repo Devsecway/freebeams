@@ -84,6 +84,11 @@ type viewCache struct {
 	audioSrc  *render.MediaSource
 	audioSeek int
 	audioRows []ui.PlaylistRow
+
+	// The Preview Output menu and its media picker (previewstyle.go), and
+	// the themes the Preview / Live grids' thumbnails were drawn with.
+	ps                      previewStyleView
+	previewTheme, liveTheme models.Theme
 }
 
 func newViewCache() viewCache {
@@ -196,6 +201,8 @@ func (a *App) buildUI() {
 	a.wireRemote()   // the remote control's pairing dialog and Options page (remote.go)
 	a.wireAlerts()   // the Alerts ▾ menu and its dialogs (alerts.go)
 	a.wireAudio()    // the audio playlist under the schedule (audio.go)
+
+	a.wirePreviewStyle() // the Preview Output monitor's context menu (previewstyle.go)
 }
 
 // thumbnail is a SlideView (cut, no transition) showing slide i of d. A
@@ -208,7 +215,9 @@ func thumbnail(d *models.Deck, i int) Control.Instance {
 	v.SetTransitionDuration(0)
 	s := d.Slides[i]
 	s.Background = core.StillBackground(s.Background)
-	v.SetFrame(models.Frame{Mode: models.ModeNormal, Slide: &s, Theme: d.Theme})
+	th := d.Theme
+	th.Background = *core.StillBackground(&th.Background) // a motion background as its poster
+	v.SetFrame(models.Frame{Mode: models.ModeNormal, Slide: &s, Theme: th})
 	return v.AsControl()
 }
 
@@ -234,6 +243,11 @@ func (a *App) render() {
 		v.previewDeck = st.Preview
 		w.PreviewGrid.SetItems(gridItems(st.Preview))
 		v.previewSel = -2
+	} else if st.Preview != nil && st.Preview.Theme != v.previewTheme {
+		w.PreviewGrid.RefreshThumbnails() // restyled in place (RestylePreview / RestyleDecks)
+	}
+	if st.Preview != nil {
+		v.previewTheme = st.Preview.Theme
 	}
 	if st.PreviewIndex != v.previewSel {
 		v.previewSel = st.PreviewIndex
@@ -243,6 +257,11 @@ func (a *App) render() {
 		v.liveDeck = st.Live
 		w.LiveGrid.SetItems(gridItems(st.Live))
 		v.liveSel = -2
+	} else if st.Live != nil && st.Live.Theme != v.liveTheme {
+		w.LiveGrid.RefreshThumbnails()
+	}
+	if st.Live != nil {
+		v.liveTheme = st.Live.Theme
 	}
 	if st.LiveIndex != v.liveSel {
 		v.liveSel = st.LiveIndex
@@ -409,7 +428,7 @@ func (a *App) render() {
 		w.Themes.SetApplyTarget(target)
 	}
 	if a.th.editing != nil {
-		a.th.editView.SetFrame(editorFrame(*a.th.editing)) // compared by content
+		a.th.editView.SetFrame(a.editorPreviewFrame(*a.th.editing)) // compared by content
 	}
 
 	// Resource preview for the visible tab.
@@ -432,6 +451,9 @@ func (a *App) render() {
 
 	// The audio playlist and its player (audio.go).
 	a.renderAudio()
+
+	// The Preview Output menu and its media picker (previewstyle.go).
+	a.renderPreviewStyle()
 
 	// Error messages: the first queued alert is on screen.
 	switch {

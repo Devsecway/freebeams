@@ -82,6 +82,11 @@ type ThemeEditor struct {
 	bgKinds           []models.BackgroundKind
 	hAligns           []models.HAlign
 	vAligns           []models.VAlign
+
+	// itemMode is Edit Theme for This Item… (OpenItem): the editor works on
+	// an item's own copy, so the name is fixed and OK / Apply restyle the
+	// item instead of saving a theme (the app tells them apart).
+	itemMode bool
 }
 
 // NewThemeEditor builds the dialog. Add AsWindow() to the scene tree
@@ -375,6 +380,7 @@ func (e *ThemeEditor) SetTheme(th Theme.Instance) { e.dlg.setTheme(th) }
 func (e *ThemeEditor) Open(t models.Theme) {
 	e.theme = t
 	e.errText = ""
+	e.itemMode = false
 	title := "Edit Theme"
 	if t.ID == 0 {
 		title = "New Theme"
@@ -385,6 +391,24 @@ func (e *ThemeEditor) Open(t models.Theme) {
 	e.dlg.popup()
 	e.name.AsControl().GrabFocus()
 }
+
+// OpenItem shows the editor on an item's own copy of its theme (Edit Theme
+// for This Item…, titled after the item): the name cannot be changed, and
+// OK / Apply report the copy through OnSave / OnApply like a theme.
+func (e *ThemeEditor) OpenItem(t models.Theme, item string) {
+	e.theme = t
+	e.errText = ""
+	e.itemMode = true
+	e.dlg.win.SetTitle("Edit Theme for This Item · " + item)
+	e.render()
+	e.notify()
+	e.dlg.popup()
+	e.bgKind.AsControl().GrabFocus()
+}
+
+// ItemMode reports whether the editor was last opened on an item's copy
+// (OpenItem rather than Open). It stays set while OK / Cancel report.
+func (e *ThemeEditor) ItemMode() bool { return e.itemMode }
 
 // Update replaces the theme being edited without closing (after Apply saved
 // it and assigned an ID).
@@ -438,6 +462,7 @@ func (e *ThemeEditor) render() {
 	if e.name.Text() != t.Name {
 		e.name.SetText(t.Name)
 	}
+	e.name.SetEditable(!e.itemMode)
 	e.bgKind.Select(indexOf(e.bgKinds, t.Background.Kind, 0))
 	e.bgColor.SetColor(toGodotColor(t.Background.Color))
 	e.bgColor2.SetColor(toGodotColor(t.Background.Color2))

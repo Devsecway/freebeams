@@ -123,6 +123,8 @@ type App struct {
 
 	au audioState // the schedule's background audio playlist (audio.go)
 
+	ps previewStyleState // restyling the item in Preview (previewstyle.go)
+
 	importState core.ImportState
 	ewBibles    []easyworship.BibleFile // EasyWorship's Bible files (scanEWBibles)
 
