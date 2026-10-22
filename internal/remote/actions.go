@@ -74,6 +74,10 @@ var actions = map[string]actionSpec{
 		}
 		return map[string]any{"kind": "slide", "n": *a.Index + 1}, nil
 	}},
+	// The background audio playlist: play / pause, next and previous track.
+	"audio-toggle": {"audio-toggle", PermControl, noArgs},
+	"audio-next":   {"audio-next", PermControl, noArgs},
+	"audio-prev":   {"audio-prev", PermControl, noArgs},
 	// add-song adds library song {id} to the end of the schedule.
 	"add-song": {"remote-add-song", PermSchedule, func(a phoneArgs) (map[string]any, error) {
 		if a.ID <= 0 {

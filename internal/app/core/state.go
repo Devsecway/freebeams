@@ -219,6 +219,9 @@ type State struct {
 	// Alerts is the alert overlay: message alerts, nursery codes, the
 	// countdown and the clock (alerts.go).
 	Alerts AlertsState `json:"alerts"`
+
+	// Audio is the schedule's background audio playlist and its player (audio.go).
+	Audio AudioState `json:"audio"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -261,6 +264,8 @@ type StateInput struct {
 
 	Remote RemoteState
 	Alerts AlertsState
+
+	Audio AudioState
 }
 
 // deckState summarises deck d with slide i selected.
@@ -325,6 +330,13 @@ func BuildState(in StateInput) State {
 	st.Stage = in.Stage
 	st.Remote = in.Remote.normalized()
 	st.Alerts = in.Alerts
+	st.Audio = in.Audio
+	if st.Audio.Tracks == nil {
+		st.Audio.Tracks = []AudioTrackState{}
+	}
+	if st.Audio.Order == nil {
+		st.Audio.Order = []int{}
+	}
 	if st.Alerts.Active == nil {
 		st.Alerts.Active = []AlertRunState{}
 	}

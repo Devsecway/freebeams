@@ -266,6 +266,14 @@ internal/app               Godot: the App node that wires store + presenter + ui
 - Anything projected every frame (the alert ticker, the countdown) must not set `a.dirty`: `busy()` includes it,
   so a ticker that runs for minutes would keep `wait-idle` from ever answering. Tick authoritative state before
   `render` (dirty only when it changed) and project the per-frame part after it (`App.renderOverlay`).
+- A `MediaSource` no layer shows (the audio playlist's `render.RoleAudio`) is never pumped: only SlideViews that
+  hold a source call `pumpSources`. With no video on screen its player stays `loading` and never plays, so the app
+  calls `render.PumpMedia()` every frame while one is open (`App.audioEvents`); the frame guard makes extra calls free.
+- The phones' state is published from `render` and pushed only when its JSON changed; render runs when the app is
+  dirty, not every frame. A per-frame value (a playback position) in `remote.State` would be stale on the phone:
+  the audio playlist sends the title and status only.
+- A new optional key in the `.fbs` schedule: `json:",omitzero"` with an `IsZero()` method (`models.Playlist`)
+  keeps files without it byte-identical, old builds ignore it, and `ScheduleVersion` stays 1.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

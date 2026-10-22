@@ -21,6 +21,17 @@ type State struct {
 	LiveItem int       `json:"liveItem"` // schedule row on air, -1
 	Preview  DeckDoc   `json:"preview"`
 	Live     DeckDoc   `json:"live"`
+
+	// Audio is the background audio playlist (the phone's music bar).
+	Audio AudioDoc `json:"audio"`
+}
+
+// AudioDoc is the audio playlist as the phone shows it: the current track
+// and whether it plays. No position: the state is pushed on changes only.
+type AudioDoc struct {
+	Title  string `json:"title"`  // the current (or cued) track
+	Status string `json:"status"` // stopped | playing | paused
+	Tracks int    `json:"tracks"` // tracks in the playlist (0: the bar is hidden)
 }
 
 // ItemDoc is one schedule row.
@@ -55,6 +66,8 @@ type StateInput struct {
 	Presenter models.PresenterState
 	Schedule  *models.Schedule
 	Selected  int // the schedule row Preview came from, -1
+
+	Audio AudioDoc
 }
 
 // BuildState makes the phone's state document.
@@ -66,6 +79,10 @@ func BuildState(in StateInput) State {
 	}
 	if st.Mode == "" {
 		st.Mode = string(models.ModeNormal)
+	}
+	st.Audio = in.Audio
+	if st.Audio.Status == "" {
+		st.Audio.Status = "stopped"
 	}
 	if s := in.Schedule; s != nil {
 		st.Title = s.Title

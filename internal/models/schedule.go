@@ -47,6 +47,11 @@ type Schedule struct {
 	Title   string         `json:"title"`
 	Items   []ScheduleItem `json:"items"`
 
+	// Playlist is the background audio (playlist.go). It is left out of the
+	// file while empty, and a file without it (every schedule before it
+	// existed) opens with an empty playlist; the format version stays 1.
+	Playlist Playlist `json:"playlist,omitzero"`
+
 	// Path is where the schedule was loaded from / saved to (not serialized).
 	Path string `json:"-"`
 	// Dirty is set by mutations and cleared by save/load (not serialized).

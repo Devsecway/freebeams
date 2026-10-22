@@ -545,7 +545,8 @@ func (a *App) presentationItemArg(args actionArgs) int {
 }
 
 const mediaMenuItems = "add-to-schedule|go-live|aspect-fill|aspect-fit|aspect-stretch|repeat-loop|repeat-once|logo-background|" +
-	"remove|delete-file|update-schedule|reveal|view-large|view-medium|view-small|view-details|sort-name|sort-date|sort-kind|refresh"
+	"remove|delete-file|update-schedule|reveal|view-large|view-medium|view-small|view-details|sort-name|sort-date|sort-kind|refresh|" +
+	"add-to-playlist"
 
 // mediaMenuAction runs one item of the media tile menu, as a click would:
 // `media-menu {item, index|title, confirm}`. Items that act on a tile use the
@@ -636,6 +637,10 @@ func (a *App) mediaMenuAction(cmd *control.Command, args actionArgs) {
 		a.answer(cmd, err)
 	case item == "refresh":
 		a.refreshMedia(cmd, args.Confirm)
+	case item == "add-to-playlist": // Add to Audio Playlist (audio.go)
+		if i, ok := target(); ok {
+			a.answer(cmd, a.addMediaToPlaylist(a.md.list[i]))
+		}
 	default:
 		cmd.RespondErr(fmt.Errorf("media-menu: unknown item %q (%s)", item, mediaMenuItems))
 	}

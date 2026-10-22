@@ -10,7 +10,7 @@ Legend as in [PHASE1-STATUS.md](PHASE1-STATUS.md): **pass**, **partial**, **fail
 How to reproduce:
 ```bash
 gofmt -l . ; go build ./... && go vet ./... && go test -count=1 ./...
-test/smoke.sh          # 877 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control, alerts and tile-menu blocks)
+test/smoke.sh          # 970 checks (Phase 1: 191; media, presentations, themes, transitions/settings, Bibles, search, playback, song-theme, stage-display, remote-control, alerts, audio-playlist and tile-menu blocks)
 ```
 "smoke: X" names a check that `test/smoke.sh` prints as `ok: X`.
 
@@ -496,6 +496,43 @@ units per second rather than EasyWorship's slow / medium / fast; there is no hot
   block, `/state.alerts`, `dialog.alertDialog`, the screenshot windows, `handleAlertsCommand`), `settings.go`
   (load / restore / `set-setting alerts`), `core/settings.go` (`Settings.Alerts`), `core/state.go` (own blocks).
 - `test/smoke.sh`: the `# ---- alerts` block before `# ---- item menus`.
+
+## Audio playlists (PLAN v0.2 item 3, second half)
+
+Recorded 2026-10-22 on the same machine (HDMI TV as the projector). "smoke: X" names a check in the
+`# ---- audio playlist` section of `test/smoke.sh` (before `# ---- item menus`, 93 checks; the full run passed with 970). EasyWorship has no
+playlist (its audio files are schedule items with Media Usage / Repeating, `Form_VideoProperties`), so the design
+is our own and minimal; the decisions are in [MEDIA.md](MEDIA.md) "Audio playlist".
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Playlist model: ordered library audio files with stable track ids; repeat off / all / one, shuffle, fade-out on stop; saved with the schedule (`playlist` key, left out while empty; old schedules open with an empty one; version stays 1) | **pass** | `internal/models/playlist.go`. `TestPlaylistEdits`, `TestRepeatModes`, `TestPlaylistNormalize`, `TestTrackFromMedia`, `TestSchedulePlaylistRoundTrip` (empty playlist not written, a pre-playlist `.fws` opens, the settings round-trip, edits mark dirty). Smoke: `the saved schedule has the playlist`, `a new schedule has no playlist; the music stops`, `open the schedule again`, `the reopened playlist plays`. |
+| Player logic in pure Go: track order, the end of the list, repeat, shuffle without repeats, skipping missing / failing files, Prev restart, fade-out, edits while playing | **pass** | `core.AudioPlayer` (`internal/app/core/audio.go`, injected `Exists` / `Rand`). `TestAudioOrderAndEnd`, `TestAudioSkipsMissingFiles`, `TestAudioShuffleWithoutRepeats` (30 passes of 7 tracks: each pass a permutation, never a track twice in a row; shuffle on mid-list; a track added mid-pass; a picked track), `TestAudioPrevNextStopped`, `TestAudioFadeOut`, `TestAudioSyncAfterEdits`, `TestAudioState`. |
+| Plays independently of the Live slide: a song going live, Black, Clear and Logo leave it playing | **pass** | Its own audio-only player role (`render.RoleAudio`, `internal/render/audiosource.go`; additive, `nativePlayer` unchanged), opened and closed by `App.renderAudio`, pumped by the app every frame. Smoke: `the song goes live; the music plays on`, `black; the music plays on`, `the music advances under Black`, `logo; the music plays on`, `back to normal (audio)`. |
+| Position, end of track → next, next / prev / seek / volume / repeat / shuffle / stop / fade-out | **pass** | Smoke: `the first track plays`, `the position advances`, `the first track ends and the second starts`, `next skips the missing file`, `prev goes back over the missing file`, `play a track by index`, `a missing track cannot be played`, `the list ends: stopped, the first track cued`, `repeat all wraps to the first track`, `repeat one plays the track again`, `shuffle on` (the order is a permutation led by the current track), `the position holds while paused`, `stop at once`, `stop fades out`, `the volume ramps down`, `the fade ends stopped`, `a deleted file is marked missing`. |
+| Operator UI: the Audio Playlist panel under the schedule (track list, its own transport), Media tab ▸ Add to Audio Playlist | **pass** | `ui.AudioPlaylist` (`internal/ui/playlist.go`), dumb view; icons `stop`, `shuffle`, `repeat_one`. Smoke: `add a folder of tones to the playlist` (files added to the library too), `adding a library item again (Media tab menu)`, `a video cannot join the playlist`, `move the last track to the top`, `remove the missing track`, `Clear Playlist asks first`, `clear the playlist (confirmed)`. Screenshots `audio-playlist-main.png` (missing file dimmed), `audio-playlist-playing.png` (repeat all). |
+| Phone remote: play / pause, next and previous track | **pass** | `audio-toggle`, `audio-next`, `audio-prev` in `remote/actions.go` (`TestActionsAreWhitelisted`); `remote.State.audio {title, status, tracks}` (`TestBuildState`); the phone's music bar (`web/index.html`, `app.js`). Smoke: `the phone plays the music and skips a track`, `the phone goes back a track and pauses`. |
+| Control actions and `/state.audio` | **pass** | `audio-play {index}`, `audio-pause`, `audio-toggle`, `audio-stop {fade}`, `audio-next`, `audio-prev`, `audio-seek {seconds}`, `audio-volume {value}`, `audio-repeat {mode}`, `audio-shuffle {on}`, `audio-fade-out {seconds}`, `playlist-add {index \| title \| path \| paths}`, `playlist-remove {index}`, `playlist-move {from, to}`, `playlist-clear {confirm}`, `media-menu {item: "add-to-playlist"}`. `/state.audio`: `status, playing, track, title, next, order, position, duration, volume, gain, fading, repeat, shuffle, fadeOut, tracks [{title, path, seconds, missing}], native, loaded, failed`. Smoke: `an empty playlist cannot play`, `a seek needs a playing track`, `a bad repeat mode is refused`, `a fade-out over 30 s is refused`, `a volume that is not a number is refused (audio)`, `a move out of range is refused`. |
+
+Known limits: macOS only for now (it plays through the same player layer as the monitors, so the ffmpeg-pipe
+backend for Windows / Linux will cover it); no drag-and-drop into the list, no crossfade between tracks, no
+library of saved playlists, and the music goes to the default output device like the monitors' audio.
+
+### Shared files touched (audio playlists)
+
+- New files: `internal/models/playlist.go`, `internal/app/core/audio.go` (each + test), `internal/render/audiosource.go`,
+  `internal/ui/playlist.go`, `internal/app/audio.go`.
+- `internal/models/schedule.go` (the `Playlist` field in its own block), `schedule_ops.go` (+1: `Playlist.Normalize`
+  on load); `internal/render/videosource.go` untouched (the new role and `OpenAudio` / `CloseAudio` / `PumpMedia` live in
+  `audiosource.go`); `internal/ui/mainwindow.go` (the `AudioPlaylist` field block, +2 in `buildSchedule`),
+  `internal/ui/media.go` (the `Add to Audio Playlist` entry, id and callback in their own blocks),
+  `internal/ui/uicore/icons.go` (an `audio playlist` block after the transport icons).
+- `internal/app/app.go` (`au` field block, `initAudio`, `audioEvents` and the per-frame `renderAudio` in `Process`),
+  `view.go` (view-cache block, `wireAudio`, `renderAudio` in `render`), `control.go` (`Fade` arg block, `/state.audio`,
+  `handleAudioCommand` in the dispatcher chain), `menus_items.go` (`media-menu add-to-playlist`), `remote.go` (+1),
+  `core/state.go` (own blocks); `internal/remote/state.go`, `actions.go`, `remote_test.go`, `web/*` (the music bar).
+- `test/smoke.sh`: the `# ---- audio playlist` block before `# ---- item menus`. Docs: `MEDIA.md`, `REMOTE.md`,
+  `UI-SPEC.md` §3.3, `CLAUDE.md` (gotchas appended).
 
 ## Remaining for Phase 2
 

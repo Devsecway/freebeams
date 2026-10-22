@@ -320,6 +320,19 @@
     for (const p of ['schedule', 'slides', 'songs']) $('pane-' + p).hidden = p !== app.tab;
     renderSchedule(st);
     renderSlides(st);
+    renderMusic(st);
+  }
+
+  // The background audio playlist: the current track and play / pause.
+  function renderMusic(st) {
+    const a = st.audio || { tracks: 0 };
+    $('music').hidden = !a.tracks;
+    if (!a.tracks) return;
+    $('music').dataset.status = a.status;
+    $('music-label').textContent = a.status === 'playing' ? 'Music playing' : a.status === 'paused' ? 'Music paused' : 'Music stopped';
+    $('music-title').textContent = a.title || '';
+    $('music-play').dataset.playing = String(a.status === 'playing');
+    for (const id of ['music-prev', 'music-play', 'music-next']) $(id).disabled = !canControl();
   }
 
   function renderLive(st) {
@@ -507,6 +520,9 @@
     });
   }
   $('prev').addEventListener('click', () => send('prev'));
+  $('music-play').addEventListener('click', () => send('audio-toggle'));
+  $('music-prev').addEventListener('click', () => send('audio-prev'));
+  $('music-next').addEventListener('click', () => send('audio-next'));
   $('next').addEventListener('click', () => send('next'));
   $('deck-golive').addEventListener('click', () => { send('go-live'); app.deck = 'live'; app.deckChosen = false; render(); });
   $('menu-btn').addEventListener('click', () => { $('sheet').hidden = false; });

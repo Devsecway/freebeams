@@ -332,6 +332,7 @@ func (a *App) renderRemote(v *remoteView) {
 	if a.rm.status.Running {
 		a.rm.srv.Publish(remote.BuildState(remote.StateInput{
 			Name: a.rm.name, Presenter: a.pres.State, Schedule: a.sched, Selected: a.schedSel,
+			Audio: a.audioPhoneDoc(),
 		}))
 	}
 }

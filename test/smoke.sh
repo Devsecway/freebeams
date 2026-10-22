@@ -1517,6 +1517,152 @@ pixel "the output is black again" "$OUT/alerts-cleared-output.png" black
 act "restore the alert styles" set-setting "{\"key\":\"alerts\",\"value\":$ALERT_STYLES}" 's["settings"]["alerts"]["nursery"]["background"]["A"] < 1'
 act "black off (alerts)" black '{"on":false}' 's["mode"] == "normal"'
 
+# ---- audio playlist (background audio) ---------------------------------------------------------
+# The schedule's audio playlist plays independently of the Live slide (docs/MEDIA.md "Audio
+# playlist"): four short tones (one deleted after it was added, so it is skipped), driven through
+# the audio-* / playlist-* actions and /state.audio; a song going live and Black leave it playing;
+# the phone remote toggles it and skips tracks; the playlist round-trips through the .fbs file.
+# Audio has no pixels: /state.audio (what the native player reports) is the truth.
+LAST="$(state)"
+check "the audio state is present (empty, stopped)" "$LAST" 's["audio"]["tracks"] == [] and s["audio"]["status"] == "stopped" and s["audio"]["track"] == -1 and s["audio"]["repeat"] == "off" and not s["audio"]["shuffle"]'
+AU_NATIVE="$(field "$LAST" audio.native)"
+act "an empty playlist cannot play" audio-play '' 'not r["ok"] and "no track" in r["error"]'
+act "a seek needs a playing track" audio-seek '{"seconds":1}' 'not r["ok"]'
+act "a bad repeat mode is refused" audio-repeat '{"mode":"twice"}' 'not r["ok"]'
+act "a fade-out over 30 s is refused" audio-fade-out '{"seconds":31}' 'not r["ok"]'
+if [ "$FFMPEG" = "True" ] && [ "$AU_NATIVE" = "True" ]; then
+	AU_DIR="$OUT/audio-playlist"
+	rm -rf "$AU_DIR"
+	mkdir -p "$AU_DIR"
+	ffmpeg -v error -y -f lavfi -i "sine=frequency=440:duration=3" "$AU_DIR/pl-1-prelude.wav" &&
+		ffmpeg -v error -y -f lavfi -i "sine=frequency=660:duration=8" -c:a aac "$AU_DIR/pl-2-hymn.m4a" &&
+		ffmpeg -v error -y -f lavfi -i "sine=frequency=880:duration=3" "$AU_DIR/pl-3-gone.wav" &&
+		ffmpeg -v error -y -f lavfi -i "sine=frequency=550:duration=3" "$AU_DIR/pl-4-postlude.wav" || fail "ffmpeg could not make the playlist tones"
+	LAST="$(state)"
+	AU_AUDIO="$(field "$LAST" media.audio)"
+	AU_SCHED="$(field "$LAST" schedule.path)"
+	act "add a folder of tones to the playlist" playlist-add "{\"path\":\"$AU_DIR\"}" "[t[\"title\"] for t in s[\"audio\"][\"tracks\"]] == [\"pl-1-prelude\", \"pl-2-hymn\", \"pl-3-gone\", \"pl-4-postlude\"] and s[\"media\"][\"audio\"] == $AU_AUDIO + 4 and s[\"schedule\"][\"dirty\"] and s[\"audio\"][\"status\"] == \"stopped\" and s[\"audio\"][\"track\"] == 0"
+	act "adding a library item again (Media tab menu)" media-menu '{"item":"add-to-playlist","title":"pl-1-prelude"}' 'len(s["audio"]["tracks"]) == 5 and s["audio"]["tracks"][4]["title"] == "pl-1-prelude"'
+	act "remove the duplicate" playlist-remove '{"index":4}' 'len(s["audio"]["tracks"]) == 4'
+	act "the video collection (audio)" search-media '{"q":"","kind":"video"}' 's["media"]["kind"] == "video"'
+	if [ "$(field "$LAST" media.results)" != "0" ]; then
+		act "a video cannot join the playlist" media-menu '{"item":"add-to-playlist","index":0}' 'not r["ok"] and "not an audio file" in r["error"]'
+	fi
+	act "all media (audio)" search-media '{"q":""}' 's["media"]["kind"] == "" and len(s["audio"]["tracks"]) == 4'
+	rm "$AU_DIR/pl-3-gone.wav"
+	act "a deleted file is marked missing" state '' '[t.get("missing", False) for t in s["audio"]["tracks"]] == [False, False, True, False]'
+	act "volume 0.6" audio-volume '{"value":0.6}' 's["audio"]["volume"] == 0.6'
+	act "a volume that is not a number is refused (audio)" audio-volume '{"value":"loud"}' 'not r["ok"]'
+	act "play the playlist" audio-play '' 's["audio"]["status"] == "playing" and s["audio"]["track"] == 0 and s["audio"]["title"] == "pl-1-prelude" and s["audio"]["next"] == 1'
+	pb_wait "the first track plays" 's["audio"]["loaded"] and s["audio"]["position"] > 0.2 and s["audio"]["duration"] > 2.9 and s["audio"]["playing"]'
+	AU_POS="$(field "$LAST" audio.position)"
+	sleep 0.4
+	LAST="$(state)"
+	check "the position advances" "$LAST" "s[\"audio\"][\"position\"] > $AU_POS and s[\"audio\"][\"track\"] == 0"
+	wait_idle # a playing playlist does not keep the app busy
+	shot audio-playlist-main main
+	act "seek near the end of the first track" audio-seek '{"seconds":2.5}' 'r["ok"]'
+	pb_wait "the first track ends and the second starts" 's["audio"]["track"] == 1 and s["audio"]["playing"] and s["audio"]["loaded"] and s["audio"]["position"] < 1.5 and s["audio"]["title"] == "pl-2-hymn"'
+	act "select a song" select-song '{"title":"Amazing Grace"}' 's["preview"]["title"] == "Amazing Grace"'
+	act "the song goes live; the music plays on" go-live '' 's["live"]["title"] == "Amazing Grace" and s["audio"]["playing"] and s["audio"]["track"] == 1'
+	act "black; the music plays on" black '{"on":true}' 's["mode"] == "black" and s["audio"]["playing"] and s["audio"]["track"] == 1'
+	wait_idle # past the fade to black
+	AU_POS="$(field "$(state)" audio.position)"
+	sleep 0.4
+	act "the music advances under Black" state '' "s[\"audio\"][\"position\"] > $AU_POS and s[\"audio\"][\"playing\"] and s[\"mode\"] == \"black\""
+	act "logo; the music plays on" logo '{"on":true}' 's["mode"] == "logo" and s["audio"]["playing"]'
+	act "back to normal (audio)" logo '{"on":false}' 's["mode"] == "normal" and s["audio"]["playing"]'
+	act "clear; the music plays on" clear '{"on":true}' 's["mode"] == "clear" and s["audio"]["playing"]'
+	act "clear off (audio)" clear '{"on":false}' 's["mode"] == "normal" and s["audio"]["playing"] and s["audio"]["track"] == 1'
+	act "next skips the missing file" audio-next '' 's["audio"]["track"] == 3 and s["audio"]["playing"] and s["audio"]["title"] == "pl-4-postlude"'
+	pb_wait "the fourth track plays" 's["audio"]["track"] == 3 and s["audio"]["loaded"] and s["audio"]["position"] > 0.1'
+	act "prev goes back over the missing file" audio-prev '' 's["audio"]["track"] == 1 and s["audio"]["playing"]'
+	act "play a track by index" audio-play '{"index":3}' 's["audio"]["track"] == 3 and s["audio"]["playing"]'
+	act "a missing track cannot be played" audio-play '{"index":2}' 'not r["ok"]'
+	pb_wait "the fourth track is open" 's["audio"]["track"] == 3 and s["audio"]["loaded"]'
+	act "seek near the end of the last track (repeat off)" audio-seek '{"seconds":2.5}' 'r["ok"]'
+	pb_wait "the list ends: stopped, the first track cued" 's["audio"]["status"] == "stopped" and s["audio"]["track"] == 0 and s["audio"]["position"] == 0 and not s["audio"]["loaded"]'
+	act "repeat all" audio-repeat '{"mode":"all"}' 's["audio"]["repeat"] == "all" and s["audio"]["status"] == "stopped"'
+	act "play the last track" audio-play '{"index":3}' 's["audio"]["track"] == 3 and s["audio"]["next"] == 0'
+	pb_wait "the last track is open" 's["audio"]["track"] == 3 and s["audio"]["loaded"] and s["audio"]["position"] > 0.1'
+	act "seek near the end (repeat all)" audio-seek '{"seconds":2.5}' 'r["ok"]'
+	pb_wait "repeat all wraps to the first track" 's["audio"]["track"] == 0 and s["audio"]["playing"] and s["audio"]["loaded"] and s["audio"]["position"] < 1.5'
+	act "repeat one" audio-repeat '{"mode":"one"}' 's["audio"]["repeat"] == "one"'
+	act "seek near the end (repeat one)" audio-seek '{"seconds":2.5}' 'r["ok"]'
+	pb_wait "the seek lands" 's["audio"]["position"] > 2.4 and s["audio"]["track"] == 0'
+	pb_wait "repeat one plays the track again" 's["audio"]["track"] == 0 and s["audio"]["playing"] and s["audio"]["position"] < 1.5'
+	act "repeat cycles back to off" audio-repeat '' 's["audio"]["repeat"] == "off"'
+	act "shuffle on" audio-shuffle '{"on":true}' 's["audio"]["shuffle"] and sorted(s["audio"]["order"]) == [0, 1, 2, 3] and s["audio"]["order"][0] == s["audio"]["track"] == 0'
+	act "shuffle off" audio-shuffle '' 'not s["audio"]["shuffle"] and s["audio"]["order"] == [0, 1, 2, 3]'
+	act "pause" audio-pause '' 's["audio"]["status"] == "paused" and not s["audio"]["playing"]'
+	sleep 0.3
+	AU_POS="$(field "$(state)" audio.position)"
+	sleep 0.4
+	act "the position holds while paused" state '' "s[\"audio\"][\"position\"] == $AU_POS and s[\"audio\"][\"status\"] == \"paused\""
+	act "toggle resumes" audio-toggle '' 's["audio"]["playing"]'
+	act "stop at once" audio-stop '{"fade":false}' 's["audio"]["status"] == "stopped" and not s["audio"]["loaded"] and s["audio"]["track"] == 0'
+	act "a fade-out of 1.5 s" audio-fade-out '{"seconds":1.5}' 's["audio"]["fadeOut"] == 1.5'
+	act "play for the fade" audio-play '' 's["audio"]["playing"]'
+	pb_wait "playing before the fade" 's["audio"]["loaded"] and s["audio"]["position"] > 0.2'
+	act "stop fades out" audio-stop '' 's["audio"]["fading"] and s["audio"]["status"] == "playing"'
+	pb_wait "the volume ramps down" 's["audio"]["fading"] and 0 < s["audio"]["gain"] < 0.9'
+	pb_wait "the fade ends stopped" 's["audio"]["status"] == "stopped" and not s["audio"]["fading"] and s["audio"]["gain"] == 1 and not s["audio"]["loaded"]'
+	# The phone remote: play / pause, next and previous track (internal/remote/actions.go).
+	RPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
+	RBASE="http://127.0.0.1:$RPORT"
+	act "turn the remote on (audio)" remote "{\"on\":true,\"port\":$RPORT}" 's["remote"]["running"]'
+	RCODE="$(field "$LAST" remote.code)"
+	LAST="$("$RC" pair -base "$RBASE" -code "$RCODE" -name "Music Phone")"
+	check "a phone asks to pair (audio)" "$LAST" 'r["ok"] and r["id"]'
+	PAIR_ID="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["id"])' "$LAST")"
+	PAIR_SECRET="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["secret"])' "$LAST")"
+	act "approve the music phone" remote-approve '{"name":"Music Phone"}' 'len(s["remote"]["devices"]) == 1'
+	RTOKEN="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["token"])' "$("$RC" wait -base "$RBASE" -id "$PAIR_ID" -secret "$PAIR_SECRET")")"
+	LAST="$("$RC" ws -base "$RBASE" -token "$RTOKEN" -do audio-toggle -do audio-next)"
+	check "the phone plays the music and skips a track" "$LAST" 'r["ok"] and [x["action"] for x in r["replies"]] == ["audio-toggle", "audio-next"] and r["state"]["audio"] == {"title": "pl-2-hymn", "status": "playing", "tracks": 4}'
+	act "the app plays the second track" state '' 's["audio"]["track"] == 1 and s["audio"]["playing"]'
+	LAST="$("$RC" ws -base "$RBASE" -token "$RTOKEN" -do audio-prev -do audio-toggle)"
+	check "the phone goes back a track and pauses" "$LAST" 'r["ok"] and r["state"]["audio"]["title"] == "pl-1-prelude" and r["state"]["audio"]["status"] == "paused"'
+	act "remove the music phone" remote-revoke '{"name":"Music Phone"}' 's["remote"]["devices"] == []'
+	act "turn the remote off (audio)" remote '{"on":false}' 'not s["remote"]["running"]'
+	# Editing and the schedule file.
+	act "move the last track to the top" playlist-move '{"from":3,"to":0}' '[t["title"] for t in s["audio"]["tracks"]] == ["pl-4-postlude", "pl-1-prelude", "pl-2-hymn", "pl-3-gone"] and s["audio"]["track"] == 1 and s["audio"]["status"] == "paused"'
+	act "a move out of range is refused" playlist-move '{"from":0,"to":9}' 'not r["ok"]'
+	act "remove the missing track" playlist-remove '{"index":3}' 'len(s["audio"]["tracks"]) == 3'
+	act "repeat all and a 2 s fade-out for the file" audio-repeat '{"mode":"all"}' 's["audio"]["repeat"] == "all"'
+	act "fade-out 2 s" audio-fade-out '{"seconds":2}' 's["audio"]["fadeOut"] == 2'
+	act "play on (audio)" audio-toggle '' 's["audio"]["playing"]'
+	wait_idle
+	shot audio-playlist-playing main
+	act "save the schedule with the playlist" save-schedule '{}' 'not s["schedule"]["dirty"]'
+	python3 - "$AU_SCHED" <<'PY' || fail "the saved schedule has the playlist"
+import json, sys
+d = json.load(open(sys.argv[1]))
+p = d["playlist"]
+assert [t["title"] for t in p["tracks"]] == ["pl-4-postlude", "pl-1-prelude", "pl-2-hymn"], p
+assert p["repeat"] == "all" and p["fadeOut"] == 2 and all(t["id"] and t["path"] and t["mediaId"] for t in p["tracks"]), p
+PY
+	log "ok: the saved schedule has the playlist"
+	act "a new schedule has no playlist; the music stops" new-schedule '' 's["audio"]["tracks"] == [] and s["audio"]["status"] == "stopped"'
+	pb_wait "the player closed" 'not s["audio"]["loaded"] and s["audio"]["status"] == "stopped"'
+	act "open the schedule again" open-schedule "{\"path\":\"$AU_SCHED\"}" '[t["title"] for t in s["audio"]["tracks"]] == ["pl-4-postlude", "pl-1-prelude", "pl-2-hymn"] and s["audio"]["repeat"] == "all" and s["audio"]["fadeOut"] == 2 and s["audio"]["status"] == "stopped" and s["audio"]["track"] == 0 and not s["schedule"]["dirty"]'
+	act "the reopened playlist plays" audio-play '' 's["audio"]["playing"] and s["audio"]["title"] == "pl-4-postlude"'
+	pb_wait "the reopened playlist's first track plays" 's["audio"]["loaded"] and s["audio"]["position"] > 0.1'
+	act "stop (audio)" audio-stop '{"fade":false}' 's["audio"]["status"] == "stopped"'
+	act "Clear Playlist asks first" playlist-clear '' 'len(s["audio"]["tracks"]) == 3'
+	wait_idle
+	check "the clear question is up" "$LAST" 's["dialog"]["confirm"] == "Clear Playlist"'
+	act "cancel the clear" dismiss '' 'len(s["audio"]["tracks"]) == 3 and s["focus"] != "dialog"'
+	act "clear the playlist (confirmed)" playlist-clear '{"confirm":true}' 's["audio"]["tracks"] == [] and s["audio"]["track"] == -1 and s["schedule"]["dirty"]'
+	for t in pl-1-prelude pl-2-hymn pl-3-gone pl-4-postlude; do
+		act "remove $t from the library" remove-media "{\"title\":\"$t\",\"confirm\":true}" 'r["ok"]'
+	done
+	act "the library has its audio count back" state '' "s[\"media\"][\"audio\"] == $AU_AUDIO"
+	act "save the schedule (audio)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+else
+	log "audio playlist: playback skipped (ffmpeg=$FFMPEG native=$AU_NATIVE)"
+fi
+
 # ---- item menus (media and presentation tile menus) --------------------------------------------
 # The right-click / gear menus of the media and presentation tiles (UI-SPEC §3.6), driven
 # through `media-menu {item}` / `presentation-menu {item}`. A square image whose top quarter
