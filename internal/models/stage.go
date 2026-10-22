@@ -62,7 +62,7 @@ func (f StageFrame) NextHeader() string {
 	switch {
 	case f.NextTitle != "":
 		h := "NEXT ITEM · " + f.NextTitle
-		if f.NextLabel != "" {
+		if f.NextLabel != "" && f.NextLabel != f.NextTitle {
 			h += " · " + f.NextLabel
 		}
 		return h

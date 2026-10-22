@@ -2,6 +2,7 @@ package render
 
 import (
 	"math"
+	"strings"
 
 	"freebeams/internal/models"
 	"freebeams/internal/render/layout"
@@ -131,6 +132,11 @@ func (v *StageView) build() {
 	v.timer.SetHorizontalAlignment(GUI.HorizontalAlignmentRight)
 	v.clock = label()
 	v.clock.SetHorizontalAlignment(GUI.HorizontalAlignmentRight)
+	for _, l := range []Label.Instance{v.badge, v.timer, v.clock} {
+		// Measured slots: never trim the clock to "9:39 A…" over a rounding
+		// difference between the measurement and the rasterized size.
+		l.SetTextOverrunBehavior(TextServer.OverrunNoTrimming)
+	}
 	v.head = label()
 	v.current = newTextLabel() // line breaks forced from the canvas-unit fit
 	v.current.SetHorizontalAlignment(GUI.HorizontalAlignmentCenter)
@@ -152,7 +158,7 @@ func textWidth(f Font.Instance, s string, size float64) float64 {
 		return 0
 	}
 	sz := f.MoreArgs().GetStringSize(s, GUI.HorizontalAlignmentLeft, -1, int(math.Round(size)), TextServer.JustificationFlag(3), 0, 0)
-	return math.Ceil(float64(sz.X))
+	return math.Ceil(float64(sz.X) + size*0.08) // slack for the rasterized size's rounding
 }
 
 // relayout projects the frame at the current size. It is a no-op when
@@ -206,7 +212,11 @@ func (v *StageView) relayout() {
 	if f.ShowNext {
 		place(v.rule2.AsControl(), pixelRule(b.NextRule.Scale(s)))
 		v.rule2.AsCanvasItem().SetVisible(true)
-		v.line(v.head, f.NextHeader(), b.NextHeader, b.NextHeaderSize, s, false, stageNextHeader)
+		headColor := stageNextHeader
+		if f.NextTitle != "" {
+			headColor = stageNext // a new item is coming: the musicians change songs
+		}
+		v.line(v.head, f.NextHeader(), b.NextHeader, b.NextHeaderSize, s, f.NextTitle != "", headColor)
 		v.fitted(v.next, f.Next, b.Next, b.NextMin, b.NextMax, s, false, stageNext)
 	} else {
 		v.rule2.AsCanvasItem().SetVisible(false)
@@ -249,7 +259,7 @@ func (v *StageView) fitted(l Label.Instance, text string, r layout.Rect, min, ma
 	}
 	const lineSpacing = 0.08
 	f := models.Font{Size: float32(max), MinSize: float32(min), Bold: bold, LineSpacing: lineSpacing}
-	fit := fitText(text, f, r.W, r.H)
+	fit := fitStageText(text, f, r.W, r.H)
 	font := stageFont(bold)
 	px, k := layout.RasterSize(float64(fit.size), s)
 	advance := (lineHeight(font, float32(fit.size)) + lineSpacing*float64(fit.size)) * s / k
@@ -271,4 +281,38 @@ func stageStyle(ls LabelSettings.Instance, f Font.Instance, px int, lineSpacing 
 	ls.SetShadowColor(Color.RGBA{})
 	ls.SetShadowSize(0)
 	ls.SetShadowOffset(Vector2.New(0, 0))
+}
+
+// stageFitCache memoizes fitStageText (canvas units; cleared when full).
+var stageFitCache = map[fitKey]fitResult{}
+
+// fitStageText is fitText for the stage display: it prefers the largest size
+// at which every line of the slide stays on one line (a lyric line broken in
+// two is hard to sing from), and falls back to the plain fit (wrapping) when
+// even the smallest size cannot keep the lines whole.
+func fitStageText(text string, f models.Font, boxW, boxH float64) fitResult {
+	maxSize, minSize := int(math.Round(float64(f.Size))), int(math.Round(float64(f.MinSize)))
+	k := fitKey{text: text, font: fontKey{f.Family, f.Bold, f.Italic}, maxSize: maxSize, minSize: minSize,
+		lineSpacing: f.LineSpacing, boxW: int(math.Round(boxW)), boxH: int(math.Round(boxH))}
+	if r, ok := stageFitCache[k]; ok {
+		return r
+	}
+	font := fontFor(f.Family, f.Bold, f.Italic)
+	lines := strings.Count(text, "\n") + 1
+	whole := func(s int) bool {
+		p := shape(text, font, s, f.LineSpacing, boxW)
+		return float64(p.GetSize().Y) <= boxH && p.GetLineCount() <= lines
+	}
+	size := layout.FitFontSize(minSize, maxSize, whole)
+	var res fitResult
+	if whole(size) {
+		res = fitResult{size: size, lines: text}
+	} else {
+		res = fitText(text, f, boxW, boxH)
+	}
+	if len(stageFitCache) >= fitCacheMax {
+		clear(stageFitCache)
+	}
+	stageFitCache[k] = res
+	return res
 }
