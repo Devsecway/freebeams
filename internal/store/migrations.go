@@ -130,6 +130,24 @@ CREATE INDEX themes_name ON themes (name COLLATE NOCASE);
 ALTER TABLE media ADD COLUMN aspect TEXT NOT NULL DEFAULT 'fill';
 ALTER TABLE media ADD COLUMN repeat TEXT NOT NULL DEFAULT 'loop';
 `,
+
+	// 6: saved message alerts (EasyWorship's Alerts.db). json is the
+	// models.Alert; name is duplicated for listing and ordering. IF NOT EXISTS
+	// keeps the script safe if parallel branches renumber their migrations.
+	`
+CREATE TABLE IF NOT EXISTS alerts (
+	id      INTEGER PRIMARY KEY,
+	name    TEXT    NOT NULL,
+	json    TEXT    NOT NULL,
+	created TEXT    NOT NULL,
+	updated TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS alerts_name ON alerts (name COLLATE NOCASE);
+INSERT INTO alerts (name, json, created, updated) VALUES
+	('Vehicle', '{"name":"Vehicle","message":"The owner of the vehicle with plate {plate}, please move it.","display":"scroll","align":"center","end":"count","count":3}', datetime('now'), datetime('now')),
+	('Parent Needed', '{"name":"Parent Needed","message":"Parents of {child}, please come to the {room}.","display":"scroll","align":"center","end":"count","count":3}', datetime('now'), datetime('now')),
+	('Service Starting', '{"name":"Service Starting","message":"Service starts in {countdown}","display":"static","align":"center","end":"token","count":1,"endToken":"countdown"}', datetime('now'), datetime('now'));
+`,
 }
 
 // migrate brings the schema up to date. Each migration runs in its own
