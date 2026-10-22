@@ -629,7 +629,7 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		s.opt.Logf("[remote] wrong pairing code from %s", ip)
 		writeJSON(w, http.StatusForbidden, map[string]any{"ok": false, "remaining": left,
-			"error": "That code is not right. Check the code shown in FreeBeams (Remote ▸ Show Pairing Code)."})
+			"error": "That code is not right. Check the code shown in FreeBeams (Remote ▾ › Show Pairing Code…)."})
 		return
 	}
 	// One waiting request per address: asking again replaces the old one.

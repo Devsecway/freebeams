@@ -70,8 +70,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, d Device) {
 		return // the upgrader has answered
 	}
 	c := &client{s: s, dev: d, conn: conn, wake: make(chan struct{}, 1), out: make(chan []byte, 32), quit: make(chan struct{})}
+	// The hello goes out before the write loop starts: the loop's select
+	// would otherwise pick the first state push and the hello in any order.
 	hello, _ := json.Marshal(map[string]any{"type": "hello", "session": s.session(d)})
-	c.out <- hello
+	if c.write(hello) != nil {
+		conn.Close()
+		return
+	}
 
 	s.mu.Lock()
 	if s.stopped() {
