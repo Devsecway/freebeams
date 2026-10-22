@@ -46,6 +46,9 @@ func (a *App) state() core.State {
 	if a.win.Confirm.Visible() {
 		dialog.Confirm = a.win.Confirm.Title()
 	}
+	if a.win.Editor.Visible() {
+		dialog.SongEditorTheme = a.win.Editor.ThemeName()
+	}
 	if m := a.win.Message; m.Visible() {
 		dialog.Message = &core.Alert{Title: m.Title(), Message: m.Text()}
 	}
@@ -61,6 +64,7 @@ func (a *App) state() core.State {
 			Count: a.songCount, Query: a.songQuery, Results: len(a.songs), Selected: a.songSel,
 			Current: songTitle(a.song), CountText: a.songsStatus,
 			First: core.FirstSongTitle(a.songs), LyricsMatches: core.LyricsMatches(a.songs),
+			Theme: a.songThemeName(),
 		},
 		Bibles:        a.bibles,
 		BibleSelected: a.bibleSel,
@@ -152,6 +156,10 @@ type actionArgs struct {
 	// Themes (themes.go).
 	Theme *models.Theme `json:"theme"` // save-theme: the theme to save (id 0 inserts)
 	Row   *int          `json:"row"`   // apply-theme: schedule row (default: the selected one)
+
+	// Per-song themes (songthemes.go): set-song-theme, song-editor-theme and
+	// save-song take a theme name; "" or "(Default)" is the default song theme.
+	ThemeName string `json:"themeName"`
 
 	// Playback (playback.go); volume takes Value, loop takes On, all take Target.
 	Seconds *float64 `json:"seconds"` // seek: the position in seconds
@@ -514,6 +522,12 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = render.WindowScreenshot(a.win.Confirm.AsWindow())
 	case "message":
 		png, err = render.WindowScreenshot(a.win.Message.AsWindow())
+	case "song-menu", "song-theme-menu": // the Songs list's context menu / its Theme ▸ submenu
+		w := a.win.Songs.MenuWindow()
+		if cmd.Query["window"] == "song-theme-menu" {
+			w = a.win.Songs.ThemeMenuWindow()
+		}
+		png, err = render.WindowScreenshot(w)
 	case "output":
 		png, err = a.out.Screenshot()
 	case "stage":

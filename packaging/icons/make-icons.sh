@@ -42,7 +42,7 @@ python3 -I -c 'import PIL, numpy' 2>/dev/null || {
 	exit 1
 }
 
-TMP="$(mktemp -d -t freebeams-icons)"
+TMP="$(mktemp -d -t freebeams-icons.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "==> rasterising $SVG at 1024 px on white and on black"

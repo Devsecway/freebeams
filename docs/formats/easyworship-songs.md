@@ -70,3 +70,32 @@ Findings (all 223 blobs surveyed):
 
 Import (`ImportInto`) skips songs already in the library with the same title and author
 (case-insensitive, whitespace-collapsed). It saves the rest in one transaction with `store.SaveSongs`.
+
+## Per-song themes: not imported
+
+FreeBeams songs can have a theme of their own (`Song.ThemeID`, see `docs/PHASE2-STATUS.md` "Per-song themes").
+The importer leaves it at 0 (the default song theme) because EasyWorship's link could not be verified.
+Surveyed on 2026-10-22 against the local data (`Songs.db`, `SongWords.db`, `Themes.db`, `PresentationLayouts.db`):
+
+- **Songs.db `song.presentation_id` is 0 for all 223 songs**, and `layout_revision` is 1 for every song.
+  No song in this library has a theme or layout of its own, so there is no real example of the link.
+- **Themes.db `file_item`** lists 110 themes: 36 with `presentation_type` 12, 37 with type 13, 37 with type 14. The
+  same title appears under several types (`Fall Skies 1` is 12, 13 and 14). Each row's `presentation_id` points at a
+  `presentation` row in PresentationLayouts.db. The meaning of the types is not documented. Guessing a song, scripture
+  or presentation type from the titles would be speculation.
+- **PresentationLayouts.db** stores a theme as a `presentation` with `slide` rows (a type-12 theme has six, the
+  others one), each `slide` with `element` rows (geometry in `x`/`y`/`width`/`height`, `element_type`, and background,
+  foreground and shape `resource` ids). `element_property` holds mostly override flags (`mofText`, `mofDims`,
+  `mofBackground`), not fonts or colors. Backgrounds are `resource_image` / `resource_video` rows that name the file
+  (`<images>Echo Morph Still.jpg`, `<videos>EWM-…HD720.mp4`). The `file` table is empty, so the media itself is not in
+  these databases. Where a theme keeps its font, size, color, outline and shadow was not found. `resource_text`
+  (RTF) has only 3 rows for 110 themes, and the per-element properties are flags.
+- `SongWords.db` `word.slide_uids` / `slide_layout_revisions` reference per-slide layouts by uid. They are filled for
+  every song, but nothing ties them to a theme in this library.
+
+Two things would have to be decoded and checked before a mapping could be trusted: the song → theme link
+(`presentation_id` pointing into PresentationLayouts.db and its `slide.theme_id` / `modified_theme_id`, with a real
+non-zero example), and an EW theme → `models.Theme` conversion (background media, the text element's box, the font
+and color, outline and shadow). Neither can be verified here, so no EW theme or song theme is imported.
+EasyWorship's own Profiles ▸ Utilities ▸ "Reset Songs to Default Theme" suggests the link exists in libraries
+where operators assigned themes. A library with such songs would make the first half testable.

@@ -55,7 +55,9 @@ rc=0
 GOOS=linux "$ROOT/bin/gd" build || rc=$?
 # Godot's headless export can crash on teardown on GPU-less machines after
 # writing the binary, so trust the artifacts, not only the exit status.
-[ -f "$BIN" ] && [ -f "$SO" ] || fail "gd build failed (exit $rc): $BIN or $SO was not produced"
+if [ ! -f "$BIN" ] || [ ! -f "$SO" ]; then
+	fail "gd build failed (exit $rc): $BIN or $SO was not produced"
+fi
 [ "$rc" -eq 0 ] || echo "    note: gd exited $rc but the artifacts exist (Godot teardown crash)"
 if command -v file >/dev/null 2>&1; then
 	file "$SO" | grep -q 'ELF 64-bit.*shared object' || fail "$SO is not an ELF shared object"

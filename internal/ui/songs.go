@@ -24,6 +24,7 @@ const (
 	songMenuAddToSchedule
 	songMenuGoLive
 	songMenuNew
+	songMenuTheme // the Theme ▸ submenu (songthemes.go)
 )
 
 // SongLibraryPanel is the Songs resource tab: the library (collections) pane
@@ -49,6 +50,12 @@ type SongLibraryPanel struct {
 	selected  int
 	countText string
 	built     bool
+
+	// Per-song themes (songthemes.go): the context menu's Theme ▸ submenu
+	// reports a pick as OnSetTheme(row, theme id; 0 = the default theme).
+	OnSetTheme   func(i int, themeID int64)
+	themeMenu    PopupMenu.Instance
+	themeChoices []ThemeChoice
 }
 
 // NewSongLibraryPanel builds the Songs tab.
@@ -134,6 +141,7 @@ func NewSongLibraryPanel() *SongLibraryPanel {
 	s.menu.AddSeparator()
 	s.menu.MoreArgs().AddItem("Add to Schedule", songMenuAddToSchedule, 0)
 	s.menu.MoreArgs().AddItem("Go Live", songMenuGoLive, 0)
+	s.addThemeMenu()
 	s.menu.OnIdPressed(s.menuPressed)
 	s.list.AsNode().AddChild(s.menu.AsNode())
 
@@ -263,6 +271,7 @@ func (s *SongLibraryPanel) enableMenu(m PopupMenu.Instance) {
 
 func (s *SongLibraryPanel) showMenu() {
 	s.enableMenu(s.menu)
+	s.projectThemeMenu()
 	popupAtMouse(s.menu)
 }
 

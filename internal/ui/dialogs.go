@@ -16,6 +16,7 @@ import (
 	"graphics.gd/classdb/LineEdit"
 	"graphics.gd/classdb/MarginContainer"
 	"graphics.gd/classdb/Node"
+	"graphics.gd/classdb/OptionButton"
 	"graphics.gd/classdb/TextEdit"
 	"graphics.gd/classdb/TextServer"
 	"graphics.gd/classdb/Theme"
@@ -154,6 +155,13 @@ type SongEditor struct {
 	errLbl  Label.Instance
 	song    models.Song
 	errText string
+
+	// The Theme picker (songthemes.go): the choices after "(Default)" and the
+	// song's theme id (0 = default), projected by renderTheme.
+	themeOpt     OptionButton.Instance
+	themeChoices []ThemeChoice
+	themeID      int64
+	themesDirty  bool
 }
 
 var songFields = []struct{ key, label string }{
@@ -189,6 +197,7 @@ func NewSongEditor() *SongEditor {
 		add(grid, l.AsControl(), ed.AsControl())
 	}
 	e.fields["title"].SetPlaceholderText("Required")
+	e.addThemePicker(grid)
 
 	lyricsLbl := label("Lyrics", vTitle)
 	e.lyrics = TextEdit.New()
@@ -232,6 +241,7 @@ func (e *SongEditor) Open(song models.Song, lyricsText string) {
 	e.fields["ccli"].SetText(song.CCLI)
 	e.fields["tags"].SetText(song.Tags)
 	e.lyrics.SetText(lyricsText)
+	e.themeID = song.ThemeID
 	e.render()
 	e.dlg.popup()
 	e.fields["title"].AsControl().GrabFocus()
@@ -245,6 +255,7 @@ func (e *SongEditor) Visible() bool { return e.dlg.win.Visible() }
 
 func (e *SongEditor) render() {
 	e.errLbl.SetText(e.errText)
+	e.renderTheme()
 }
 
 func (e *SongEditor) save() {
@@ -256,6 +267,7 @@ func (e *SongEditor) save() {
 	song.Administrator = get("administrator")
 	song.CCLI = get("ccli")
 	song.Tags = get("tags")
+	song.ThemeID = e.savedThemeID()
 	if song.Title == "" {
 		e.errText = "Title is required."
 		e.render()
