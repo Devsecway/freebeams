@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
-# Build the universal macOS app and package it as a DMG that holds
-# FreeBeams.app and an Applications symlink.
+# Build the universal macOS app and package it as a styled DMG.
 #
-#   bin/release-dmg               GOOS=macos bin/gd build, then package
+#   bin/release-dmg               build the app (custom engine template), then the DMG
+#   bin/release-dmg --app-only    build and finish the app only (bin/sign-notarize signs it next)
 #   SKIP_BUILD=1 bin/release-dmg  package the existing releases/darwin/universal/FreeBeams.app
+#   STOCK_ENGINE=1                export with Godot's stock template instead of bin/build-engine's
+#
+# The app: GOOS=macos bin/gd build exports it with the size-optimised engine
+# template (bin/build-engine macos), then LICENSE.txt, THIRD-PARTY-NOTICES.txt
+# and the document icons (schedule.icns, bible.icns, which the Info.plist's
+# CFBundleDocumentTypes name) go into Contents/Resources, and the bundle is
+# ad-hoc signed again (adding files breaks the export's seal).
+#
+# The DMG (dmgbuild, packaging/macos/dmg-settings.py): FreeBeams.app and an
+# Applications link on a branded background with the arrow between them, the
+# app icon as the volume icon, the MIT licence as the licence agreement, lzma
+# compressed (ULMO). dmgbuild is installed into ~/.cache/freebeams/dmgbuild-*
+# when it is not on PATH.
 #
 # Output: releases/FreeBeams-<version>-macOS.dmg, with <version> from
 # bin/version (config/version in graphics/project.godot).
@@ -15,6 +28,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/releases/darwin/universal/FreeBeams.app"
 BIN="$APP/Contents/MacOS/FreeBeams"
+ENTITLEMENTS="$ROOT/packaging/macos/entitlements.plist"
+DMGBUILD_VERSION=1.6.7
 
 fail() {
 	echo "release-dmg: $*" >&2
@@ -27,17 +42,44 @@ need() { # need COMMAND "where it comes from"
 [ "$(uname -s)" = "Darwin" ] || fail "runs on macOS only (hdiutil, lipo)"
 need hdiutil "part of macOS"
 need lipo "Xcode command line tools: xcode-select --install"
-need ditto "part of macOS"
+need codesign "part of macOS"
 
 V="$("$ROOT/bin/version")"
 DMG="$ROOT/releases/FreeBeams-$V-macOS.dmg"
+app_only=0
+[ "${1:-}" = "--app-only" ] && app_only=1
 
 cd "$ROOT"
+
+build_app() {
+	if [ "${STOCK_ENGINE:-0}" = "1" ]; then
+		echo "==> stock engine template (STOCK_ENGINE=1)"
+	else
+		echo "==> engine template"
+		"$ROOT/bin/build-engine" macos >/dev/null
+		"$ROOT/bin/build-engine" --use macos
+		trap '"$ROOT/bin/build-engine" --restore' EXIT
+	fi
+	echo "==> GOOS=macos bin/gd build"
+	GOOS=macos "$ROOT/bin/gd" build
+	"$ROOT/bin/build-engine" --restore
+	trap - EXIT
+	[ -d "$APP" ] || fail "$APP not found: the export did not run or failed"
+
+	echo "==> licence, notices and document icons into Contents/Resources"
+	local res="$APP/Contents/Resources"
+	cp -f LICENSE "$res/LICENSE.txt"
+	cp -f THIRD-PARTY-NOTICES.txt "$res/THIRD-PARTY-NOTICES.txt"
+	cp -f packaging/macos/schedule.icns packaging/macos/bible.icns "$res/"
+	echo "==> ad-hoc signing the finished bundle"
+	codesign --force --deep --sign - --options runtime --entitlements "$ENTITLEMENTS" "$APP"
+	codesign --verify --deep --strict "$APP"
+}
+
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
 	echo "==> skipping the build (SKIP_BUILD=1)"
 else
-	echo "==> GOOS=macos bin/gd build"
-	GOOS=macos "$ROOT/bin/gd" build
+	build_app
 fi
 [ -d "$APP" ] || fail "$APP not found: the export did not run or failed"
 [ -x "$BIN" ] || fail "$BIN is missing from the bundle"
@@ -52,32 +94,52 @@ esac
 
 # The bundle version comes from the same project.godot setting as bin/version
 # (the macOS preset leaves short_version empty, so Godot falls back to it).
-plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || true)"
+plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$APP/Contents/Info.plist" 2>/dev/null || true; }
+plist_version="$(plist CFBundleShortVersionString)"
 [ "$plist_version" = "$V" ] || fail "Info.plist has CFBundleShortVersionString '$plist_version', bin/version says '$V'"
+[ -n "$(plist NSHumanReadableCopyright)" ] || fail "Info.plist has no NSHumanReadableCopyright"
+for ext in fbs fws fbbible; do
+	plutil -extract UTExportedTypeDeclarations xml1 -o - "$APP/Contents/Info.plist" | grep -q "<string>$ext</string>" ||
+		fail "Info.plist does not declare .$ext (application/additional_plist_content in the macOS preset)"
+done
+for f in LICENSE.txt THIRD-PARTY-NOTICES.txt schedule.icns bible.icns; do
+	[ -f "$APP/Contents/Resources/$f" ] || fail "Contents/Resources/$f is missing (build with bin/release-dmg)"
+done
 
-STAGE="$(mktemp -d -t freebeams-dmg.XXXXXX)"
-trap 'rm -rf "$STAGE"' EXIT
-echo "==> staging FreeBeams.app and the Applications link"
-ditto "$APP" "$STAGE/FreeBeams.app"
-ln -s /Applications "$STAGE/Applications"
+if [ "$app_only" = 1 ]; then
+	echo "Done: $APP"
+	exit 0
+fi
+
+# --- dmgbuild ------------------------------------------------------------------
+if command -v dmgbuild >/dev/null 2>&1; then
+	DMGBUILD=(dmgbuild)
+else
+	venv="${XDG_CACHE_HOME:-$HOME/.cache}/freebeams/dmgbuild-$DMGBUILD_VERSION"
+	if [ ! -x "$venv/bin/dmgbuild" ]; then
+		need python3 "to install dmgbuild"
+		echo "==> installing dmgbuild $DMGBUILD_VERSION into $venv"
+		python3 -m venv "$venv"
+		"$venv/bin/python" -m pip install -q "dmgbuild==$DMGBUILD_VERSION"
+	fi
+	DMGBUILD=("$venv/bin/dmgbuild")
+fi
 
 echo "==> writing $DMG"
 rm -f "$DMG"
-# hdiutil's own size estimate for -srcfolder is sometimes too small ("create
-# failed - No space left on device" on CI runners): size the image from the
-# staged folder plus headroom. It also fails now and then with "Resource busy"
-# while a scanner holds the staged files: retry, and show its message.
-size_mb=$(($(du -sm "$STAGE" | cut -f1) * 12 / 10 + 32))
+# hdiutil fails now and then with "Resource busy" while a scanner holds the
+# staged files: retry.
 for try in 1 2 3 4; do
-	if hdiutil create -volname "FreeBeams $V" -srcfolder "$STAGE" -size "${size_mb}m" -fs HFS+ -ov -format UDZO -imagekey zlib-level=9 "$DMG"; then
+	if "${DMGBUILD[@]}" -s packaging/macos/dmg-settings.py -D "app=$APP" -D "root=$ROOT" "FreeBeams $V" "$DMG"; then
 		break
 	fi
-	[ "$try" -lt 4 ] || fail "hdiutil create failed $try times"
-	echo "==> hdiutil create failed (try $try), retrying" >&2
+	[ "$try" -lt 4 ] || fail "dmgbuild failed $try times"
+	echo "==> dmgbuild failed (try $try), retrying" >&2
 	rm -f "$DMG"
 	sleep $((try * 5))
 done
 hdiutil verify -quiet "$DMG"
+hdiutil imageinfo "$DMG" | grep -q '^Format: ULMO' || fail "$DMG is not lzma-compressed (ULMO)"
 
 echo "Done: $DMG"
 ls -lh "$DMG"

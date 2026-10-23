@@ -4,6 +4,8 @@
 # saves screenshots to test/out/ and asserts /state along the way.
 #
 #   test/smoke.sh            # needs gd, curl, python3
+#   SMOKE_APP=releases/darwin/universal/FreeBeams.app/Contents/MacOS/FreeBeams test/smoke.sh
+#                            # the same run against an exported build (its engine template)
 #
 # Exit status is non-zero on the first failed check, with a clear message.
 # The app log is kept in test/out/app.log.
@@ -27,6 +29,8 @@ rm -f "$KEEPALIVE_TYPES"
 KEY="testkey"
 EW_SONGS="/Users/Shared/Softouch/Easyworship/Default/v6.1/Databases/Data/Songs.db"
 APP_PID=""
+APP_NAME="Godot" # what macOS calls the process: Godot under gd run, the bundle name when exported
+[ -n "${SMOKE_APP:-}" ] && APP_NAME="FreeBeams"
 BASE=""
 
 log() { printf '[smoke] %s\n' "$*"; }
@@ -131,7 +135,7 @@ shot() { # NAME WINDOW
 
 # ---- launch -------------------------------------------------------------------
 [ -x "$ROOT/bin/gd" ] || fail "bin/gd missing"
-log "launching: FREEBEAMS_LIBRARY=$LIB bin/gd run"
+log "launching: FREEBEAMS_LIBRARY=$LIB ${SMOKE_APP:-bin/gd run}"
 (
 	cd "$ROOT" || exit 1
 	export FREEBEAMS_LIBRARY="$LIB" FREEBEAMS_CONTROL_KEY="$KEY" FREEBEAMS_BIBLES_DIR="$BIBLES_DIR"
@@ -139,6 +143,9 @@ log "launching: FREEBEAMS_LIBRARY=$LIB bin/gd run"
 	# graphics.gd's per-frame walk reaches that goroutines mutate, and lists
 	# the walked types in $KEEPALIVE_TYPES at shutdown (see "keepalive walk").
 	export FREEBEAMS_KEEPALIVE_CHECK="$KEEPALIVE_TYPES"
+	if [ -n "${SMOKE_APP:-}" ]; then
+		exec "$SMOKE_APP"
+	fi
 	exec "$ROOT/bin/gd" run
 ) >"$LOG" 2>&1 &
 APP_PID=$!
@@ -182,7 +189,7 @@ if python3 -c 'import json,sys; sys.exit(0 if json.loads(sys.argv[1])["data"]["s
 	osascript -e 'tell application "Finder" to activate' >/dev/null 2>&1 || true
 	sleep 1.5
 	act "output stays on the TV while another app is active" output-native '' 'd["onScreen"] and d["shown"] and not d["hidesOnDeactivate"]'
-	osascript -e 'tell application "Godot" to activate' >/dev/null 2>&1 || true
+	osascript -e "tell application \"$APP_NAME\" to activate" >/dev/null 2>&1 || true
 	sleep 1
 fi
 
@@ -974,6 +981,8 @@ pixel "the output still shows the slide" "$OUT/output-during-error.png" has 1f3f
 act "dismiss the error" dismiss '' 'not s["dialog"].get("message") and s["dialog"].get("host", "") == ""'
 # Menus through the control API.
 act "Help ▸ About" menu '{"item":"about"}' 's["dialog"]["message"]["title"] == "About FreeBeams" and s["dialog"]["host"] == "main"'
+wait_idle
+shot about message
 act "close About" dismiss '' 'not s["dialog"].get("message")'
 act "unknown menu item is rejected" menu '{"item":"bogus"}' 'not r["ok"]'
 act "File ▸ New Schedule (clean schedule, no question)" menu '{"item":"new-schedule"}' 's["schedule"]["title"] == "Untitled" and not s["schedule"]["dirty"] and s["focus"] != "dialog"'
@@ -2647,11 +2656,44 @@ check "the drop went after the last row (auto-scrolled)" "$LAST" "len(s[\"schedu
 act "a click still selects a schedule row" click-schedule '{"index":14}' 's["schedule"]["selected"] == 14 and s["preview"]["title"] == "Amazing Grace" and s["focus"] == "list"'
 act "save the schedule (drag and drop)" save-schedule "{\"path\":\"$OUT/smoke-dragdrop.fbs\"}" 'not s["schedule"]["dirty"]'
 
+# ---- opening files (double-click, Open with, a second launch: open-files) -------------------
+# The installers register .fbs / .fws and .fbbible; a launch with such paths, or
+# a second launch handing them over, ends in open-files (internal/app/openfiles.go).
+OPEN_DIR="$OUT/open-files"
+rm -rf "$OPEN_DIR"
+mkdir -p "$OPEN_DIR"
+python3 - "$OPEN_DIR" <<'PY'
+import gzip, json, os, sys
+hdr = {"format": "freebeams-bible", "version": 1, "abbrev": "SMKO", "name": "Smoke Opened", "language": "en",
+       "copyright": "© 2026 Smoke Fixture", "verses": 1}
+body = json.dumps(hdr)[:-1] + ',\n"books":' + json.dumps({"John": {"1": {"1": "Smoke opened, John one one."}}}) + "}\n"
+with gzip.open(os.path.join(sys.argv[1], "SMKO.fbbible"), "wb") as f:
+    f.write(body.encode("utf-8"))
+open(os.path.join(sys.argv[1], "notes.txt"), "w").write("not openable")
+PY
+act "save the schedule to open it again" save-schedule "{\"path\":\"$OPEN_DIR/opened.fbs\"}" 'not s["schedule"]["dirty"]'
+OPEN_N="$(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST")"
+act "new schedule (open-files)" new-schedule '' 'len(s["schedule"]["items"]) == 0'
+act "open-files refuses what it cannot open" open-files "{\"paths\":[\"$OPEN_DIR/notes.txt\",\"$OPEN_DIR/missing.fbs\"]}" 'not r["ok"] and "nothing to open" in r["error"]'
+act "open-files takes a schedule and a package" open-files "{\"paths\":[\"$OPEN_DIR/SMKO.fbbible\",\"$OPEN_DIR/opened.fbs\"]}" 'r["ok"]'
+wait_idle
+wait_idle
+check "the schedule opened first" "$LAST" "s[\"schedule\"][\"path\"] == \"$OPEN_DIR/opened.fbs\" and len(s[\"schedule\"][\"items\"]) == $OPEN_N"
+check "then the package opened the Bible Manager with its licence question" "$LAST" 's["bibleManager"]["open"] and s["dialog"]["confirm"] == "Import Bible File" and "SMKO" not in s["bibles"]'
+shot open-files-bible dialog
+act "OK imports the opened package" accept '' 'r["ok"]'
+wait_idle
+check "SMKO is installed" "$LAST" '"SMKO" in s["bibles"]'
+act "remove SMKO (open-files)" bible-remove '{"abbrev":"SMKO","confirm":true}' 'r["ok"]'
+wait_idle
+act "close the manager (open-files)" bible-manager '{"action":"close"}' 'not s["bibleManager"]["open"]'
+grep -q "open: schedule $OPEN_DIR/opened.fbs" "$LOG" || fail "the log does not show the schedule being opened"
+
 # Open File Location last: the Finder window it opens takes the focus.
 act "Open File Location shows the square in the Finder" media-menu '{"item":"reveal","title":"smoke-square"}' 'r["ok"] and "file location" not in s["lastError"]'
 # The Finder window is now frontmost; an occluded Godot window stops redrawing (screenshots freeze), so come back.
 sleep 1
-osascript -e 'tell application "Godot" to activate' >/dev/null 2>&1 || true
+osascript -e "tell application \"$APP_NAME\" to activate" >/dev/null 2>&1 || true
 sleep 1
 
 # ---- quit ------------------------------------------------------------------------------------

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- shared-mime-info: the file types FreeBeams opens (installed into
+     share/mime/packages by install.sh; the AppImage carries it for integrators). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-freebeams-schedule">
+    <comment>FreeBeams schedule</comment>
+    <sub-class-of type="application/json"/>
+    <generic-icon name="x-office-presentation"/>
+    <glob pattern="*.fbs"/>
+    <glob pattern="*.fws"/>
+  </mime-type>
+  <mime-type type="application/x-freebeams-bible">
+    <comment>FreeBeams Bible package</comment>
+    <sub-class-of type="application/gzip"/>
+    <generic-icon name="x-office-document"/>
+    <glob pattern="*.fbbible"/>
+  </mime-type>
+</mime-info>

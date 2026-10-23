@@ -549,6 +549,9 @@ func (a *App) handleCommand(cmd *control.Command) {
 	case "new-schedule":
 		a.newSchedule()
 		ok()
+	case "open-files":
+		// Schedules and Bible packages, as a double-click opens them (openfiles.go).
+		a.openFilesCommand(cmd, append(args.Paths, args.Path))
 
 	// Keys and UI.
 	case "import-bibles":

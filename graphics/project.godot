@@ -35,5 +35,8 @@ textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.2118, 0.2118, 0.2118, 1)
 
 [physics]
+; No 3D physics anywhere: the custom engine template (bin/build-engine) has no
+; 3D physics engine, and this says so instead of a fallback warning at startup.
+3d/physics_engine="Dummy"
 common/physics_ticks_per_second=1
 common/enable_pause_aware_picking=false

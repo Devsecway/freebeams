@@ -374,6 +374,16 @@ internal/app               Godot: the App node that wires store + presenter + ui
   `--force` and the entitlements in `packaging/macos/entitlements.plist`.
 - Never run `gd build` while the exported app is running from `releases/`: the export replaces the bundle in place.
 
+- Release exports use FreeBeams' own engine template (`bin/build-engine`, `docs/RELEASE.md` "The engine template"):
+  classes the Go code does not link are compiled out (`packaging/engine/freebeams.build`). After using a new engine
+  class, rerun `go run packaging/engine/profile.go <godot src> packaging/engine/freebeams.build` and check an export
+  with `SMOKE_APP=…/MacOS/FreeBeams test/smoke.sh`: a missing class logs `null bind` / `Parameter "mb" is null`.
+  Godot binds some `Mesh` methods in `ArrayMesh::_bind_methods`, hence `ArrayMesh` in `packaging/engine/keep.txt`.
+- An rpath given through FFmpeg's configure `--extra-ldflags` loses its `$ORIGIN` to the quoting: `bin/build-ffmpeg`
+  sets it with `patchelf --set-rpath '$ORIGIN'` after the install.
+- `bin/release-dmg` adds files to `Contents/Resources` after the export, so it re-signs ad hoc; dmgbuild writes the
+  DMG window layout itself (no Finder scripting or TCC prompt).
+
 ## Conventions
 - Errors are wrapped with context (`fmt.Errorf("load song %d: %w", id, err)`). No panics in library code.
 - Table-driven tests. Tests that need the local EasyWorship install (`/Users/Shared/Softouch/...`) call `t.Skip` when it is absent.

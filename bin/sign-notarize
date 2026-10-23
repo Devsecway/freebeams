@@ -176,8 +176,10 @@ DMG="$ROOT/releases/FreeBeams-$V-macOS.dmg"
 if [ "$SKIP_BUILD" = "1" ]; then
 	echo "==> skipping the build (SKIP_BUILD=1)"
 else
-	echo "==> GOOS=macos bin/gd build"
-	GOOS=macos "$ROOT/bin/gd" build
+	# The custom engine template, the licence files and the document icons
+	# (bin/release-dmg --app-only); signed for real below.
+	echo "==> bin/release-dmg --app-only"
+	"$ROOT/bin/release-dmg" --app-only
 fi
 [ -d "$APP" ] || fail "$APP not found"
 

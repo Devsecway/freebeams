@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the Linux bundle (freebeams + linux_<arch>.so) and package it as a
-# tar.gz and an AppImage.
+# tar.xz and an AppImage.
 #
 # Runs on Linux only, natively (the glibc build and the AppImage tooling are
 # Linux-only; GOARCH must be the host's). Build on an old-enough distro
@@ -9,8 +9,12 @@
 #
 # Outputs (<v> = bin/version, <arch> = GOARCH):
 #   releases/linux/<arch>/                             freebeams, linux_<arch>.so, freebeams.sh,
-#                                                      ffmpeg, ffprobe, FFMPEG-*.txt (LGPL, bin/build-ffmpeg)
-#   releases/FreeBeams-<v>-linux-<arch>.tar.gz       the portable bundle
+#                                                      ffmpeg, ffprobe, lib*.so.*, FFMPEG-*.txt
+#                                                      (LGPL, bin/build-ffmpeg), LICENSE.txt,
+#                                                      THIRD-PARTY-NOTICES.txt
+#   releases/FreeBeams-<v>-linux-<arch>.tar.xz       the portable bundle, with install.sh,
+#                                                      README.txt and share/ (desktop entry,
+#                                                      AppStream, MIME types, icons)
 #   releases/FreeBeams-<v>-<x86_64|aarch64>.AppImage (NO_APPIMAGE=1 skips it)
 #
 # appimagetool is downloaded into ~/.cache/freebeams when missing
@@ -50,10 +54,22 @@ V="$("$ROOT/bin/version")"
 
 # --- build -------------------------------------------------------------------
 # gd compiles with the system gcc (or zig when it is on PATH), then exports
-# the "Linux x86_64" / "Linux arm64" preset headlessly.
+# the "Linux x86_64" / "Linux arm64" preset headlessly, with bin/build-engine's
+# size-optimised template (x86_64; cached after the first build) unless
+# STOCK_ENGINE=1.
+if [ "${STOCK_ENGINE:-0}" != "1" ] && [ "$GOARCH" = amd64 ]; then
+	step "engine template"
+	"$ROOT/bin/build-engine" linux >/dev/null
+	"$ROOT/bin/build-engine" --use linux
+	trap '"$ROOT/bin/build-engine" --restore' EXIT
+else
+	echo "    stock engine template"
+fi
 step "GOOS=linux GOARCH=$GOARCH bin/gd build"
 rc=0
 GOOS=linux "$ROOT/bin/gd" build || rc=$?
+"$ROOT/bin/build-engine" --restore
+trap - EXIT
 # Godot's headless export can crash on teardown on GPU-less machines after
 # writing the binary, so trust the artifacts, not only the exit status.
 if [ ! -f "$BIN" ] || [ ! -f "$SO" ]; then
@@ -69,41 +85,75 @@ step "version $V"
 # --- bundle ------------------------------------------------------------------
 # The exported binary embeds the .pck; its library.gdextension points at
 # linux_<arch>.so, which Godot loads from the binary's own directory.
-step "bundle the .so and launcher next to the binary"
+step "bundle the .so, the launcher and the licences next to the binary"
 cp -f "$SO" "$OUT/"
 cp -f packaging/linux/AppRun "$OUT/freebeams.sh"
+cp -f LICENSE "$OUT/LICENSE.txt"
+cp -f THIRD-PARTY-NOTICES.txt "$OUT/THIRD-PARTY-NOTICES.txt"
 chmod +x "$BIN" "$OUT/freebeams.sh"
 
-# ffmpeg + ffprobe beside the binary: the media player, poster frames and
-# metadata (docs/MEDIA.md). bin/build-ffmpeg builds the pinned, checksummed
-# LGPL release once into its cache; NO_FFMPEG=1 skips it (the app then uses an
-# ffmpeg on PATH, or plays only Theora backgrounds).
-FFMPEG_BUNDLE=(ffmpeg ffprobe FFMPEG-LICENSE.txt FFMPEG-NOTICE.txt)
+# ffmpeg + ffprobe and the FFmpeg libraries they share, beside the binary: the
+# media player, poster frames and metadata (docs/MEDIA.md). bin/build-ffmpeg
+# builds the pinned, checksummed LGPL release once into its cache; NO_FFMPEG=1
+# skips it (the app then uses an ffmpeg on PATH, or plays only Theora backgrounds).
 step "bundle ffmpeg"
 if [ "${NO_FFMPEG:-0}" = "1" ]; then
 	echo "    skipped (NO_FFMPEG=1)"
-	FFMPEG_BUNDLE=()
 else
 	"$ROOT/bin/build-ffmpeg"
 	FF="$("$ROOT/bin/build-ffmpeg" --prefix)"
-	cp -f "$FF/bin/ffmpeg" "$FF/bin/ffprobe" "$OUT/"
+	cp -f "$FF"/bin/* "$OUT/"
 	cp -f "$FF/LICENSE.txt" "$OUT/FFMPEG-LICENSE.txt"
 	cp -f "$FF/NOTICE.txt" "$OUT/FFMPEG-NOTICE.txt"
 	chmod +x "$OUT/ffmpeg" "$OUT/ffprobe"
 	"$OUT/ffmpeg" -hide_banner -version | head -n 1
+	# The libraries resolve beside the programs ($ORIGIN), not from the system.
+	if command -v ldd >/dev/null 2>&1; then
+		ldd "$OUT/ffmpeg" | grep -E 'libav|libsw' | grep -v "$(cd "$OUT" && pwd)" && fail "ffmpeg loads FFmpeg libraries from outside the bundle"
+	fi
 fi
 
-step "tar.gz"
-TGZ="releases/FreeBeams-$V-linux-$GOARCH.tar.gz"
+# share/: the desktop entry, AppStream metadata, MIME types and icons, laid out
+# the way install.sh and the AppImage want them.
+ID=com.devsecway.freebeams
+share_tree() { # share_tree DIR: writes DIR/share
+	local d="$1/share"
+	mkdir -p "$d/applications" "$d/metainfo" "$d/mime/packages" "$d/icons"
+	cp -f "packaging/linux/$ID.desktop" "$d/applications/"
+	sed -e "s/@VERSION@/$V/" -e "s/@DATE@/$(date -u +%Y-%m-%d)/" "packaging/linux/$ID.metainfo.xml" >"$d/metainfo/$ID.metainfo.xml"
+	cp -f packaging/linux/freebeams-mime.xml "$d/mime/packages/"
+	cp -R packaging/linux/icons/hicolor "$d/icons/"
+}
+step "check the desktop entry and the AppStream metadata"
+check_dir="$(mktemp -d -t freebeams-check.XXXXXX)"
+share_tree "$check_dir"
+if command -v desktop-file-validate >/dev/null 2>&1; then
+	desktop-file-validate "$check_dir/share/applications/$ID.desktop"
+else
+	echo "    desktop-file-validate not found (desktop-file-utils): not checked"
+fi
+if command -v appstreamcli >/dev/null 2>&1; then
+	appstreamcli validate --no-net --explain "$check_dir/share/metainfo/$ID.metainfo.xml"
+else
+	echo "    appstreamcli not found (appstream): not checked"
+fi
+rm -rf "$check_dir"
+
+# --- tarball -------------------------------------------------------------------
+step "tar.xz"
+TXZ="releases/FreeBeams-$V-linux-$GOARCH.tar.xz"
 STAGE="$(mktemp -d -t freebeams-linux.XXXXXX)"
 trap 'rm -rf "$STAGE"' EXIT
-mkdir -p "$STAGE/FreeBeams-$V"
-cp -R "$OUT"/. "$STAGE/FreeBeams-$V/"
-cp -f graphics/icon.png "$STAGE/FreeBeams-$V/freebeams.png"
-cp -f packaging/linux/freebeams.desktop "$STAGE/FreeBeams-$V/"
-rm -f "$TGZ"
-tar -C "$STAGE" -czf "$TGZ" "FreeBeams-$V"
-ls -lh "$TGZ"
+T="$STAGE/FreeBeams-$V"
+mkdir -p "$T"
+cp -R "$OUT"/. "$T/"
+cp -f packaging/linux/install.sh "$T/"
+sed "s/@VERSION@/$V/" packaging/linux/README.txt >"$T/README.txt"
+share_tree "$T"
+chmod +x "$T/install.sh"
+rm -f "$TXZ"
+tar -C "$STAGE" -cf - "FreeBeams-$V" | xz -9e -T0 >"$TXZ"
+ls -lh "$TXZ"
 
 # --- AppImage ----------------------------------------------------------------
 step "AppImage"
@@ -113,14 +163,16 @@ else
 	APPDIR="releases/linux/FreeBeams-$GOARCH.AppDir"
 	rm -rf "$APPDIR"
 	mkdir -p "$APPDIR/usr/bin"
-	cp -f "$BIN" "$SO" "$APPDIR/usr/bin/"
-	for f in ${FFMPEG_BUNDLE[@]+"${FFMPEG_BUNDLE[@]}"}; do
-		cp -f "$OUT/$f" "$APPDIR/usr/bin/"
+	# Everything that sits beside the binary in the bundle: the .so, ffmpeg
+	# and its libraries, the licences.
+	for f in "$OUT"/*; do
+		[ "$(basename "$f")" = freebeams.sh ] || cp -f "$f" "$APPDIR/usr/bin/"
 	done
+	share_tree "$APPDIR/usr"
 	cp -f packaging/linux/AppRun "$APPDIR/AppRun"
-	cp -f packaging/linux/freebeams.desktop "$APPDIR/"
-	cp -f graphics/icon.png "$APPDIR/freebeams.png"
-	cp -f graphics/icon.png "$APPDIR/.DirIcon"
+	cp -f "packaging/linux/$ID.desktop" "$APPDIR/"
+	cp -f packaging/linux/icons/hicolor/256x256/apps/freebeams.png "$APPDIR/freebeams.png"
+	cp -f packaging/linux/icons/hicolor/256x256/apps/freebeams.png "$APPDIR/.DirIcon"
 	chmod +x "$APPDIR/AppRun" "$APPDIR/usr/bin/freebeams"
 
 	TOOL="${APPIMAGETOOL:-$HOME/.cache/freebeams/appimagetool-$APPIMAGE_ARCH.AppImage}"
@@ -136,11 +188,16 @@ else
 	rm -f "$APPIMAGE"
 	# APPIMAGE_EXTRACT_AND_RUN lets appimagetool (itself an AppImage) run on
 	# machines without FUSE, such as CI runners. ARCH is required by the tool.
-	ARCH="$APPIMAGE_ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" "$APPDIR" "$APPIMAGE"
+	# zstd at its highest level with 1 MiB blocks: the smallest image the
+	# AppImage runtime still mounts quickly.
+	ARCH="$APPIMAGE_ARCH" APPIMAGE_EXTRACT_AND_RUN=1 VERSION="$V" "$TOOL" --comp zstd \
+		--mksquashfs-opt -Xcompression-level --mksquashfs-opt 22 \
+		--mksquashfs-opt -b --mksquashfs-opt 1M \
+		"$APPDIR" "$APPIMAGE"
 	[ -f "$APPIMAGE" ] || fail "$APPIMAGE was not produced"
 	ls -lh "$APPIMAGE"
 fi
 
 step "done"
 echo "bundle: $OUT/"
-echo "tar.gz: $TGZ"
+echo "tar.xz: $TXZ"

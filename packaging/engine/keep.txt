@@ -1,0 +1,19 @@
+# Engine classes the custom templates keep although nothing in the project names
+# them (packaging/engine/profile.go). One class per line.
+#
+# Theora backgrounds: Godot loads .ogv files into these, the Go code only sees
+# the VideoStream base.
+VideoStreamTheora
+# Ogg Vorbis audio inside .ogv files and sound effects.
+AudioStreamOggVorbis
+# Image formats Godot decodes at runtime (media thumbnails, backgrounds).
+ImageTexture
+PortableCompressedTexture2D
+# The project icon (config/icon) is loaded as an imported texture at startup.
+CompressedTexture2D
+# Short sound files Godot can decode itself.
+AudioStreamWAV
+# Mesh's create_outline / generate_triangle_mesh / create_*_shape are bound in
+# ArrayMesh::_bind_methods (on Mesh, by their pointer type): graphics.gd links
+# them through Mesh, so ArrayMesh must register.
+ArrayMesh

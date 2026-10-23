@@ -147,8 +147,11 @@ Conventions for contributors (state machine UI, package dependency rules, Godot 
 
 ## Licensing
 
-- The code has no licence file yet; until one is added it is all rights reserved by the authors.
-- The bundled Bibles (KJV, ASV) are public domain. Other translations enter a library only through your own
+- FreeBeams is released under the [MIT License](LICENSE) (Copyright (c) 2026 Devsecway).
+- [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) lists the components every package carries (Godot, graphics.gd,
+  the Go modules, SQLite, the SCOWL word list, FFmpeg, the bundled Bibles) with their licence texts; both files ship
+  inside every package and Help ▸ About names them. `packaging/notices/make-notices.sh` regenerates the notices.
+- The bundled Bibles (KJV, ASV, RVA 1909) are public domain. Other translations enter a library only through your own
   import, and you are responsible for holding a licence for them.
 - The logo and wordmark are original work for this project ([docs/branding/README.md](docs/branding/README.md)).
   EasyWorship is a trademark of Softouch Development; FreeBeams is not affiliated with it.

@@ -2,9 +2,12 @@ package control
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -108,5 +111,42 @@ func TestActionDispatch(t *testing.T) {
 	resp, body = do(t, ts, "GET", "/screenshot?window=output", "test-key", "")
 	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/png" || body != "\x89PNGoutput" {
 		t.Fatalf("screenshot: %d %q %q", resp.StatusCode, resp.Header.Get("Content-Type"), body)
+	}
+}
+
+func TestInstanceForward(t *testing.T) {
+	t.Setenv(KeyEnv, "instance-key")
+	s := New(0)
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		cmd := <-s.Commands()
+		if cmd.Action != "open-files" || string(cmd.Data) != `{"paths":["/a.fbs"]}` {
+			cmd.RespondErr(fmt.Errorf("unexpected %s %s", cmd.Action, cmd.Data))
+			return
+		}
+		cmd.Respond(Result{OK: true})
+	}()
+	path := InstancePath(filepath.Join(t.TempDir(), "library.db"))
+	if err := WriteInstance(path, s); err != nil {
+		t.Fatal(err)
+	}
+	in, err := ReadInstance(path)
+	if err != nil || in.Addr != s.Addr() || in.Key != "instance-key" || in.PID != os.Getpid() {
+		t.Fatalf("ReadInstance = %+v, %v", in, err)
+	}
+	if err := Forward(in, "open-files", map[string][]string{"paths": {"/a.fbs"}}); err != nil {
+		t.Fatalf("Forward: %v", err)
+	}
+	if err := Forward(Instance{Addr: in.Addr, Key: "wrong"}, "open-files", nil); err == nil {
+		t.Fatal("Forward with a wrong key succeeded")
+	}
+	RemoveInstance(path, s)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("instance file still there: %v", err)
+	}
+	if _, err := ReadInstance(path); err == nil {
+		t.Fatal("ReadInstance of a removed file succeeded")
 	}
 }
