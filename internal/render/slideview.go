@@ -643,6 +643,11 @@ func (l *layer) apply(vis visual, r layout.Rect, s float64) {
 		bc := l.body.AsControl()
 		bc.SetGrowHorizontal(hGrow(th.HAlign))
 		bc.SetGrowVertical(vGrow(th.VAlign))
+		// Shape the new text in the new style before sizing: the label's
+		// minimum size is only refreshed when it shapes, and a stale one
+		// (the previous, taller text) clamped a short box and pushed the
+		// words below a lower third.
+		_ = l.body.GetLineCount()
 		placeScaled(bc, boxes.Body.Scale(s), k)
 		l.body.AsCanvasItem().SetVisible(true)
 	} else {

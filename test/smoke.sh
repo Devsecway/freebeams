@@ -1403,7 +1403,6 @@ tp_live() {
 	act "select the $1 item" select-schedule "{\"index\":$TP_ROW}" "s[\"preview\"][\"theme\"] == \"$1\""
 	act "the $1 item goes live" go-live '' "s[\"live\"][\"theme\"] == \"$1\""
 	wait_idle
-	sleep 0.8 # the transition settings an earlier block chose (a push moves the text, not the band)
 }
 # luma FILE X0 Y0 X1 Y1: the mean luminance (0..255) of a region of a screenshot.
 luma() {
@@ -1437,6 +1436,9 @@ log "lower third: luminance above the band $TP_TOP, in the band (left edge) $TP_
 log "ok: the lower third draws its band"
 pixel "Scripture Lower Third: the words sit in the bottom third" "$OUT/builtin-scripture-lower-third.png" lacks ffffff 0.0 0.0 1.0 0.6 20
 pixel "Scripture Lower Third: white words in the band" "$OUT/builtin-scripture-lower-third.png" has ffffff 0.0 0.66 1.0 1.0 300
+# Shown after the taller High Contrast text, the words must still fit the short box (a stale label
+# minimum size once pushed them past the bottom edge).
+pixel "Scripture Lower Third: no words below the text box" "$OUT/builtin-scripture-lower-third.png" lacks ffffff 0.0 0.95 1.0 1.0 20
 
 # Duplicate, export, delete, import: the round trip keeps the look.
 act "Themes tab (polish)" tab '{"tab":"themes"}' 's["tab"] == 4'

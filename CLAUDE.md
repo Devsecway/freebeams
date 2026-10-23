@@ -156,6 +156,9 @@ internal/app               Godot: the App node that wires store + presenter + ui
   matching file to compile, so keep the data files in place when regenerating.
 - Go 1.27's `encoding/json` error strings name `jsontext.Value` internals; never assert on them. Decode objects with
   `json.Decoder` tokens to keep document order and own the error texts.
+- A `Label`'s minimum size is refreshed only when it shapes. Sizing it right after `SetText` / a `LabelSettings`
+  change clamps it to the *previous* text's minimum (a lower-third box grew past the slide's bottom edge). Call a
+  shaping getter (`GetLineCount()`) before `SetSize` (`render/slideview.go` `apply`).
 - `ui.ConfirmDialog` is a fixed 420×150 window: a question longer than a heading line plus one sentence pushes
   OK/Cancel out of view (see `core.BibleFileQuestion`).
 - Two first-run imports writing the same table race on a unique key; tell the second about the first
