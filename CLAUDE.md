@@ -142,6 +142,8 @@ internal/app               Godot: the App node that wires store + presenter + ui
   rows top-down: usable as `image.RGBA.Pix`. Fill it opaque black first so premultiplied == straight.
 - Adding a field to a gofmt-aligned struct or map literal in a shared file realigns the whole block. Put new fields in
   their own blank-line-separated block to keep diffs additive and merges clean (several agents edit these files).
+- macOS bash 3.2 answers `PATH=… command -v x` from its hash once the script has run `x`: test a changed PATH in
+  a subshell, `(PATH=… && command -v x)` (the smoke test's no-ffmpeg run).
 - A smoke block that adds a schedule item late must `save-schedule` before `# ---- quit`, or the close question makes
   "the app did not exit after quit" fail.
 - Draw calls from a `draw` signal handler (`CanvasItem.OnDraw`) work, but end the handler with a getter (`ci.Visible()`)
