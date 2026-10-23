@@ -297,7 +297,7 @@ func (a *App) render() {
 	// Monitors and the output (SetFrame is idempotent per Seq / content).
 	a.previewView.SetFrame(a.pres.PreviewFrame())
 	live := a.pres.LiveFrame()
-	a.liveView.SetTransition(a.settings.Transition) // the output's view: renderTransition below, once it exists
+	a.applyTransitions(a.liveView) // the output's view: renderTransition below, once it exists (transitions.go)
 	a.liveView.SetFrame(live)
 	screen := a.outputScreen() // the configured display, if connected (settings.go)
 	switch {
@@ -308,7 +308,7 @@ func (a *App) render() {
 	case st.OutputEnabled && a.out.Screen() != screen:
 		a.out.Open(screen) // the output display setting changed: move it
 	}
-	a.renderTransition(a.settings.Transition)
+	a.renderTransition()
 	a.out.SetFrame(live)
 	a.renderPlayback() // the monitors' players and transport bars (playback.go)
 

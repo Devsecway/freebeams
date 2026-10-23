@@ -42,6 +42,9 @@ type SettingsValues struct {
 
 	// Alerts is Options ▸ Alerts (alertsettings.go).
 	Alerts models.AlertStyles
+
+	// Screens are the Black, Clear and Logo transitions (settings_screens.go).
+	Screens models.ScreenTransitions
 }
 
 // ScreenRow is one display in the output picker.
@@ -109,6 +112,10 @@ type SettingsDialog struct {
 	// OnAlertStyles reports a change on the Alerts page.
 	OnAlertStyles func(models.AlertStyles)
 
+	// OnScreenTransition reports a new Black, Clear or Logo transition
+	// (settings_screens.go).
+	OnScreenTransition func(models.OutputMode, models.ScreenTransition)
+
 	// LogoPreview hosts the app's render of the logo screen (a SlideView).
 	LogoPreview *MonitorHost
 
@@ -142,6 +149,8 @@ type SettingsDialog struct {
 	rendering   bool
 
 	stage *stagePage // the Stage Display section (settings_stage.go)
+
+	screenCtl []*screenControls // the Black / Clear / Logo rows (settings_screens.go)
 }
 
 // NewSettingsDialog builds the dialog. MainWindow adds AsWindow() to the tree.
@@ -294,10 +303,9 @@ func (d *SettingsDialog) buildTransitionPage() Control.Instance {
 	return page(card("Slide Transition",
 		settingRow("Transition", d.kind.AsControl()),
 		settingRow("Duration", d.duration.AsControl()),
-		hint("Used by the Live monitor and the output for slide changes and for Black, Clear and Logo. Directional "+
-			"transitions name the direction of motion: Push Left pushes the old slide off to the left. Thumbnails and the "+
-			"Preview monitor cut."),
-	))
+		hint("Used by the Live monitor and the output for slide changes. Directional transitions name the direction of "+
+			"motion: Push Left pushes the old slide off to the left. Thumbnails and the Preview monitor cut."),
+	), d.buildScreenTransitionsCard())
 }
 
 func (d *SettingsDialog) buildLogoPage() Control.Instance {
@@ -501,6 +509,7 @@ func (d *SettingsDialog) render() {
 	}
 	d.duration.AsRange().SetValueNoSignal(Float.X(d.values.Transition.Duration.Milliseconds()))
 	d.duration.SetEditable(d.values.Transition.Kind != models.TransitionCut) // a cut has no duration
+	d.renderScreenTransitions()
 
 	// Logo and library.
 	d.logoLbl.SetText(d.values.Logo)
