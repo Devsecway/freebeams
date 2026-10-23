@@ -210,6 +210,9 @@ type App struct {
 	// published its control server for later launches to hand files to.
 	opening      core.OpenFiles
 	instanceFile string
+
+	// Files dropped from the Finder / Explorer (filedrop.go).
+	fdrop fileDropState
 }
 
 // New returns the app node; add it to the scene tree (main.go does this).

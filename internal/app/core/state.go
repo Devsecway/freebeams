@@ -269,6 +269,9 @@ type State struct {
 	// BibleManager is the Bible Manager: every translation it can add or
 	// remove, the Bibles folder and the running task (biblemanager.go).
 	BibleManager BibleManagerState `json:"bibleManager"`
+
+	// FileDrop is the last drop of files from the Finder (filedrop.go).
+	FileDrop FileDropState `json:"fileDrop"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -319,6 +322,8 @@ type StateInput struct {
 	TransitionProgress float64
 
 	BibleManager BibleManagerState
+
+	FileDrop FileDropState
 }
 
 // deckState summarises deck d with slide i selected.
@@ -417,6 +422,15 @@ func BuildState(in StateInput) State {
 	if st.Bundled.Skipped == nil {
 		st.Bundled.Skipped = []string{}
 	}
+
+	st.FileDrop = in.FileDrop
+	if st.FileDrop.Inserted == nil {
+		st.FileDrop.Inserted = []string{}
+	}
+	if st.FileDrop.Skipped == nil {
+		st.FileDrop.Skipped = []string{}
+	}
+
 	st.Bibles = make([]string, 0, len(in.Bibles))
 	for _, b := range in.Bibles {
 		st.Bibles = append(st.Bibles, b.Abbrev)

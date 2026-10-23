@@ -354,6 +354,12 @@ internal/app               Godot: the App node that wires store + presenter + ui
   tree: give it the theme explicitly (`ui.themeOf`). Plain Trees drag through `SetDragForwarding(drag, can, drop)`.
 - A drop target is only asked (`_can_drop_data`) while the pointer is over it; clear its drop feedback from a
   ticker (`GuiIsDragging`, pointer still inside) and on `NotificationDragEnd`, not from the last can-drop call.
+- An OS file drop (Finder / Explorer) is the root `Window`'s `files_dropped` (`Window.Instance.OnFilesDropped`), paths
+  only, and Godot sends no hover events before it: no drop feedback is possible while the files are dragged. Take the
+  position from `CanvasItem.GetGlobalMousePosition()` in the handler (the root viewport reads the OS cursor). Automation
+  synthesizes a drop by warping the pointer and `Object.Call(root, "emit_signal", "files_dropped", paths)` (a Go
+  `[]string` arrives as the handler's `[]string`); see `internal/app/filedrop.go`.
+- `/screenshot?window=dialog` of the message dialog is blank (one colour): shoot it with `window=message`.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

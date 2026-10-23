@@ -111,6 +111,8 @@ func (a *App) state() core.State {
 		TransitionProgress: a.transitionProgress(),
 
 		BibleManager: a.bibleManagerStateDoc(),
+
+		FileDrop: a.fdrop.last,
 	})
 }
 

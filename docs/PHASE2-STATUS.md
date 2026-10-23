@@ -794,9 +794,9 @@ Smoke on 2026-10-22: `test/smoke.sh` **PASS** (1145 checks; the drag and drop bl
 `test/splitters.sh` **PASS**.
 
 Limitations: the hook moves the real mouse pointer while it drags (an operator touching the mouse during a smoke
-run can disturb it); one item per drag (no multi-select drag of songs or tiles); dropping files from the Finder
-into the schedule is not handled; a drag that starts on an unselected row selects it (and previews it) first, as
-a click does.
+run can disturb it); one item per drag (no multi-select drag of songs or tiles); a drag that starts on an
+unselected row selects it (and previews it) first, as a click does. Files dropped from the Finder: see "Files
+dropped from the Finder" below.
 
 ### Shared files touched (drag and drop)
 
@@ -806,6 +806,35 @@ a click does.
 - `internal/app/app.go` (a `drop` field block), `events.go` (`addToSchedule` inserts while dropping;
   `selectSongAt`), `view.go` (`wireDragDrop`), `hooks.go` (`drag-to-schedule`), `control.go` (an `actionArgs` block: `at`).
 - `test/smoke.sh` (the `# ---- drag and drop` block, before Open File Location), `CLAUDE.md` (gotchas appended).
+
+## Files dropped from the Finder (or Explorer)
+
+Recorded 2026-10-24 on the same machine. As in EasyWorship, files dragged from the Finder land in the schedule or a
+library, so the pastor's slides or a video can go into the service minutes before it starts.
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Files dropped on the schedule are added to their library and inserted at the drop position, in drop order | **pass** | Godot reports an OS drop through the root window's `files_dropped` (paths only); `App.filesDropped` reads the pointer (`GetGlobalMousePosition`: the root viewport asks the OS cursor) and `MainWindow.FileDropAt` names the spot: the schedule column (header and list, not the audio playlist) with the `uicore.DropGap` under the pointer, a resource tab's button, or the shown tab's page. `core.PlanFileDrop` (`TestPlanFileDrop`, `TestDroppedKindOf`) sorts the paths; the media / presentation files are registered as the tabs' "+" does (`media.Scan` / `presentations.Scan`, existing items reused) and inserted from the gap through `insertingAt` + `addToSchedule`. Smoke: `two images dropped onto the empty schedule`, `a PDF dropped between them`. |
+| Without a pointer position the files go after the selected row | **pass** | `core.FileDropInsertAt` (`TestFileDropInsertAt`: gap, else after the selection, else the end). Smoke: `without a pointer the drop goes after the selected row` (`drop-files` mode `direct`). |
+| A presentation that is not rendered yet still goes in at once | **pass** | `core.PendingPresentationItem` ("Preparing slides…", no cache key); every render result fills the schedule's pending items of that document (`core.FillPendingPresentation`, `TestPendingPresentationFill`, called from `applyPresentationUpdate`), and Preview follows when the item is selected. Smoke: `the dropped PDF has its pages in the schedule` (2 slides; screenshot `file-drop-pdf.png`). |
+| Schedules and Bible packages | **pass** | A `.fbs` / `.fws` dropped on the schedule opens as File ▸ Open (asking about unsaved changes) and a `.fbbible` goes to the Bible Manager's Add, both through the open-files queue (`openPendingFiles`). One schedule per drop; the media and presentations dropped together with a schedule are skipped (the opened schedule would replace the one they go into). Smoke: `a schedule file dropped on the schedule opens it`. |
+| Dropping on the Media or Presentations tab adds to that library only | **pass** | The tab's button (the tab is then shown) or its page while shown; folders are scanned as Add Folder does. Smoke: `a folder dropped on the Media tab adds its images there only`, `a deck dropped on the Presentations tab adds it there only`. |
+| Unsupported files are skipped with one clear message | **pass** | `core.FileDropMessage` (`TestFileDropMessage`): one line per reason (not a usable file for that target, a folder on the schedule, not found, a second schedule, outside the targets), naming up to three files and counting the rest, in the "Add Files" message dialog. Smoke: `a mixed drop inserts what it can and names the rest` (screenshot `file-drop-message.png`), `files dropped outside the targets do nothing`; log hygiene clean. |
+| Control hook | **pass** | `drop-files {paths, target: schedule\|media\|presentations\|outside, at, mode}`: warps the pointer over the target (the schedule's gap `at`, the tab button, the Preview grid) and emits the root window's `files_dropped`, so the drop goes through the signal handler and its pointer lookup; mode `direct` calls the drop path with no pointer. Answered once the libraries have reloaded; `/state` `fileDrop {target, at, inserted, skipped, done}`. |
+
+Limitations: Godot sends no hover events for an OS drag, so there is no insertion line while the files are dragged
+over the schedule (the drop still lands at the gap under the pointer); folders dropped on the schedule are refused
+(they go onto the Media / Presentations tab); a drop on the audio playlist or the output window is not handled; a
+Keynote package (a folder on disk) counts as a folder; the hook cannot drag from the real Finder, it emits the
+signal Godot would.
+
+### Shared files touched (files dropped from the Finder)
+
+- New: `internal/app/core/filedrop.go` (+ test), `internal/app/filedrop.go`, `internal/ui/filedrop.go`.
+- `internal/app/app.go` (an `fdrop` field block), `view.go` (`wireFileDrop`), `hooks.go` (`drop-files`),
+  `control.go` (a `FileDrop` line in `state()`), `presentations.go` (one `fillDroppedPresentations` call in
+  `applyPresentationUpdate`), `core/state.go` (`FileDrop` blocks in `State` / `StateInput`, `BuildState`).
+- `test/smoke.sh` (the `# ---- files dropped from the Finder` block, after drag and drop).
 
 ## Bible Manager: add, remove and package Bibles
 
@@ -859,8 +888,8 @@ Recorded 2026-10-22 on the same machine. Formats, policy and behaviour: [BIBLES.
 - **Packaging** (PLAN §4 M6): the release build, scripts, CI workflows and docs are in place, see
   [RELEASE.md](RELEASE.md). Still open: signing and notarization (needs credentials), and the Windows and Linux
   builds, which are unverified until the release workflow has run.
-- Media library polish: audio (EasyWorship's `Audio` folder), dropping Finder files into the schedule, per-item titles and
-  tags, removing items whose files have gone missing.
+- Media library polish: audio (EasyWorship's `Audio` folder), per-item titles and tags, removing items whose files
+  have gone missing; an insertion line while Finder files hover the schedule (Godot reports OS drops only on release).
 - Presentations polish: verify `pdftoppm` and LibreOffice on a machine that has them (or bundle poppler in the
   release for Windows / Linux); per-page thumbnails for the Preview / Live grids; re-render a schedule
   presentation whose cache is gone and whose document is no longer in the library; speaker notes; a Windows PDF

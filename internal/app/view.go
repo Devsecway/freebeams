@@ -227,6 +227,8 @@ func (a *App) buildUI() {
 
 	a.wireDragDrop() // drag and drop into and within the schedule (dragdrop.go)
 
+	a.wireFileDrop() // files dropped from the Finder / Explorer (filedrop.go)
+
 	a.wireBibleManager() // the Bible Manager and Remove Bible… (biblemanager.go)
 }
 

@@ -146,6 +146,10 @@ func (a *App) handleHook(cmd *control.Command, args actionArgs) bool {
 		// A real drag through Godot's input pipeline into (or within) the
 		// schedule list (dragdrop.go).
 		a.dragToSchedule(cmd, args)
+	case "drop-files":
+		// Files dropped from the Finder: the root window's files_dropped at
+		// the target, or the drop path directly (filedrop.go).
+		a.dropFilesHook(cmd, args)
 	case "output-native":
 		// What the OS says about the projector window (macOS): on screen, level,
 		// hidden while the app is inactive. For the smoke test's app-switch check.
