@@ -822,6 +822,9 @@ library, so the pastor's slides or a video can go into the service minutes befor
 | Unsupported files are skipped with one clear message | **pass** | `core.FileDropMessage` (`TestFileDropMessage`): one line per reason (not a usable file for that target, a folder on the schedule, not found, a second schedule, outside the targets), naming up to three files and counting the rest, in the "Add Files" message dialog. Smoke: `a mixed drop inserts what it can and names the rest` (screenshot `file-drop-message.png`), `files dropped outside the targets do nothing`; log hygiene clean. |
 | Control hook | **pass** | `drop-files {paths, target: schedule\|media\|presentations\|outside, at, mode}`: warps the pointer over the target (the schedule's gap `at`, the tab button, the Preview grid) and emits the root window's `files_dropped`, so the drop goes through the signal handler and its pointer lookup; mode `direct` calls the drop path with no pointer. Answered once the libraries have reloaded; `/state` `fileDrop {target, at, inserted, skipped, done}`. |
 
+Smoke on 2026-10-24: `test/smoke.sh` **PASS** (1558 checks; the file drop block adds 27), log hygiene and the
+keepalive check clean; `test/splitters.sh` **PASS**.
+
 Limitations: Godot sends no hover events for an OS drag, so there is no insertion line while the files are dragged
 over the schedule (the drop still lands at the gap under the pointer); folders dropped on the schedule are refused
 (they go onto the Media / Presentations tab); a drop on the audio playlist or the output window is not handled; a
