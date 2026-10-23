@@ -630,6 +630,8 @@ func (a *App) screenshot(cmd *control.Command) {
 		png, err = a.stage.win.Screenshot()
 	case "stage-message":
 		png, err = render.WindowScreenshot(a.win.StageMessage.AsWindow())
+	case "media-properties":
+		png, err = render.WindowScreenshot(a.win.MediaProperties.AsWindow())
 	case "alert-manager", "alert-editor", "alert-fill", "nursery", "countdown":
 		w, _ := a.win.AlertWindow(cmd.Query["window"])
 		png, err = render.WindowScreenshot(w)

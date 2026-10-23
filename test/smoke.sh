@@ -1343,10 +1343,37 @@ PY
 	pb_wait "the clip stops at its end with loop off" 'not s["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 3.8'
 	act "toggle-play restarts a clip that ended" toggle-play '' 's["playback"]["live"]["playing"]'
 	act "loop on again" loop '{"on":true}' 's["playback"]["live"]["loop"]'
-	act "black stops the media" black '' 's["mode"] == "black" and not s["playback"]["live"]["media"]'
-	wait_idle # the fade to black ends: the player closes
-	act "black off brings the clip back" black '' 's["mode"] == "normal" and s["playback"]["live"]["media"] and s["playback"]["live"]["playing"] and s["playback"]["live"]["loop"]'
-	pb_wait "the clip plays again from the start" 's["playback"]["live"]["position"] > 0.1 and s["playback"]["live"]["position"] < 2.5 and s["playback"]["live"]["hasVideo"]'
+	# Black / Logo cover the clip but leave it playing (docs/MEDIA.md "Black,
+	# Clear and Logo"): the player is held open past the fade, keeps its
+	# position and its sound, and coming back shows the clip where it got to.
+	act "pause before Black" pause '' 'not s["playback"]["live"]["playing"]'
+	act "seek to 2 s before Black" seek '{"seconds":2.0}' 'r["ok"]'
+	pb_wait "the clip holds at 2 s" 'abs(s["playback"]["live"]["position"] - 2.0) < 0.15 and not s["playback"]["live"]["playing"]'
+	act "black hides the clip; its player stays open" black '' 's["mode"] == "black" and s["playback"]["live"]["media"] and s["playback"]["live"]["hidden"]'
+	wait_idle # the fade to black ends: the layers let go, the hold keeps the player
+	sleep 0.6
+	LAST="$(state)"
+	check "the position survives Black" "$LAST" 'abs(s["playback"]["live"]["position"] - 2.0) < 0.15 and s["playback"]["live"]["duration"] > 3.9 and s["playback"]["live"]["hasVideo"]'
+	act "play under Black (the sound goes on)" play '' 's["playback"]["live"]["playing"] and s["playback"]["live"]["hidden"]'
+	sleep 0.6
+	LAST="$(state)"
+	check "the position advances under Black" "$LAST" 's["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 2.3'
+	act "pause under Black" pause '' 'not s["playback"]["live"]["playing"]'
+	sleep 0.3
+	LAST="$(state)"
+	PB_POS="$(field "$LAST" playback.live.position)"
+	act "black off brings the clip back" black '' 's["mode"] == "normal" and s["playback"]["live"]["media"] and not s["playback"]["live"].get("hidden") and s["playback"]["live"]["loop"]'
+	check "the clip resumes where it was" "$LAST" "abs(s[\"playback\"][\"live\"][\"position\"] - $PB_POS) < 0.15"
+	act "logo over the clip keeps it too" logo '' 's["mode"] == "logo" and s["playback"]["live"]["hidden"]'
+	wait_idle
+	LAST="$(state)"
+	check "the position survives Logo" "$LAST" "abs(s[\"playback\"][\"live\"][\"position\"] - $PB_POS) < 0.15"
+	act "logo off" logo '' 's["mode"] == "normal" and not s["playback"]["live"].get("hidden")'
+	act "play again after Black" play '' 's["playback"]["live"]["playing"]'
+	pb_wait "the clip plays on from where it was" "s[\"playback\"][\"live\"][\"position\"] > $PB_POS + 0.2 or s[\"playback\"][\"live\"][\"position\"] < 1.0"
+	wait_idle
+	shot playback-after-black-output output
+	pixel "the output shows the clip again after Black" "$OUT/playback-after-black-output.png" has 2a7f62 0.25 0.25 0.75 0.75 10000
 	act "a seek without seconds is refused" seek '{}' 'not r["ok"]'
 	act "a bad target is refused" seek '{"seconds":1,"target":"output"}' 'not r["ok"]'
 	act "the preview's volume is its own" volume '{"value":0.25,"target":"preview"}' 's["playback"]["preview"]["volume"] == 0.25 and s["playback"]["live"]["volume"] == 1'
@@ -1378,9 +1405,76 @@ PY
 		grep -q 'the sound cannot play' "$LOG" && fail "the ffmpeg player could not decode a sound track"
 		log "ok: the ffmpeg player decoded every sound track"
 	fi
-	act "remove the clip" remove-media '{"title":"smoke-clip","confirm":true}' "s[\"media\"][\"count\"] == $PB_COUNT + 1"
+	# ---- media polish: posters, the resource preview's transport, Edit
+	# Properties…, Repeating and Aspect Ratio honoured by schedule items.
+	if [ "$PB_PLAYER" = "avfoundation" ]; then
+		check "posters come from AVFoundation" "$LAST" 's["media"]["posters"] == "avfoundation"'
+	fi
+	act "select the clip (resource preview)" select-media '{"title":"smoke-clip"}' 's["playback"]["resource"]["media"] and not s["playback"]["resource"]["playing"] and s["playback"]["resource"]["position"] == 0'
+	pb_wait "the resource preview opened its own player" 's["playback"]["resource"]["duration"] > 3.9 and s["playback"]["resource"]["hasVideo"]'
+	PB_LIVE_POS="$(field "$LAST" playback.live.position)"
+	wait_idle
+	shot resource-before-output output
+	act "play in the resource preview" play '{"target":"resource"}' 's["playback"]["resource"]["playing"] and not s["playback"]["live"]["playing"] and s["live"]["title"] == "smoke-tone"'
+	pb_wait "the resource preview plays" 's["playback"]["resource"]["position"] > 0.3'
+	check "the resource preview leaves the monitors alone" "$LAST" "not s[\"playback\"][\"live\"][\"playing\"] and abs(s[\"playback\"][\"live\"][\"position\"] - $PB_LIVE_POS) < 0.01 and not s[\"playback\"][\"preview\"][\"playing\"] and s[\"playback\"][\"preview\"][\"title\"] == \"smoke-clip\""
+	act "seek in the resource preview" seek '{"seconds":1.0,"target":"resource"}' 'r["ok"]'
+	act "the resource preview's volume is its own" volume '{"value":0.4,"target":"resource"}' 's["playback"]["resource"]["volume"] == 0.4 and s["playback"]["live"]["volume"] == 0.5'
+	wait_idle
+	shot resource-transport-main main
+	shot resource-after-output output
+	pixel "the output did not change while the resource preview played" "$OUT/resource-after-output.png" same "$OUT/resource-before-output.png"
+	act "pause the resource preview" pause '{"target":"resource"}' 'not s["playback"]["resource"]["playing"]'
+	# Edit Properties…: title, tags, Repeating, Aspect Ratio.
+	act "Edit Properties… opens" media-menu '{"item":"properties","title":"smoke-clip"}' 's["dialog"]["mediaProperties"]'
+	wait_idle
+	shot media-properties media-properties
+	act "properties: title, tags, play once, fit" media-properties '{"props":{"title":"Smoke Clip Once","tags":"smoke, Test ,smoke","repeat":"once","aspect":"fit"}}' 'r["ok"]'
+	LAST="$(state)"
+	check "the properties are applied" "$LAST" 'not s["dialog"].get("mediaProperties") and s["media"]["current"] == "Smoke Clip Once" and s["media"]["tags"] == "smoke, Test" and s["media"]["repeat"] == "once" and s["media"]["aspect"] == "fit"'
+	act "search finds the clip by its tag" search-media '{"q":"test"}' 's["media"]["results"] >= 1'
+	act "all media (properties)" search-media '{"q":""}' 's["media"]["kind"] == ""'
+	act "Edit Properties… again: cancel changes nothing" media-menu '{"item":"properties","title":"Smoke Clip Once"}' 's["dialog"]["mediaProperties"]'
+	act "cancel the properties" media-properties '{"cancel":true}' 'not s["dialog"].get("mediaProperties") and s["media"]["current"] == "Smoke Clip Once"'
+	# The schedule item takes the item's Repeating (once) and Aspect Ratio (fit).
+	act "add the clip to the schedule (play once, fit)" add-to-schedule '{"source":"media"}' 's["schedule"]["items"][-1] == "Smoke Clip Once"'
+	PB_ROW="$(python3 -c 'import json,sys; d = json.loads(sys.argv[1])["data"]; print(len(d.get("state", d)["schedule"]["items"]) - 1)' "$LAST")"
+	act "select the clip's schedule item" select-schedule "{\"index\":$PB_ROW}" 's["preview"]["title"] == "Smoke Clip Once"'
+	act "the schedule item goes live, not looping" go-live '' 's["live"]["title"] == "Smoke Clip Once" and s["playback"]["live"]["playing"] and not s["playback"]["live"]["loop"]'
+	pb_wait "repeat off: the clip stops at its end" 'not s["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 3.8'
+	wait_idle
+	shot playback-fit-output output
+	# The clip is 16:9 like the canvas, so fit shows no bars here; the square
+	# clip below checks the letterbox.
+	pixel "fit: the 16:9 clip fills the output" "$OUT/playback-fit-output.png" has 2a7f62 0.02 0.3 0.1 0.7 2000
+	PB_SQ="$OUT/playback-square"
+	rm -rf "$PB_SQ"
+	mkdir -p "$PB_SQ"
+	ffmpeg -v error -y -f lavfi -i "color=c=0x2a7f62:s=240x240:r=30:d=3" \
+		-vf "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
+		-c:v libx264 -preset veryfast "$PB_SQ/smoke-square-clip.mp4" || fail "ffmpeg could not make the square clip"
+	act "add the square clip" add-media "{\"path\":\"$PB_SQ\"}" 'r["ok"]'
+	act "select the square clip" select-media '{"title":"smoke-square-clip"}' 's["media"]["current"] == "smoke-square-clip"'
+	act "square clip: Aspect Ratio ▸ Fit" media-menu '{"item":"aspect-fit"}' 's["media"]["aspect"] == "fit"'
+	act "the square clip goes live" go-live '' 's["live"]["title"] == "smoke-square-clip" and s["playback"]["live"]["media"]'
+	pb_wait "the square clip plays" 's["playback"]["live"]["position"] > 0.3 and s["playback"]["live"]["hasVideo"]'
+	wait_idle
+	shot playback-square-fit-output output
+	pixel "fit letterboxes the square clip: black bars beside it" "$OUT/playback-square-fit-output.png" has 000000 0.03 0.3 0.18 0.7 2000
+	pixel "fit: the square clip in the middle" "$OUT/playback-square-fit-output.png" has 2a7f62 0.4 0.3 0.6 0.7 2000
+	pixel "fit: no clip at the edges" "$OUT/playback-square-fit-output.png" lacks 2a7f62 0.02 0.3 0.15 0.7 50
+	act "the square clip back to Fill" media-menu '{"item":"aspect-fill"}' 's["media"]["aspect"] == "fill"'
+	act "the square clip goes live filled" go-live '' 's["live"]["title"] == "smoke-square-clip"'
+	pb_wait "the filled square clip plays" 's["playback"]["live"]["position"] > 0.3'
+	wait_idle
+	shot playback-square-fill-output output
+	pixel "fill covers the canvas with the square clip" "$OUT/playback-square-fill-output.png" has 2a7f62 0.02 0.3 0.15 0.7 2000
+	act "remove the clip's schedule item" remove-schedule "{\"index\":$PB_ROW}" "len(s[\"schedule\"][\"items\"]) == $PB_ROW"
+	act "save the schedule (playback)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+	act "remove the square clip" remove-media '{"title":"smoke-square-clip","confirm":true}' 'r["ok"]'
+	act "remove the clip" remove-media '{"title":"Smoke Clip Once","confirm":true}' "s[\"media\"][\"count\"] == $PB_COUNT + 1"
 	act "remove the tone" remove-media '{"title":"smoke-tone","confirm":true}' "s[\"media\"][\"count\"] == $PB_COUNT and s[\"media\"][\"audio\"] == $PB_AUDIO"
-	check "the tone keeps playing from the live deck" "$LAST" 's["live"]["title"] == "smoke-tone" and s["playback"]["live"]["media"]'
+	check "the square clip keeps playing from the live deck" "$LAST" 's["live"]["title"] == "smoke-square-clip" and s["playback"]["live"]["media"]'
 	act "Songs tab (playback)" tab '{"tab":"songs"}' 's["tab"] == 0'
 else
 	log "playback: skipped (ffmpeg=$FFMPEG native=$PB_NATIVE player=$PB_PLAYER)"
@@ -2591,4 +2685,71 @@ if [ -n "$BAD" ]; then
 	fail "the app log has errors or warnings"
 fi
 grep -q 'shutting down' "$LOG" || fail "no clean shutdown in the log"
+
+# ---- poster frames without ffmpeg (macOS) ----------------------------------------------------
+# A second, short run on a fresh library and cache with ffmpeg / ffprobe
+# hidden from PATH: AVFoundation (AVAssetImageGenerator) must still give the
+# playback block's clip a poster frame and a duration.
+if [ "${PB_PLAYER:-}" = "avfoundation" ] && [ -f "$OUT/playback/smoke-clip.mp4" ]; then
+	NOFF_BIN="$OUT/noffmpeg-bin"
+	rm -rf "$NOFF_BIN"
+	NOFF_PATH=""
+	IFS=: read -r -a PATH_DIRS <<<"$PATH"
+	for d in "${PATH_DIRS[@]}"; do
+		if [ -e "$d/ffmpeg" ] || [ -e "$d/ffprobe" ]; then
+			shadow="$NOFF_BIN/$(printf '%s' "$d" | tr '/' '_')"
+			mkdir -p "$shadow"
+			for f in "$d"/*; do
+				case "$(basename "$f")" in ffmpeg | ffprobe) ;; *) ln -s "$f" "$shadow/" 2>/dev/null ;; esac
+			done
+			d="$shadow"
+		fi
+		NOFF_PATH="${NOFF_PATH:+$NOFF_PATH:}$d"
+	done
+	PATH="$NOFF_PATH" command -v ffmpeg >/dev/null && fail "could not hide ffmpeg from PATH"
+	NOFF_LIB="$(mktemp -t freebeams-noffmpeg)"
+	NOFF_CACHE="$OUT/noffmpeg-cache"
+	NOFF_LOG="$OUT/app-noffmpeg.log"
+	rm -rf "$NOFF_CACHE" "$OUT/noffmpeg-bibles"
+	mkdir -p "$NOFF_CACHE" "$OUT/noffmpeg-bibles"
+	log "relaunching with ffmpeg hidden from PATH"
+	(
+		cd "$ROOT" || exit 1
+		export PATH="$NOFF_PATH" FREEBEAMS_LIBRARY="$NOFF_LIB" FREEBEAMS_CONTROL_KEY="$KEY" FREEBEAMS_CACHE="$NOFF_CACHE" \
+			FREEBEAMS_BIBLES_DIR="$OUT/noffmpeg-bibles"
+		unset FREEBEAMS_FFMPEG_DIR FREEBEAMS_PLAYER
+		exec "$ROOT/bin/gd" run
+	) >"$NOFF_LOG" 2>&1 &
+	APP_PID=$!
+	LOG="$NOFF_LOG"
+	BASE=""
+	for _ in $(seq 1 600); do
+		BASE="$(grep -m1 -o 'Control server: http://[0-9.:]*' "$NOFF_LOG" | sed 's/^Control server: //')"
+		[ -n "$BASE" ] && break
+		app_running || fail "the app (no ffmpeg) exited before starting the control server"
+		sleep 0.5
+	done
+	[ -n "$BASE" ] || fail "no 'Control server:' line in $NOFF_LOG"
+	wait_idle
+	act "no ffmpeg: the tools are missing, AVFoundation takes the posters" tab '{"tab":"media"}' 'not s["media"]["ffmpeg"] and s["media"]["posters"] == "avfoundation"'
+	act "no ffmpeg: add the clip" add-media "{\"path\":\"$OUT/playback/smoke-clip.mp4\"}" 'r["ok"]'
+	act "no ffmpeg: list the clip" search-media '{"q":"smoke-clip"}' 's["media"]["results"] == 1'
+	pb_wait "no ffmpeg: the clip has a poster frame" 's["media"]["pending"] == 0 and not s["media"]["working"]'
+	ls "$NOFF_CACHE"/*smoke-clip*.jpg >/dev/null 2>&1 || fail "no poster JPEG for the clip in $NOFF_CACHE"
+	log "ok: the poster file exists ($(ls "$NOFF_CACHE"/*smoke-clip*.jpg))"
+	act "no ffmpeg: select the clip" select-media '{"title":"smoke-clip"}' 's["media"]["current"] == "smoke-clip"'
+	wait_idle
+	shot noffmpeg-media-main main
+	LAST="$(post close)"
+	for _ in $(seq 1 60); do
+		app_running || break
+		sleep 0.5
+	done
+	app_running && fail "the app (no ffmpeg) did not exit after quit"
+	BAD="$(grep -nE 'ERROR|WARNING|leaked|Leaked|panic:|SCRIPT ERROR' "$NOFF_LOG" || true)"
+	[ -z "$BAD" ] || { printf '%s\n' "$BAD" >&2; fail "the no-ffmpeg run's log has errors or warnings"; }
+	log "ok: log hygiene (no ffmpeg)"
+	rm -f "$NOFF_LIB" "$NOFF_LIB-wal" "$NOFF_LIB-shm"
+	rm -rf "$NOFF_BIN"
+fi
 log "PASS (screenshots in $OUT)"
