@@ -112,7 +112,7 @@ func (p *fontPicker) appendName(name string) int {
 // listed family the OS cannot resolve to a file: loading it would log a
 // FreeType error per draw).
 func faceFor(family string) Font.Instance {
-	if family == "" || OS.GetSystemFontPath(family, false) == "" {
+	if family == "" || !uicore.LoadableFontFile(OS.GetSystemFontPath(family, false)) {
 		return Font.Instance{}
 	}
 	f := SystemFont.New()

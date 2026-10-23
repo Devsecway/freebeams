@@ -1403,6 +1403,7 @@ tp_live() {
 	act "select the $1 item" select-schedule "{\"index\":$TP_ROW}" "s[\"preview\"][\"theme\"] == \"$1\""
 	act "the $1 item goes live" go-live '' "s[\"live\"][\"theme\"] == \"$1\""
 	wait_idle
+	sleep 0.8 # the transition settings an earlier block chose (a push moves the text, not the band)
 }
 # luma FILE X0 Y0 X1 Y1: the mean luminance (0..255) of a region of a screenshot.
 luma() {
