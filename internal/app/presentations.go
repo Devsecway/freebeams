@@ -571,4 +571,5 @@ func (a *App) applyPresentationUpdate(p models.Presentation) {
 			a.setPreview(&deck)
 		}
 	}
+	a.fillDroppedPresentations(p) // a document dropped into the schedule before it was rendered (filedrop.go)
 }

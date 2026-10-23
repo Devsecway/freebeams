@@ -2862,6 +2862,68 @@ check "the drop went after the last row (auto-scrolled)" "$LAST" "len(s[\"schedu
 act "a click still selects a schedule row" click-schedule '{"index":14}' 's["schedule"]["selected"] == 14 and s["preview"]["title"] == "Amazing Grace" and s["focus"] == "list"'
 act "save the schedule (drag and drop)" save-schedule "{\"path\":\"$OUT/smoke-dragdrop.fbs\"}" 'not s["schedule"]["dirty"]'
 
+# ---- files dropped from the Finder ------------------------------------------------------------
+# The root window's files_dropped (internal/app/filedrop.go). drop-files warps the pointer over
+# the target and emits the signal, so the drop goes through the handler's pointer lookup; mode
+# "direct" skips the pointer. The fixtures live in a folder of their own, recreated here.
+FD_DIR="$OUT/file-drop"
+rm -rf "$FD_DIR"
+mkdir -p "$FD_DIR/fd-folder"
+python3 - "$FD_DIR" <<'PY'
+import os, struct, sys, zlib
+def png(path, rgb, w=320, h=180):
+    raw = (b"\x00" + bytes(rgb) * w) * h
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) +
+                           chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+d = sys.argv[1]
+png(os.path.join(d, "fd-red.png"), (0xBF, 0x2A, 0x2A))
+png(os.path.join(d, "fd-blue.png"), (0x2A, 0x2A, 0xBF))
+png(os.path.join(d, "fd-green.png"), (0x2A, 0xBF, 0x2A))
+png(os.path.join(d, "fd-folder", "fd-yellow.png"), (0xBF, 0xBF, 0x2A))
+open(os.path.join(d, "notes.txt"), "w").write("not a resource")
+PY
+cp "$PRES_DIR/smoke-deck.pdf" "$FD_DIR/fd-deck.pdf"
+cp "$PRES_DIR/smoke-slides.pptx" "$FD_DIR/fd-slides.pptx"
+act "a fresh schedule (file drop)" new-schedule '' 's["schedule"]["items"] == []'
+act "Songs tab (file drop)" tab '{"tab":"songs"}' 's["tab"] == 0'
+FD_MEDIA="$(field "$LAST" media.count)"
+FD_PRES="$(field "$LAST" presentations.count)"
+act "two images dropped onto the empty schedule" drop-files "{\"paths\":[\"$FD_DIR/fd-red.png\",\"$FD_DIR/fd-blue.png\"],\"target\":\"schedule\"}" "s[\"fileDrop\"][\"done\"] and s[\"fileDrop\"][\"target\"] == \"schedule\" and s[\"fileDrop\"][\"at\"] == 0 and s[\"schedule\"][\"items\"] == [\"fd-red\", \"fd-blue\"] and s[\"media\"][\"count\"] == $FD_MEDIA + 2 and s[\"tab\"] == 0 and not s[\"dialog\"].get(\"message\")"
+act "a PDF dropped between them" drop-files "{\"paths\":[\"$FD_DIR/fd-deck.pdf\"],\"target\":\"schedule\",\"at\":1}" "s[\"fileDrop\"][\"at\"] == 1 and s[\"fileDrop\"][\"inserted\"] == [\"fd-deck\"] and s[\"schedule\"][\"items\"] == [\"fd-red\", \"fd-deck\", \"fd-blue\"] and s[\"presentations\"][\"count\"] == $FD_PRES + 1"
+if [ "$PRES_PDF" = "True" ]; then
+	wait_presentations
+	act "the dropped PDF has its pages in the schedule" select-schedule '{"index":1}' 's["preview"]["title"] == "fd-deck" and s["preview"]["count"] == 2 and s["schedule"]["selected"] == 1'
+	wait_idle
+	shot file-drop-pdf main
+	pixel "Preview shows the dropped PDF's first page" "$OUT/file-drop-pdf.png" has 2a5fbf 0.0 0.0 1.0 1.0 2000
+else
+	log "no PDF renderer: the dropped PDF stays a Preparing slides item"
+fi
+act "a mixed drop inserts what it can and names the rest" drop-files "{\"paths\":[\"$FD_DIR/notes.txt\",\"$FD_DIR/fd-green.png\",\"$FD_DIR/fd-folder\"],\"target\":\"schedule\",\"at\":0}" "s[\"schedule\"][\"items\"] == [\"fd-green\", \"fd-red\", \"fd-deck\", \"fd-blue\"] and s[\"fileDrop\"][\"skipped\"] == [\"notes.txt\", \"fd-folder\"] and s[\"dialog\"][\"message\"][\"title\"] == \"Add Files\" and \"notes.txt\" in s[\"dialog\"][\"message\"][\"message\"] and \"fd-folder\" in s[\"dialog\"][\"message\"][\"message\"]"
+wait_idle
+shot file-drop-message message
+pixel "the skipped-files message has content" "$OUT/file-drop-message.png" notblank
+act "dismiss the skipped-files message" dismiss '' 'not s["dialog"].get("message")'
+act "select the top row (file drop)" select-schedule '{"index":0}' 's["schedule"]["selected"] == 0'
+act "without a pointer the drop goes after the selected row" drop-files "{\"paths\":[\"$FD_DIR/fd-blue.png\"],\"target\":\"schedule\",\"mode\":\"direct\"}" "s[\"schedule\"][\"items\"] == [\"fd-green\", \"fd-blue\", \"fd-red\", \"fd-deck\", \"fd-blue\"] and s[\"fileDrop\"][\"at\"] == 1 and s[\"media\"][\"count\"] == $FD_MEDIA + 3"
+act "a folder dropped on the Media tab adds its images there only" drop-files "{\"paths\":[\"$FD_DIR/fd-folder\",\"$FD_DIR/fd-slides.pptx\"],\"target\":\"media\"}" "s[\"tab\"] == 2 and s[\"fileDrop\"][\"target\"] == \"media\" and s[\"media\"][\"count\"] == $FD_MEDIA + 4 and len(s[\"schedule\"][\"items\"]) == 5 and s[\"dialog\"][\"message\"][\"title\"] == \"Add Files\" and \"fd-slides.pptx\" in s[\"dialog\"][\"message\"][\"message\"]"
+act "dismiss the Media tab message" dismiss '' 'not s["dialog"].get("message")'
+act "the folder's image is in the library" select-media '{"title":"fd-yellow"}' 's["media"]["current"] == "fd-yellow"'
+act "a deck dropped on the Presentations tab adds it there only" drop-files "{\"paths\":[\"$FD_DIR/fd-slides.pptx\"],\"target\":\"presentations\"}" "s[\"tab\"] == 3 and s[\"presentations\"][\"count\"] == $FD_PRES + 2 and len(s[\"schedule\"][\"items\"]) == 5 and not s[\"dialog\"].get(\"message\")"
+wait_presentations
+act "files dropped outside the targets do nothing" drop-files "{\"paths\":[\"$FD_DIR/fd-red.png\"],\"target\":\"outside\"}" "s[\"fileDrop\"][\"target\"] == \"\" and len(s[\"schedule\"][\"items\"]) == 5 and s[\"dialog\"][\"message\"][\"title\"] == \"Add Files\" and \"drop files onto the schedule\" in s[\"dialog\"][\"message\"][\"message\"]"
+act "dismiss the outside message" dismiss '' 'not s["dialog"].get("message")'
+act "an unknown drop target is refused" drop-files "{\"paths\":[\"$FD_DIR/fd-red.png\"],\"target\":\"preview\"}" 'not r["ok"]'
+act "save the dropped schedule" save-schedule "{\"path\":\"$FD_DIR/fd-sched.fbs\"}" 'not s["schedule"]["dirty"]'
+act "a fresh schedule (file drop open)" new-schedule '' 's["schedule"]["items"] == []'
+act "a schedule file dropped on the schedule opens it" drop-files "{\"paths\":[\"$FD_DIR/fd-sched.fbs\"],\"target\":\"schedule\"}" 'r["ok"]'
+wait_idle
+check "the dropped schedule is open" "$LAST" "s[\"schedule\"][\"path\"] == \"$FD_DIR/fd-sched.fbs\" and len(s[\"schedule\"][\"items\"]) == 5 and not s[\"schedule\"][\"dirty\"]"
+act "Songs tab (file drop done)" tab '{"tab":"songs"}' 's["tab"] == 0'
+act "save the schedule (file drop)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+
 # ---- opening files (double-click, Open with, a second launch: open-files) -------------------
 # The installers register .fbs / .fws and .fbbible; a launch with such paths, or
 # a second launch handing them over, ends in open-files (internal/app/openfiles.go).

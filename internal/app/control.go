@@ -114,6 +114,7 @@ func (a *App) state() core.State {
 
 		LiveTransition:   a.liveTransition(),   // transitions.go
 		NativeAppearance: a.nativeAppearance(), // appearance.go
+		FileDrop:         a.fdrop.last,
 	})
 }
 

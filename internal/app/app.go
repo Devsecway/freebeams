@@ -213,6 +213,9 @@ type App struct {
 
 	// look is what the OS-drawn chrome was last given (appearance.go).
 	look nativeLook
+
+	// Files dropped from the Finder / Explorer (filedrop.go).
+	fdrop fileDropState
 }
 
 // New returns the app node; add it to the scene tree (main.go does this).
