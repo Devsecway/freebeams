@@ -59,6 +59,47 @@ func FrameMedia(f models.Frame) (models.Background, bool) {
 	return bg, true
 }
 
+// MonitorMedia returns the video or audio a monitor keeps playing for frame
+// f: FrameMedia's, and also the media slide under Black and Logo. Black and
+// Logo cover the output but leave the file playing (EasyWorship's
+// behaviour: the sound goes on, and coming back shows the clip where it has
+// got to), so shown is false then. ok is false when the frame's slide is no
+// video or audio at all.
+func MonitorMedia(f models.Frame) (bg models.Background, shown, ok bool) {
+	if f.Slide == nil || f.Slide.Background == nil {
+		return models.Background{}, false, false
+	}
+	bg = *f.Slide.Background
+	if !bg.Kind.Plays() || bg.Path == "" {
+		return models.Background{}, false, false
+	}
+	switch f.Mode {
+	case models.ModeBlack, models.ModeLogo:
+		return bg, false, true
+	}
+	return bg, true, true
+}
+
+// AdvancePlayback is a monitor's playback after its frame became f: the
+// same file (also under Black / Logo, and back) keeps everything the
+// operator set, play / pause, loop, volume and the seek count, so the
+// player's position carries on; a new file gets PlaybackDefaults; a frame
+// with no video or audio NoPlayback. changed reports a new Key.
+func AdvancePlayback(pb Playback, f models.Frame, live bool) (next Playback, changed bool) {
+	bg, _, ok := MonitorMedia(f)
+	key := ""
+	if ok {
+		key = bg.Path
+	}
+	if key == pb.Key {
+		return pb, false
+	}
+	if ok {
+		return PlaybackDefaults(bg, live, pb), true
+	}
+	return NoPlayback(pb), true
+}
+
 // PlaybackState is one monitor's playback as reported to the transport bar
 // and GET /state: the operator's settings plus what the player reports.
 type PlaybackState struct {
@@ -79,12 +120,20 @@ type PlaybackState struct {
 
 	// Player is the media player backend (avfoundation, ffmpeg, theora).
 	Player string `json:"player"`
+
+	// Hidden reports a file that plays on under Black or Logo (MonitorMedia):
+	// the output does not show it, the sound and the position go on.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // PlaybackStates is the /state document's "playback" object.
 type PlaybackStates struct {
 	Live    PlaybackState `json:"live"`
 	Preview PlaybackState `json:"preview"`
+
+	// Resource is the resource preview's mini transport (a clip previewed
+	// before it goes anywhere near the output).
+	Resource PlaybackState `json:"resource"`
 }
 
 // TransportTime formats the transport bar's time as "m:ss / m:ss" ("0:00 /
@@ -131,19 +180,41 @@ func ClampVolume(v float64) float64 {
 	return min(max(v, 0), 1)
 }
 
+// Target is a transport a playback control action drives.
+type Target int
+
+const (
+	TargetLive     Target = iota // the Live Output monitor and the projector
+	TargetPreview                // the Preview Output monitor
+	TargetResource               // the resource preview's mini transport
+)
+
+// String is the target's name in the control API.
+func (t Target) String() string {
+	switch t {
+	case TargetPreview:
+		return "preview"
+	case TargetResource:
+		return "resource"
+	}
+	return "live"
+}
+
 // PlaybackTarget resolves a control action's "target" ("live" by default,
-// or "preview"). ok is false for anything else.
-func PlaybackTarget(target string) (live bool, ok bool) {
+// "preview" or "resource"). ok is false for anything else.
+func PlaybackTarget(target string) (t Target, ok bool) {
 	switch target {
 	case "", "live":
-		return true, true
+		return TargetLive, true
 	case "preview":
-		return false, true
+		return TargetPreview, true
+	case "resource":
+		return TargetResource, true
 	}
-	return false, false
+	return TargetLive, false
 }
 
 // PlaybackError is the control API's complaint about a target.
 func PlaybackError(action, target string) error {
-	return fmt.Errorf("%s: target must be \"live\" or \"preview\", got %q", action, target)
+	return fmt.Errorf("%s: target must be \"live\", \"preview\" or \"resource\", got %q", action, target)
 }
