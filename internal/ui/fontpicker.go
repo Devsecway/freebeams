@@ -7,6 +7,7 @@ import (
 	"graphics.gd/classdb/Control"
 	"graphics.gd/classdb/Font"
 	"graphics.gd/classdb/LineEdit"
+	"graphics.gd/classdb/OS"
 	"graphics.gd/classdb/SystemFont"
 	"graphics.gd/classdb/TextServer"
 	"graphics.gd/classdb/Tree"
@@ -107,9 +108,11 @@ func (p *fontPicker) appendName(name string) int {
 	return len(p.names) - 1
 }
 
-// faceFor is a family's own face (the default UI face for "").
+// faceFor is a family's own face (the default UI face for "", and for a
+// listed family the OS cannot resolve to a file: loading it would log a
+// FreeType error per draw).
 func faceFor(family string) Font.Instance {
-	if family == "" {
+	if family == "" || OS.GetSystemFontPath(family, false) == "" {
 		return Font.Instance{}
 	}
 	f := SystemFont.New()
