@@ -351,7 +351,8 @@ the schedule keep their snapshots (EasyWorship's behaviour). The Songs and Scrip
 ### Theme polish
 
 Recorded 2026-10-23 on the same machine. "smoke: X" names a check in the `# ---- theme polish` section of
-`test/smoke.sh` (after `# ---- playback`, before `# ---- song themes`).
+`test/smoke.sh` (132 checks, after `# ---- playback`, before `# ---- song themes`). The full run passed on
+2026-10-23 with 1449 checks, log hygiene clean (the video checks need ffmpeg and the native player; both were there).
 
 | Criterion | Status | Verification |
 |---|---|---|
