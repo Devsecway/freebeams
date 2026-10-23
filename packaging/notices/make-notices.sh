@@ -52,6 +52,11 @@ trap 'rm -f "$tmp"' EXIT
 
 	rule "SCOWL word list (spell checking, internal/spell/data)"
 	cat internal/spell/data/SCOWL-LICENSE
+
+	for f in packaging/notices/extra/*.txt; do
+		rule "$(head -n 1 "$f")"
+		tail -n +3 "$f"
+	done
 } >"$tmp"
 
 if [ "$check" = 1 ]; then

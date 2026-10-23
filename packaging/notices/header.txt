@@ -30,6 +30,9 @@ FFmpeg 8.1.3 (ffmpeg, ffprobe)    LGPL v2.1 or later Windows and Linux packages 
                                                      FFMPEG-LICENSE.txt and the source,
                                                      checksum and configure line are in
                                                      FFMPEG-NOTICE.txt beside them
+zlib (zlib1.dll)                  zlib licence       Windows packages, next to the FFmpeg DLLs
+mingw-w64 winpthreads             MIT + BSD-3-Clause Windows packages, next to the FFmpeg DLLs
+  (libwinpthread-1.dll)
 Bibles: King James Version (KJV), Public domain      the app library (installed on first run)
   American Standard Version
   (ASV), Reina-Valera Antigua
