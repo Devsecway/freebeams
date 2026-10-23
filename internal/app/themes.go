@@ -57,7 +57,12 @@ func (a *App) initThemes() {
 		var (
 			list     []models.Theme
 			defaults map[models.ItemKind]int64
+			added    []string
+			keep     bool
 		)
+		if err == nil {
+			added, keep, err = seedThemePolish(ctx, st) // themepolish.go
+		}
 		if err == nil {
 			list, defaults, err = fetchThemes(ctx, st)
 		}
@@ -69,6 +74,10 @@ func (a *App) initThemes() {
 			if wrote {
 				log.Printf("[freebeams] seeded the default themes")
 			}
+			if len(added) > 0 {
+				log.Printf("[freebeams] added the built-in themes %q", added)
+			}
+			a.thp.keepSchedule = keep
 			if a.th.gen.Current(ticket) {
 				a.applyThemes(list, defaults)
 			}
@@ -191,7 +200,9 @@ func (a *App) themesStateDoc() core.ThemesState {
 	if a.th.editing != nil {
 		editing = a.th.editing.Name
 	}
-	return core.BuildThemesState(a.th.list, a.th.sel, a.th.defaults, a.win.ThemeEditor.Visible(), editing)
+	st := core.BuildThemesState(a.th.list, a.th.sel, a.th.defaults, a.win.ThemeEditor.Visible(), editing)
+	a.themePolishStateDoc(&st) // themepolish.go
+	return st
 }
 
 // editorFrame is what the editor's live preview shows for the theme being
@@ -326,10 +337,11 @@ func (a *App) saveTheme(t models.Theme, cmd *control.Command) {
 // monitors, grids and output re-render through the presenter's Seq) and the
 // library decks behind the resource previews.
 func (a *App) applyThemeChange(t models.Theme) {
-	if n := core.RestyleSchedule(a.sched, t); n > 0 {
+	apply := !a.thp.keepSchedule // the editor's "Apply changes to items in schedule"
+	if apply && core.RestyleSchedule(a.sched, t) > 0 {
 		a.schedVer++
 	}
-	a.pres.RestyleDecks(core.RestyleByThemeID(t))
+	a.pres.RestyleDecks(core.ThemeRestyler(t, apply))
 	for _, d := range []*models.Deck{a.songRes.deck, a.scriptureDeck, a.th.deck} {
 		if d != nil && d.Theme.ID == t.ID && !d.Theme.Custom {
 			d.Theme = t
@@ -560,6 +572,9 @@ func (a *App) handleThemeCommand(cmd *control.Command, args actionArgs) bool {
 		}
 		a.applyThemeToItem(i, row, cmd)
 	default:
+		if a.handleThemePolishCommand(cmd) { // themepolish.go
+			return true
+		}
 		return a.handleSongThemeCommand(cmd, args)
 	}
 	return true

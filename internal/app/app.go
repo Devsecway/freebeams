@@ -144,6 +144,8 @@ type App struct {
 
 	ps previewStyleState // restyling the item in Preview (previewstyle.go)
 
+	thp themePolishState // video backgrounds, apply-to-schedule, theme files (themepolish.go)
+
 	sp spellState // the song editor's spelling checker (spell.go)
 
 	importState core.ImportState
