@@ -1,0 +1,43 @@
+FreeBeams - third-party notices
+===============================
+
+FreeBeams itself is released under the MIT License (see LICENSE, Copyright (c)
+2026 Devsecway). A FreeBeams package also carries the components below, each
+under its own licence. Their full licence texts follow this summary.
+
+Component                         Licence            Where
+--------------------------------  -----------------  ---------------------------------------
+Godot Engine @GODOT_VERSION@              MIT                the FreeBeams executable (the engine)
+  and its bundled libraries       see COPYRIGHT.txt  (FreeType, HarfBuzz, ICU, ThorVG,
+                                  below              libpng, libjpeg-turbo, libogg, libtheora,
+                                                     libvorbis, glslang, Vulkan headers,
+                                                     zstd, ...; whatever the build includes)
+graphics.gd                       MIT                the app library (Go bindings for Godot)
+modernc.org/sqlite, libc,         BSD-3-Clause       the app library (pure-Go SQLite)
+  mathutil, memory
+SQLite (translated by modernc)    Public domain      the app library
+Other Go modules (golang.org/x,   BSD-3-Clause,      the app library (each listed below)
+  google/uuid, gorilla/websocket, MIT, 0BSD
+  go-humanize, go-isatty,
+  go-strftime, bigfft, rsc.io/qr,
+  runtime.link)
+Go standard library and runtime   BSD-3-Clause       the app library (Copyright (c) 2009 The
+                                                     Go Authors; text as golang.org/x below)
+SCOWL English word list           SCOWL licence      the app library (spell checking)
+                                  (permissive, below)
+FFmpeg 8.1.3 (ffmpeg, ffprobe)    LGPL v2.1 or later Windows and Linux packages only, as
+                                                     separate programs; the licence text is
+                                                     FFMPEG-LICENSE.txt and the source,
+                                                     checksum and configure line are in
+                                                     FFMPEG-NOTICE.txt beside them
+Bibles: King James Version (KJV), Public domain      the app library (installed on first run)
+  American Standard Version
+  (ASV), Reina-Valera Antigua
+  1909 (RVA)
+
+No fonts are bundled: FreeBeams draws text with the fonts installed on the
+computer (and Godot's built-in fallback font, covered by Godot's COPYRIGHT.txt).
+
+The FreeBeams logo, icon and wordmark are original work for this project.
+EasyWorship is a trademark of Softouch Development; FreeBeams is not
+affiliated with it.
