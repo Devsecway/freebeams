@@ -199,6 +199,12 @@ type App struct {
 	// addToSchedule inserts at drop.at instead of appending; drop.held is
 	// the pointer of a drag-to-schedule hook left pressed (mode "hold").
 	drop dropState
+
+	// Files given on the command line or by `open-files` (openfiles.go),
+	// opened once the library is ready; instanceFile is where this launch
+	// published its control server for later launches to hand files to.
+	opening      core.OpenFiles
+	instanceFile string
 }
 
 // New returns the app node; add it to the scene tree (main.go does this).
@@ -225,11 +231,15 @@ func (a *App) Ready() {
 	a.initPlayback()
 
 	SceneTree.Get(a.AsNode()).SetAutoAcceptQuit(false)
+	if a.handOverLaunchFiles() { // another window has this library open: it opens them (openfiles.go)
+		return
+	}
 	setAppName(appdirs.Name) // before buildUI installs the menu bar's own menus
 	a.buildUI()
 	a.openLibrary()
 	a.restoreLayout()
 	a.startControl()
+	a.publishInstance() // openfiles.go
 	log.Printf("[freebeams] %s", versionBanner())
 
 	a.loadSettings() // transition, output display, logo, interface color (settings.go)
@@ -262,15 +272,11 @@ func (a *App) Ready() {
 // openLibrary opens the SQLite library (FREEBEAMS_LIBRARY overrides the
 // default path).
 func (a *App) openLibrary() {
-	path := os.Getenv(core.LibraryEnv)
-	if path == "" {
-		p, err := store.DefaultPath()
-		if err != nil {
-			a.fail("library path", err)
-			a.songsStatus = "Library unavailable"
-			return
-		}
-		path = p
+	path, err := libraryPath()
+	if err != nil {
+		a.fail("library path", err)
+		a.songsStatus = "Library unavailable"
+		return
 	}
 	st, err := store.Open(path)
 	if err != nil {
@@ -280,6 +286,14 @@ func (a *App) openLibrary() {
 	}
 	a.lib = keepalive.Hide(st)
 	log.Printf("[freebeams] library: %s", st.Path())
+}
+
+// libraryPath is the library file: FREEBEAMS_LIBRARY, else the default.
+func libraryPath() (string, error) {
+	if path := os.Getenv(core.LibraryEnv); path != "" {
+		return path, nil
+	}
+	return store.DefaultPath()
 }
 
 func (a *App) startControl() {
@@ -464,6 +478,7 @@ func (a *App) Process(delta Float.X) {
 	}
 	a.processRemote() // phone actions and pairing changes (remote.go)
 	a.runTimers()
+	a.openPendingFiles() // openfiles.go
 	if a.quitNext {
 		a.shutdown()
 		return
@@ -616,6 +631,7 @@ func (a *App) shutdown() {
 	}
 	a.waiters = nil
 	a.stopRemote() // phones disconnect; the devices are saved before the library closes
+	a.unpublishInstance()
 	a.out.OnClosed = nil
 	a.out.OnInput = nil
 	a.out.Close()

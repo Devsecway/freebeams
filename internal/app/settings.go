@@ -213,14 +213,15 @@ func (a *App) notify(title, message string) {
 	}
 }
 
-// aboutText describes the build (Help ▸ About).
+// aboutText describes the build (Help ▸ About): the release version, the
+// VCS build when it is known, and the licence (LICENSE and
+// THIRD-PARTY-NOTICES.txt ship in every package).
 func aboutText() string {
-	version := "development build"
+	build := ""
 	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
-		version = info.Main.Version
+		build = info.Main.Version
 	}
-	return "FreeBeams — " + version + "\n\nA free worship presentation app: songs, scriptures, media and a projector output, " +
-		"built with Go and Godot (graphics.gd). Hotkeys and layout follow EasyWorship."
+	return core.AboutText(Version(), build)
 }
 
 // onMenu runs a menu item (ui.Menus.OnAction and the `menu` control action).
