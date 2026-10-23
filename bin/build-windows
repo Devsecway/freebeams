@@ -12,8 +12,9 @@
 # Outputs (<v> = bin/version, <arch> = GOARCH, amd64 by default):
 #   releases/windows/<arch>/                    FreeBeams.exe, windows_<arch>.dll
 #                                               (+ runtime DLLs the .dll needs),
-#                                               ffmpeg.exe, ffprobe.exe, FFMPEG-*.txt
-#                                               (LGPL, bin/build-ffmpeg; native builds)
+#                                               ffmpeg.exe, ffprobe.exe, av*.dll, sw*.dll,
+#                                               FFMPEG-*.txt (LGPL, bin/build-ffmpeg; native
+#                                               builds), LICENSE.txt, THIRD-PARTY-NOTICES.txt
 #   releases/FreeBeams-<v>-windows-<arch>.zip the portable bundle
 #   releases/FreeBeams-<v>-Setup.exe          the installer (Windows with Inno Setup)
 #
@@ -129,10 +130,13 @@ elif [ "$native" != 1 ]; then
 else
 	"$ROOT/bin/build-ffmpeg"
 	FF="$("$ROOT/bin/build-ffmpeg" --prefix)"
-	cp -f "$FF/bin/ffmpeg.exe" "$FF/bin/ffprobe.exe" "$OUT/"
+	# The two programs and the FFmpeg DLLs they share (avcodec-*.dll, ...).
+	cp -f "$FF"/bin/* "$OUT/"
 	cp -f "$FF/LICENSE.txt" "$OUT/FFMPEG-LICENSE.txt"
 	cp -f "$FF/NOTICE.txt" "$OUT/FFMPEG-NOTICE.txt"
-	FFMPEG_FILES=("$OUT/ffmpeg.exe" "$OUT/ffprobe.exe")
+	for f in "$FF"/bin/*; do
+		FFMPEG_FILES+=("$OUT/$(basename "$f")")
+	done
 	"$OUT/ffmpeg.exe" -hide_banner -version | head -n 1
 fi
 
