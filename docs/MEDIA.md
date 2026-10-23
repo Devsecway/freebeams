@@ -143,7 +143,7 @@ touching the Preview or Live players.
 
 EasyWorship's Black and Logo cover the output; they do not stop a video. The decoded forms have no setting for it
 (Form_VideoProperties has Media Usage, Repeating, Aspect Ratio and Volume / Mute, nothing about Black), and in
-EasyWorship a clip keeps running, with its sound, under Black. FreeBeams does the same:
+EasyWorship a clip keeps running, with its sound, under Black. FreeBeams does the same by default:
 
 - `core.MonitorMedia(frame)` is the media a monitor keeps playing: the slide's (or the theme's) video or audio in
   the normal and clear modes (shown) and **also under Black and Logo** (`shown` false, `/state.playback.*.hidden`).
@@ -153,8 +153,28 @@ EasyWorship a clip keeps running, with its sound, under Black. FreeBeams does th
   shows the clip where it has got to (paused under Black: exactly where it was). The transport bar stays visible
   under Black, so the operator can pause the sound there.
 - Going live with another item under Black starts that item's playback (hidden) as it would without Black.
-- To silence a clip with the output, the operator pauses it (or uses the volume); a "pause on Black" option is
-  not in EasyWorship's forms and is left out.
+- To silence a clip with the output, the operator pauses it (or uses the volume), or turns on **Pause on Black**.
+
+### Pause on Black (Options ▸ Logo)
+
+A FreeBeams option, not in EasyWorship's forms: Options ▸ Logo ▸ Black and Logo ▸ "Pause video and audio under Black
+and Logo" (`core.Settings.PauseOnBlack`, persisted as `playback.pauseOnBlack`, **off by default** so the behaviour
+above stays the default; `set-setting {key: "playback.pauseOnBlack" | "pauseOnBlack", value}`,
+`/state.settings.pauseOnBlack`). It is authoritative playback state, not render: `core.CoverPlayback` runs after
+`core.AdvancePlayback` every frame on each monitor's `core.Playback` and acts only on a *change* of "covered"
+(`Playback.Hidden`, from `core.MonitorMedia`):
+
+- Black or Logo covering the **live** file while it plays pauses it and marks it `BlackPaused`
+  (`/state.playback.live.blackPaused`); a paused file stays paused and is not marked.
+- Leaving Black / Logo (to the normal or clear mode) plays a `BlackPaused` file again, from where it was; a file
+  that was paused when Black was pressed stays paused.
+- The operator's play or pause in between (`Playback.SetPlaying`: the transport, `play` / `pause` /
+  `toggle-play`, the phones) clears the mark, so the operator can still play a clip under Black and their choice
+  wins when Black goes off. Black to Logo and back stays covered (no change).
+- An item going live under Black waits paused (marked) and starts when Black goes off. Turning the option off
+  while a file is `BlackPaused` still resumes it when Black goes off. Preview and the resource preview are never
+  covered by Black. The audio playlist (background music, its own player) is not paused: walk-in music under the
+  Logo screen is the usual case.
 
 ## Playback state (`internal/app/playback.go`)
 
@@ -163,7 +183,9 @@ SeekSeq, SeekTo}` per monitor. Events mutate it:
 
 - a new video / audio item arriving on a monitor (`core.AdvancePlayback` over `core.MonitorMedia`: Black, Logo and
   Clear keep the file, see above) gets `core.PlaybackDefaults`: live autoplays, preview waits
-  paused at 0, the item's `Background.Loop` is the default (videos loop, audio does not), the volume carries over;
+  paused at 0, the item's `Background.Loop` is the default (videos loop, audio does not), the volume is the item's
+  (see "Per-item volume and mute") or carries over;
+- Black / Logo covering and uncovering the live file under Pause on Black (`core.CoverPlayback`, above);
 - the transport bar's callbacks and the control actions;
 - the player reaching the end with looping off (`MediaSource.TakeEnded`, polled every frame in `Process`).
 
@@ -205,11 +227,37 @@ comma-separated, normalised by `models.NormalizeTags`, matched by the library se
 title, tags, aspect and repeat first). `Media.Background()` turns Aspect / Repeating into `Background.Fit` /
 `Loop`, so the library deck, Preview and **schedule items** (their snapshot, made when added; Update items in
 Schedule refreshes it) play once or loop and letterbox / stretch as set. Left out: Mark In / Out, Media Usage,
-Alpha Channel, Select Thumbnail, Author / Copyright / Description, per-item volume.
+Alpha Channel, Select Thumbnail, Author / Copyright / Description.
 
 Control: `media-menu {item: "properties", index|title}` opens it; `media-properties {props: {title, tags, aspect,
-repeat}}` fills it and presses OK, `{cancel: true}` presses Cancel; `/state.dialog.mediaProperties`,
-`/state.media.tags`; screenshot window `media-properties`.
+repeat, volume, mute}}` fills it and presses OK (an empty aspect / repeat keeps the dialog's choice; title, tags,
+volume and mute are always filled in, a missing volume is Carry Over; a volume outside 0..100 is refused),
+`{cancel: true}` presses Cancel; `/state.dialog.mediaProperties`, `/state.media.{tags, volume, mute}` (the
+selected item); screenshot window `media-properties`.
+
+### Per-item volume and mute
+
+The dialog's **Volume** row (videos and audio; EasyWorship's Audio Properties: `TrackBar_Volume` +
+`SpinEdit_Volume`, `CheckBox_Mute`) is **Carry Over** (the default) or **Fixed** with a slider and a 1..100 % box
+that follow each other, and **Mute**. `models.Media.Volume` (percent, 0 = Carry Over) and `Mute`, migration 8
+(`media.volume`, `media.mute`), saved by `store.SetMediaProperties` only (`SaveMedia` never writes them; the
+pipeline's save re-reads them like the tags). `Media.Background()` copies them into `Background.Volume` / `Mute`,
+so the library deck, Preview, the resource preview and schedule snapshots (`omitempty`: schedules without them are
+unchanged; Update items in Schedule refreshes them) all carry them.
+
+The item's volume is the *start* volume when the item arrives on a monitor (`core.StartVolume` in
+`core.PlaybackDefaults`):
+
+- **Mute**: starts at 0 (the Fixed volume is kept for when Mute is unticked). The operator's transport can
+  still raise it for this playback.
+- **Fixed** n %: starts at n / 100.
+- **Carry Over**: starts at the monitor's carried volume, as before: the operator's volume of the previous item
+  without a volume of its own (1.0 at start).
+- An item with a volume of its own (`Playback.Own`, `/state.playback.*.itemVolume`) does not pass it on: the
+  operator's changes stay with that playback, and the next Carry Over item starts at the volume from before it
+  (`Playback.Carry`, `CarriedVolume`). So a quiet clip set to 40 % does not leave the next song's video at 40 %.
+- The same file staying on a monitor (Black, Logo, Clear and back) keeps the playback, the volume included. Live
+  and the schedule keep their snapshot's volume until Update items in Schedule, as with Repeating.
 
 ## Control actions
 
@@ -304,7 +352,8 @@ failed`. Actions: `audio-play {index}`, `audio-pause`, `audio-toggle`, `audio-st
 
 ## Not done
 
-- EasyWorship's Mark In / Out, Media Usage, per-item volume and mute, and a "pause on Black" option.
+- EasyWorship's Mark In / Out and Media Usage. A per-item volume for the audio playlist's tracks (they play at the
+  playlist's own volume).
 - The ffmpeg player on a real Windows or Linux machine: verified on macOS (`FREEBEAMS_PLAYER=ffmpeg`, Homebrew ffmpeg
   and the bundled LGPL build), and its pure-Go tests run in CI on `windows-latest` / `ubuntu-latest`, but the app
   itself has not run there yet. Hardware decoding (the bundled build has none: `--disable-autodetect`), a
