@@ -842,10 +842,9 @@ Recorded 2026-10-22 on the same machine. Formats, policy and behaviour: [BIBLES.
 
 - **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the
   release workflow is the first run); the Theora fallback (`render/video.go`, no ffmpeg) is still unverified.
-- **Media polish**: poster frames through `AVAssetImageGenerator` on macOS (videos still need ffmpeg for a
-  thumbnail), a per-item Repeat / Aspect property (`models.Background.Loop` is the hook), keeping a video's
-  position across Black (today a Black longer than the fade re-opens the file from 0), a transport in the resource
-  preview (UI-SPEC §3 mentions mini controls there).
+- **Media polish**: done 2026-10-23 (poster frames through AVFoundation, per-item Title / Aspect / Repeating / Tags
+  in Edit Properties, playback held across Black and Logo, the resource preview's mini transport; see
+  [MEDIA.md](MEDIA.md)). Still open: Mark In / Out, per-item volume and mute, a "pause on Black" option.
 - **Themes polish**: importing EasyWorship's per-song themes (needs a library whose songs have them, see
   "Per-song themes"); a theme video off macOS (the ffmpeg player plays the source, the Theora fallback needs a
   transcode that theme backgrounds do not look up yet); a poster for a theme video browsed from outside the
@@ -859,8 +858,8 @@ Recorded 2026-10-22 on the same machine. Formats, policy and behaviour: [BIBLES.
 - **Packaging** (PLAN §4 M6): the release build, scripts, CI workflows and docs are in place, see
   [RELEASE.md](RELEASE.md). Still open: signing and notarization (needs credentials), and the Windows and Linux
   builds, which are unverified until the release workflow has run.
-- Media library polish: audio (EasyWorship's `Audio` folder), dropping Finder files into the schedule, per-item titles and
-  tags, removing items whose files have gone missing.
+- Media library polish: dropping Finder files into the schedule. (Audio, per-item titles and tags and removing
+  missing files are done.)
 - Presentations polish: verify `pdftoppm` and LibreOffice on a machine that has them (or bundle poppler in the
   release for Windows / Linux); per-page thumbnails for the Preview / Live grids; re-render a schedule
   presentation whose cache is gone and whose document is no longer in the library; speaker notes; a Windows PDF
