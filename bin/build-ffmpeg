@@ -7,7 +7,7 @@
 # with no external libraries (--disable-autodetect, zlib aside), so the
 # programs are LGPL v2.1+. The FFmpeg libraries are built shared and sit next
 # to the two programs (avcodec-62.dll / libavcodec.so.62, ...; found through
-# the exe's folder on Windows, an $ORIGIN rpath on Linux, @loader_path on
+# the exe's folder on Windows, an $ORIGIN rpath (patchelf) on Linux, @loader_path on
 # macOS): ffmpeg and ffprobe then share one copy of libavcodec instead of
 # carrying one each, which halves what a package spends on them. libgcc is
 # linked in statically; on Windows zlib1.dll comes along from the toolchain,
@@ -17,7 +17,7 @@
 #   bin/build-ffmpeg --prefix   # prints the install prefix (bin/: ffmpeg[.exe], ffprobe[.exe] and the
 #                               # shared libraries; LICENSE.txt / NOTICE.txt)
 #
-# Runs natively on Linux (gcc, make, nasm) and on Windows under MSYS2 UCRT64
+# Runs natively on Linux (gcc, make, nasm, patchelf) and on Windows under MSYS2 UCRT64
 # (mingw-w64-ucrt-x86_64-gcc, make, nasm, zlib); also on macOS for a local
 # check. FFMPEG_CACHE (default ~/.cache/freebeams) holds the source and the
 # build; FFMPEG_PREFIX overrides the install prefix, FFMPEG_JOBS the make -j.
@@ -106,13 +106,6 @@ flags=(
 )
 case "$os" in
 windows) flags+=(--extra-ldflags=-static-libgcc) ;;
-linux)
-	# Each library and program finds the others in its own folder. make runs
-	# the link through sh: \$$ reaches it as a literal $ORIGIN. The old-style
-	# DT_RPATH (not RUNPATH) also covers the libraries' own dependencies.
-	# shellcheck disable=SC2016
-	flags+=('--extra-ldflags=-Wl,-rpath,\$$ORIGIN -Wl,--disable-new-dtags')
-	;;
 macos) flags+=(--install-name-dir=@loader_path) ;;
 esac
 step "configure ${flags[*]}"
@@ -141,6 +134,15 @@ if [ "$os" != windows ]; then
 	done
 fi
 rm -rf "${PREFIX:?}/include" "${PREFIX:?}/lib" "${PREFIX:?}/share"
+if [ "$os" = linux ]; then
+	# Each program and library finds the others in its own folder. (An rpath
+	# through configure's LDFLAGS does not survive its quoting and make's.)
+	need patchelf "apt install patchelf"
+	# shellcheck disable=SC2016
+	for f in "$PREFIX"/bin/ffmpeg "$PREFIX"/bin/ffprobe "$PREFIX"/bin/lib*.so.*; do
+		patchelf --set-rpath '$ORIGIN' "$f"
+	done
+fi
 rm -f "$PREFIX"/bin/*.lib "$PREFIX"/bin/*.def "$PREFIX"/bin/*.dll.a
 if [ "$os" = windows ]; then
 	# DLLs from the toolchain that the build links (zlib1.dll; nothing else is

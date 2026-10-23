@@ -78,8 +78,11 @@ jobs:
             ~/Library/Application Support/Godot/export_templates
           key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
 
-      - name: Cache the custom engine template
-        uses: actions/cache@v6
+      # Restored and saved explicitly: the template is saved as soon as it is
+      # built, even when a later step fails (it takes the longest to make).
+      - name: Restore the custom engine template
+        id: engine-cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/engine-cache/templates
           key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
@@ -90,6 +93,13 @@ jobs:
         run: |
           pipx install scons
           bin/build-engine macos
+
+      - name: Save the custom engine template
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/engine-cache/templates
+          key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
 
       - name: Build (and sign + notarize when the secrets are set)
         env:
@@ -169,8 +179,11 @@ jobs:
             ~/AppData/Roaming/Godot/export_templates
           key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
 
-      - name: Cache the custom engine template
-        uses: actions/cache@v6
+      # Restored and saved explicitly: the template is saved as soon as it is
+      # built, even when a later step fails (it takes the longest to make).
+      - name: Restore the custom engine template
+        id: engine-cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/engine-cache/templates
           key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
@@ -184,6 +197,13 @@ jobs:
         run: |
           pipx install scons
           bin/build-engine windows
+
+      - name: Save the custom engine template
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/engine-cache/templates
+          key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
 
       - name: Build bundle, zip and installer
         shell: msys2 {0}
@@ -234,7 +254,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends file libfuse2 desktop-file-utils appstream \
-            nasm zlib1g-dev pkg-config ffmpeg libwayland-bin
+            nasm zlib1g-dev pkg-config patchelf ffmpeg libwayland-bin
 
       - name: Cache the bundled ffmpeg build
         uses: actions/cache@v6
@@ -253,8 +273,11 @@ jobs:
             ~/.local/share/godot/export_templates
           key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
 
-      - name: Cache the custom engine template
-        uses: actions/cache@v6
+      # Restored and saved explicitly: the template is saved as soon as it is
+      # built, even when a later step fails (it takes the longest to make).
+      - name: Restore the custom engine template
+        id: engine-cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/engine-cache/templates
           key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
@@ -265,6 +288,13 @@ jobs:
         run: |
           pipx install scons
           bin/build-engine linux
+
+      - name: Save the custom engine template
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/engine-cache/templates
+          key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
 
       - name: Build bundle, tar.xz and AppImage
         env:
