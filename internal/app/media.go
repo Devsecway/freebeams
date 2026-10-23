@@ -180,6 +180,12 @@ func (a *App) mediaStateDoc() core.MediaState {
 		FFmpeg: a.md.tools.Available(), Theora: a.md.tools.CanTranscode(), Tools: a.md.tools.Status(),
 		Audio: a.md.audio, Native: native, Player: render.MediaPlayer(),
 	}
+	switch {
+	case media.AVFoundationAvailable():
+		st.Posters = "avfoundation"
+	case a.md.tools.Available():
+		st.Posters = "ffmpeg"
+	}
 	if a.md.item != nil {
 		st.Current = a.md.item.Title
 		st.Aspect, st.Repeat = string(a.md.item.Aspect.Normalized()), string(a.md.item.Repeat.Normalized())
@@ -475,6 +481,12 @@ func (a *App) startMediaWork() {
 	a.md.status = a.mediaFooter()
 	st, ctx := a.st(), a.ctx()
 	proc := media.NewProcessor(a.md.tools, a.md.cache)
+	if media.AVFoundationAvailable() {
+		// Poster frames and durations without ffmpeg (AVAssetImageGenerator);
+		// ffmpeg, when present, for what AVFoundation cannot read.
+		chain := media.Chain{First: media.AVFoundation{}, Then: a.md.tools}
+		proc.Prober, proc.Thumbnailer = chain, chain
+	}
 	proc.Native = render.NativeVideoSupported() // no transcodes: the sources play as they are
 	skip := make(map[int64]bool, len(a.md.failed))
 	for id := range a.md.failed {

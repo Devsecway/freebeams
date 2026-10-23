@@ -115,6 +115,11 @@ type MediaState struct {
 
 	// Player is the media player backend: avfoundation, ffmpeg or theora.
 	Player string `json:"player"`
+
+	// Posters names what takes video poster frames and reads durations:
+	// "avfoundation" (macOS, ffmpeg for what it cannot read), "ffmpeg" or ""
+	// (none: videos show a plain tile).
+	Posters string `json:"posters"`
 }
 
 // PresentationsState summarises the Presentations tab.
