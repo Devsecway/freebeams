@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-
 func TestBuiltinThemes(t *testing.T) {
 	seen := map[string]bool{DefaultSongTheme().Name: true, DefaultScriptureTheme().Name: true}
 	for _, th := range BuiltinThemes() {
@@ -57,4 +56,3 @@ func contrast(text RGBA, bg Background) float64 {
 	}
 	return worst
 }
-

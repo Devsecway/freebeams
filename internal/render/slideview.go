@@ -404,6 +404,8 @@ type layer struct {
 	mask    layout.Mask // what root clips its children to (transitions.go)
 
 	scale float64 // inner's scale (zoom, transitions.go); 0 until first set
+
+	band ColorRect.Instance // the theme's text box band, under the text (textbox.go)
 }
 
 func ignoreMouse(c Control.Instance) { c.SetMouseFilter(Control.MouseFilterIgnore) }
@@ -446,6 +448,7 @@ func newLayer(parent Node.Instance, role VideoRole) *layer {
 	l.video = newVideoLayer(n)
 	l.native = newNativeLayer(n)
 	l.native.role = role
+	l.band = newBand(n)
 	n.AddChild(l.body.AsNode())
 	n.AddChild(l.footer.AsNode())
 	parent.AddChild(l.root.AsNode())
@@ -593,6 +596,7 @@ func (l *layer) apply(vis visual, r layout.Rect, s float64) {
 	}
 
 	th := vis.theme
+	l.applyBand(th, vis.text != "" || vis.footer != "", s)
 	if (vis.text == "" && vis.footer == "") || s <= 0 {
 		l.body.AsCanvasItem().SetVisible(false)
 		l.footer.AsCanvasItem().SetVisible(false)
