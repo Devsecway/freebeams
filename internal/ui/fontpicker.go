@@ -126,13 +126,16 @@ func (p *fontPicker) setFamily(i int) {
 		return
 	}
 	p.family = i
-	p.button.SetText(p.labels[i])
+	// The face first: Button shapes its text in set_text, and a paragraph
+	// shaped with the face being replaced would point at a freed font
+	// ("Parameter fd is null" when it is drawn).
 	c := p.button.AsControl()
 	if f := faceFor(p.names[i]); f != (Font.Instance{}) {
 		c.AddThemeFontOverride("font", f)
 	} else {
 		c.RemoveThemeFontOverride("font")
 	}
+	p.button.SetText(p.labels[i])
 	if p.open {
 		p.render()
 	}
