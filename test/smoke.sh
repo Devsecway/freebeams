@@ -1489,6 +1489,124 @@ else
 	log "playback: skipped (ffmpeg=$FFMPEG native=$PB_NATIVE player=$PB_PLAYER)"
 fi
 
+# ---- per-item volume / mute and Pause on Black -------------------------------------------------
+# Edit Properties… Volume (Carry Over or Fixed %) and Mute are the volume an
+# item starts at on a monitor; an item without one carries the monitor's
+# volume over, and an item with one does not pass it on. Options ▸ Logo's
+# Pause on Black (off by default) pauses the live file under Black / Logo
+# and resumes it afterwards only if Black paused it (docs/MEDIA.md).
+if [ "$FFMPEG" = "True" ] && [ "$PB_NATIVE" = "True" ]; then
+	PV_DIR="$OUT/playback-volume"
+	rm -rf "$PV_DIR"
+	mkdir -p "$PV_DIR"
+	ffmpeg -v error -y -f lavfi -i "color=c=0x2a7f62:s=320x180:r=30:d=8" -f lavfi -i "sine=frequency=440:duration=8" \
+		-vf "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
+		-c:v libx264 -preset veryfast -c:a aac -shortest "$PV_DIR/pv-clip.mp4" || fail "ffmpeg could not make the volume test clip"
+	for name in pv-plain pv-muted; do
+		python3 - "$PV_DIR/$name.wav" <<'PY'
+import math, struct, sys, wave
+w = wave.open(sys.argv[1], "wb")
+w.setnchannels(1)
+w.setsampwidth(2)
+w.setframerate(22050)
+w.writeframes(b"".join(struct.pack("<h", int(8000 * math.sin(2 * math.pi * 330 * i / 22050))) for i in range(22050 * 8)))
+w.close()
+PY
+	done
+	act "Media tab (volume)" tab '{"tab":"media"}' 's["tab"] == 2'
+	PV_COUNT="$(field "$LAST" media.count)"
+	act "add the volume test items" add-media "{\"path\":\"$PV_DIR\"}" "s[\"media\"][\"count\"] == $PV_COUNT + 3"
+	act "all media (volume)" search-media '{"q":""}' 's["media"]["kind"] == ""'
+	act "a new item has no volume of its own" select-media '{"title":"pv-clip"}' 's["media"]["current"] == "pv-clip" and s["media"]["volume"] == 0 and not s["media"]["mute"]'
+	# Edit Properties…: the clip at a fixed 40 %, the second tone muted.
+	act "Edit Properties… (volume)" media-menu '{"item":"properties","title":"pv-clip"}' 's["dialog"]["mediaProperties"]'
+	act "a volume over 100 is refused" media-properties '{"props":{"title":"pv-clip","volume":140}}' 'not r["ok"] and "volume" in r["error"]'
+	act "properties: volume 40 %" media-properties '{"props":{"title":"pv-clip","volume":40}}' 'r["ok"]'
+	LAST="$(state)"
+	check "the clip keeps 40 %, not muted" "$LAST" 'not s["dialog"].get("mediaProperties") and s["media"]["current"] == "pv-clip" and s["media"]["volume"] == 40 and not s["media"]["mute"]'
+	act "Edit Properties… shows the volume" media-menu '{"item":"properties","title":"pv-clip"}' 's["dialog"]["mediaProperties"]'
+	wait_idle
+	shot media-properties-volume media-properties
+	act "cancel (volume)" media-properties '{"cancel":true}' 'not s["dialog"].get("mediaProperties") and s["media"]["volume"] == 40'
+	act "select the muted tone" select-media '{"title":"pv-muted"}' 's["media"]["current"] == "pv-muted"'
+	act "Edit Properties… (mute)" media-menu '{"item":"properties","title":"pv-muted"}' 's["dialog"]["mediaProperties"]'
+	act "properties: mute" media-properties '{"props":{"title":"pv-muted","volume":80,"mute":true}}' 'r["ok"]'
+	LAST="$(state)"
+	check "the tone is muted (80 % kept for later)" "$LAST" 's["media"]["current"] == "pv-muted" and s["media"]["volume"] == 80 and s["media"]["mute"]'
+	act "Edit Properties… shows the mute" media-menu '{"item":"properties","title":"pv-muted"}' 's["dialog"]["mediaProperties"]'
+	wait_idle
+	shot media-properties-mute media-properties
+	act "cancel (mute)" media-properties '{"cancel":true}' 'not s["dialog"].get("mediaProperties")'
+	# Carry over: the plain tone at 0.5, the clip at its 40 %, the plain tone at 0.5 again.
+	act "select the plain tone" select-media '{"title":"pv-plain"}' 's["media"]["current"] == "pv-plain" and not s["playback"]["preview"].get("itemVolume")'
+	act "the plain tone goes live" go-live '' 's["playback"]["live"]["title"] == "pv-plain" and s["playback"]["live"]["playing"] and not s["playback"]["live"].get("itemVolume")'
+	act "the operator sets 0.5" volume '{"value":0.5}' 's["playback"]["live"]["volume"] == 0.5'
+	act "select the clip: the preview starts at its 40 %" select-media '{"title":"pv-clip"}' 's["playback"]["preview"]["title"] == "pv-clip" and s["playback"]["preview"]["volume"] == 0.4 and s["playback"]["preview"]["itemVolume"]'
+	act "the clip goes live at 40 %" go-live '' 's["playback"]["live"]["title"] == "pv-clip" and s["playback"]["live"]["volume"] == 0.4 and s["playback"]["live"]["itemVolume"] and s["playback"]["live"]["playing"]'
+	pb_wait "the clip plays (volume)" 's["playback"]["live"]["position"] > 0.3 and s["playback"]["live"]["hasAudio"]'
+	act "the transport raises the clip for this playback" volume '{"value":0.9}' 's["playback"]["live"]["volume"] == 0.9'
+	act "select the plain tone again" select-media '{"title":"pv-plain"}' 's["media"]["current"] == "pv-plain"'
+	act "the plain tone goes back to the carried 0.5" go-live '' 's["playback"]["live"]["title"] == "pv-plain" and s["playback"]["live"]["volume"] == 0.5 and not s["playback"]["live"].get("itemVolume")'
+	act "select the muted tone (live)" select-media '{"title":"pv-muted"}' 's["playback"]["preview"]["volume"] == 0 and s["playback"]["preview"]["itemVolume"]'
+	act "the muted tone goes live silent" go-live '' 's["playback"]["live"]["title"] == "pv-muted" and s["playback"]["live"]["volume"] == 0 and s["playback"]["live"]["playing"] and s["playback"]["live"]["itemVolume"]'
+	pb_wait "the muted tone plays on" 's["playback"]["live"]["position"] > 0.3 and s["playback"]["live"]["playing"]'
+	act "the transport can still raise a muted item" volume '{"value":0.6}' 's["playback"]["live"]["volume"] == 0.6 and s["playback"]["live"]["playing"]'
+	# The schedule item takes the item's volume from its snapshot.
+	act "select the clip (schedule)" select-media '{"title":"pv-clip"}' 's["media"]["current"] == "pv-clip"'
+	act "add the clip to the schedule (40 %)" add-to-schedule '{"source":"media"}' 's["schedule"]["items"][-1] == "pv-clip"'
+	PV_ROW="$(python3 -c 'import json,sys; d = json.loads(sys.argv[1])["data"]; print(len(d.get("state", d)["schedule"]["items"]) - 1)' "$LAST")"
+	act "select the clip's schedule item (volume)" select-schedule "{\"index\":$PV_ROW}" 's["preview"]["title"] == "pv-clip" and s["playback"]["preview"]["volume"] == 0.4'
+	act "the schedule item goes live at 40 %" go-live '' 's["live"]["title"] == "pv-clip" and s["playback"]["live"]["volume"] == 0.4 and s["playback"]["live"]["itemVolume"]'
+	pb_wait "the schedule clip plays" 's["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 0.3'
+	# Pause on Black: off by default (the clip plays on under Black).
+	check "Pause on Black is off by default" "$LAST" 'not s["settings"]["pauseOnBlack"]'
+	act "option off: Black leaves the clip playing" black '' 's["mode"] == "black" and s["playback"]["live"]["hidden"]'
+	pb_wait "option off: the clip plays on under Black" 's["playback"]["live"]["playing"] and not s["playback"]["live"].get("blackPaused")'
+	act "option off: Black off" black '' 's["mode"] == "normal"'
+	act "Pause on Black on" set-setting '{"key":"playback.pauseOnBlack","value":true}' 's["settings"]["pauseOnBlack"]'
+	act "Options ▸ Logo shows it" options '{"page":"logo"}' 's["dialog"]["settings"]'
+	wait_idle
+	shot settings-pause-on-black settings
+	act "close Options (OK keeps it)" options '{"on":false}' 'not s["dialog"]["settings"] and s["settings"]["pauseOnBlack"]'
+	act "seek to 1 s before Black" seek '{"seconds":1.0}' 'r["ok"]'
+	pb_wait "the clip plays from 1 s before Black" 's["playback"]["live"]["playing"] and 1.0 < s["playback"]["live"]["position"] < 3.0'
+	act "Black (pause on Black)" black '' 's["mode"] == "black"'
+	pb_wait "Black pauses the live clip" 'not s["playback"]["live"]["playing"] and s["playback"]["live"]["blackPaused"] and s["playback"]["live"]["hidden"]'
+	PV_POS="$(field "$LAST" playback.live.position)"
+	sleep 1
+	LAST="$(state)"
+	check "the position holds under Black" "$LAST" "abs(s[\"playback\"][\"live\"][\"position\"] - $PV_POS) < 0.05 and not s[\"playback\"][\"live\"][\"playing\"]"
+	act "Black off (pause on Black)" black '' 's["mode"] == "normal"'
+	pb_wait "leaving Black resumes the clip" 's["playback"]["live"]["playing"] and not s["playback"]["live"].get("blackPaused")'
+	pb_wait "the clip plays on from where Black paused it" "s[\"playback\"][\"live\"][\"position\"] > $PV_POS + 0.2"
+	act "the operator pauses" pause '' 'not s["playback"]["live"]["playing"]'
+	act "Black over a paused clip" black '' 's["mode"] == "black"'
+	act "logo over the paused clip" logo '' 's["mode"] == "logo"'
+	act "logo off" logo '' 's["mode"] == "normal"'
+	LAST="$(state)"
+	check "a clip paused before Black stays paused" "$LAST" 'not s["playback"]["live"]["playing"] and not s["playback"]["live"].get("blackPaused")'
+	act "play (logo)" play '' 's["playback"]["live"]["playing"]'
+	act "Logo (pause on Black)" logo '' 's["mode"] == "logo"'
+	pb_wait "Logo pauses the clip too" 'not s["playback"]["live"]["playing"] and s["playback"]["live"]["blackPaused"]'
+	act "the operator plays under Logo" play '' 's["playback"]["live"]["playing"] and not s["playback"]["live"].get("blackPaused")'
+	pb_wait "the clip plays under Logo" 's["playback"]["live"]["playing"] and s["playback"]["live"]["hidden"]'
+	act "Logo off (operator played)" logo '' 's["mode"] == "normal"'
+	pb_wait "the clip keeps playing after Logo" 's["playback"]["live"]["playing"] and not s["playback"]["live"].get("hidden")'
+	act "Pause on Black off" set-setting '{"key":"pauseOnBlack","value":false}' 'not s["settings"]["pauseOnBlack"]'
+	act "remove the clip's schedule item (volume)" remove-schedule "{\"index\":$PV_ROW}" "len(s[\"schedule\"][\"items\"]) == $PV_ROW"
+	act "save the schedule (volume)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+	# Leave a plain item live at 0.5, as the playback block left the monitor.
+	act "select the plain tone (end)" select-media '{"title":"pv-plain"}' 's["media"]["current"] == "pv-plain"'
+	act "the plain tone goes live (end)" go-live '' 's["playback"]["live"]["title"] == "pv-plain" and s["playback"]["live"]["volume"] == 0.5'
+	for t in pv-clip pv-plain pv-muted; do
+		act "remove $t" remove-media "{\"title\":\"$t\",\"confirm\":true}" 'r["ok"]'
+	done
+	check "the volume test items are gone" "$LAST" "s[\"media\"][\"count\"] == $PV_COUNT"
+	act "Songs tab (volume)" tab '{"tab":"songs"}' 's["tab"] == 0'
+else
+	log "per-item volume / pause on Black: skipped (ffmpeg=$FFMPEG native=$PB_NATIVE)"
+fi
+
 # ---- theme polish ------------------------------------------------------------------------------
 # Video theme backgrounds (Use As Theme Background, the editor's Library…), the editor's "Apply
 # changes to items in schedule" choice, the font search, theme files (export / import) and the
