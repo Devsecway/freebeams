@@ -354,6 +354,17 @@ internal/app               Godot: the App node that wires store + presenter + ui
   tree: give it the theme explicitly (`ui.themeOf`). Plain Trees drag through `SetDragForwarding(drag, can, drop)`.
 - A drop target is only asked (`_can_drop_data`) while the pointer is over it; clear its drop feedback from a
   ticker (`GuiIsDragging`, pointer still inside) and on `NotificationDragEnd`, not from the last can-drop call.
+- Hotkey chords tell ⌘ (`Chord.Cmd`, `KeyEvent.Meta`) and Control apart only on macOS (`core.macModifiers`);
+  elsewhere ⌘ folds into Ctrl. `internal/app/core`'s `TestMain` pins the portable rules whatever the host is, and
+  Mac behaviour is tested with `setMacModifiers(t, true)`; a new keymap test must pick one explicitly. The keymap
+  lives under `settings.hotkeys.v2`; the old `settings.hotkeys` ("ctrl" = Ctrl or ⌘) is read through
+  `core.MigrateKeymap` (⌘ and ⌃ both) while the new key is missing.
+- `NSApp.appearance` (`appearance_darwin.go`) overrides the system's Light/Dark for every Godot window, its title
+  bar, the native menus and the Open/Save panels: Godot sets no per-window `NSWindow.appearance`.
+  `/state.nativeAppearance` reads `effectiveAppearance` back (with a ` (window: …)` suffix if a window differs), so
+  smoke can verify it without switching the system to Light mode.
+- A failed control reply has no state: in a smoke check of a refusal, test `r["error"]`, not `s[…]` (eval raises
+  `KeyError` and the check fails); read the unchanged state with a following `settings` / `wait-idle` act.
 
 ## Release builds (`gd build`) gotchas
 - `bin/gd` must resolve the tool binary with `GOOS= GOARCH= go tool -n gd` and exec it with the target restored:

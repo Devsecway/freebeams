@@ -29,8 +29,9 @@ func TestSettingsDefaultsAndNormalized(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.want.Alerts = models.DefaultAlertStyles() // missing alert styles get the defaults
-			tt.want.Hotkeys = DefaultKeymap()            // and missing hotkeys theirs
+			tt.want.Alerts = models.DefaultAlertStyles()        // missing alert styles get the defaults
+			tt.want.Hotkeys = DefaultKeymap()                   // and missing hotkeys theirs
+			tt.want.Screens = models.DefaultScreenTransitions() // and the screens "same"
 			if got := tt.in.Normalized(""); !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %+v\nwant %+v", got, tt.want)
 			}
@@ -145,5 +146,34 @@ func TestBindings(t *testing.T) {
 	}
 	if !reflect.DeepEqual(rows, Bindings()) {
 		t.Error("Bindings is not deterministic")
+	}
+}
+
+func TestScreenTransitionSettings(t *testing.T) {
+	want := map[models.OutputMode]string{
+		models.ModeBlack: "settings.transition.black",
+		models.ModeClear: "settings.transition.clear",
+		models.ModeLogo:  "settings.transition.logo",
+	}
+	for _, m := range ScreenModes {
+		if got := SettingScreenTransition(m); got != want[m] {
+			t.Errorf("SettingScreenTransition(%s) = %q, want %q", m, got, want[m])
+		}
+	}
+	own := models.OwnTransition(models.Transition{Kind: models.TransitionWipeDown, Duration: 300 * time.Millisecond})
+	s := DefaultSettings("")
+	s.Screens = s.Screens.With(models.ModeLogo, own)
+	s.Screens.Clear = models.ScreenTransition{} // a zero value is "same"
+	n := s.Normalized("")
+	if n.Screens.Logo != own || n.Screens.Clear != models.SameTransition() || n.Screens.Black != models.SameTransition() {
+		t.Fatalf("normalized screens = %+v", n.Screens)
+	}
+	b, err := json.Marshal(n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Settings
+	if err := json.Unmarshal(b, &back); err != nil || back.Screens != n.Screens {
+		t.Fatalf("round trip %s = %+v, %v", b, back.Screens, err)
 	}
 }

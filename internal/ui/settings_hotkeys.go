@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"runtime"
 	"slices"
 
 	"graphics.gd/classdb/Button"
@@ -124,9 +125,20 @@ func (p *HotkeysPage) build() Control.Instance {
 	col := vbox(6)
 	expand(col.AsControl())
 	add(col, p.tree.AsControl(), buttons.AsControl(), p.status.AsControl(),
-		hint("Select an action, then Add Key… and press the key, with Ctrl (⌘), Alt or Shift if you like. An action can have "+
-			"several keys. Hotkeys are off while a text field or a dialog has focus, so ⌘C still copies text."))
+		hint(hotkeysHint()))
 	return col.AsControl()
+}
+
+// hotkeysHint explains the modifiers of this platform: ⌘ and Control are
+// different keys on a Mac (core.MacModifiers); elsewhere Ctrl is Ctrl.
+func hotkeysHint() string {
+	if runtime.GOOS == "darwin" {
+		return "Select an action, then Add Key… and press the key, with ⌘, Control (⌃), Option (⌥) or Shift (⇧) if you " +
+			"like: ⌘B and ⌃B are different keys. An action can have several keys. Hotkeys are off while a text field or a " +
+			"dialog has focus, so ⌘C still copies text."
+	}
+	return "Select an action, then Add Key… and press the key, with Ctrl, Alt or Shift if you like. An action can have " +
+		"several keys. Hotkeys are off while a text field or a dialog has focus, so Ctrl+C still copies text."
 }
 
 // SetRows fills the table.

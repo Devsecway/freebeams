@@ -277,7 +277,7 @@ It is also the drag handle for the main splitter (`Cursor = hand`). Clicking it 
 | First / last slide | Home / End |
 | Next / prev schedule item | ↓ / ↑ |
 | Go live next / prev | PgDn / PgUp |
-| Black / Clear / Logo | Ctrl+B / Ctrl+C / Ctrl+L |
+| Black / Clear / Logo | Ctrl+B / Ctrl+C / Ctrl+L (on a Mac both ⌘ and Control: ⌘B and ⌃B; FreeBeams tells them apart) |
 | Jump to Verse / Chorus / Bridge / Pre-chorus / Tag / Intro / Ending / Slide | V / C / B / R / T / I / E / S (then number) |
 
 ## 4. Menus (macOS)

@@ -210,6 +210,9 @@ type App struct {
 	// published its control server for later launches to hand files to.
 	opening      core.OpenFiles
 	instanceFile string
+
+	// look is what the OS-drawn chrome was last given (appearance.go).
+	look nativeLook
 }
 
 // New returns the app node; add it to the scene tree (main.go does this).
@@ -507,6 +510,8 @@ func (a *App) Process(delta Float.X) {
 	a.tickStage() // the stage display's clock and timer (stage.go)
 
 	a.renderOverlay() // the alert layer moves every frame (alerts.go)
+
+	a.renderNativeAppearance() // title bars and native panels follow the interface colour (appearance.go)
 	a.flushReplies()
 	a.serveWaiters()
 	a.serveProgressWaiters() // wait-transition (hotkeys.go)

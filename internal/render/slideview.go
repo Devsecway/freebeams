@@ -53,6 +53,11 @@ type SlideView struct {
 	fadeSet bool
 	kind    models.TransitionKind // zero value = blend (transitions.go)
 
+	// screens are the Black / Clear / Logo transitions and run the one of
+	// the running change, picked when it starts (SetScreenTransitions).
+	screens models.ScreenTransitions
+	run     models.Transition
+
 	transitioning bool
 	progress      float64
 	skipFrame     bool // ignore the (often long) frame that started the fade
@@ -99,10 +104,11 @@ func (v *SlideView) SetFrame(f models.Frame) {
 	if v.hasFrame && f.Seq != 0 && f.Seq == v.frame.Seq {
 		return
 	}
+	from := v.frame.Mode
 	v.frame, v.hasFrame = f, true
 	v.want = resolveVisual(f)
 	v.build()
-	v.show()
+	v.show(from)
 }
 
 // Frame returns the last frame passed to SetFrame.
@@ -208,7 +214,7 @@ func (v *SlideView) Process(delta Float.X) {
 		v.updateProcess()
 		return
 	}
-	d := v.transitionDuration().Seconds()
+	d := v.run.Duration.Seconds()
 	if d <= 0 {
 		v.finishTransition()
 		return
@@ -270,7 +276,7 @@ func (v *SlideView) relayout() {
 }
 
 // show projects v.want onto the layers, crossfading when appropriate.
-func (v *SlideView) show() {
+func (v *SlideView) show(from models.OutputMode) {
 	if v.cur.applied && v.cur.vis == v.want {
 		return
 	}
@@ -280,7 +286,8 @@ func (v *SlideView) show() {
 		v.finishTransition()
 	}
 	r, s := v.area()
-	animate := v.cur.applied && v.transitionDuration() > 0 &&
+	t := v.changeTransition(from, v.frame.Mode) // transitions.go
+	animate := v.cur.applied && t.Duration > 0 &&
 		v.AsNode().IsInsideTree() && v.AsCanvasItem().IsVisibleInTree() && r.W > 0
 	if !animate {
 		v.cur.apply(v.want, r, s)
@@ -295,7 +302,8 @@ func (v *SlideView) show() {
 	v.cur.root.AsCanvasItem().SetVisible(true)
 	v.prev.root.AsCanvasItem().SetVisible(true)
 	v.AsNode().MoveChild(v.cur.root.AsNode(), -1)
-	v.raiseOverlay()    // alerts stay above both layers (overlay.go)
+	v.raiseOverlay() // alerts stay above both layers (overlay.go)
+	v.run = t
 	v.beginTransition() // the kind's starting state (transitions.go)
 	v.transitioning = true
 	v.progress = 0

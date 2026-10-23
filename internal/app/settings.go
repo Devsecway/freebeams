@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"runtime/debug"
+	"strings"
 
 	"freebeams/internal/app/core"
 	"freebeams/internal/control"
@@ -45,7 +46,12 @@ func (a *App) loadSettings() {
 		}
 		get(core.SettingInterfaceColor, &a.settings.InterfaceColor)
 		get(core.SettingAlertStyles, &a.settings.Alerts)
-		get(core.SettingHotkeys, &a.settings.Hotkeys) // hotkeys.go
+		a.settings.Hotkeys = a.loadHotkeys() // hotkeys.go
+		for _, m := range core.ScreenModes {
+			st := models.SameTransition()
+			get(core.SettingScreenTransition(m), &st)
+			a.settings.Screens = a.settings.Screens.With(m, st)
+		}
 		get(core.SettingPauseOnBlack, &a.settings.PauseOnBlack)
 		get(core.SettingRecent, &a.recent)
 	}
@@ -199,6 +205,10 @@ func (a *App) closeSettings(cancel bool) {
 	a.setAlertStyles(s.Alerts)
 	a.setHotkeys(s.Hotkeys)
 	a.setPauseOnBlack(s.PauseOnBlack)
+	for _, m := range core.ScreenModes {
+		st, _ := s.Screens.Get(m)
+		a.setScreenTransition(m, st) // transitions.go
+	}
 }
 
 // logoFilters are the native dialog filters for Choose Image….
@@ -280,6 +290,9 @@ func (a *App) wireSettings() {
 	a.logoView.SetTransitionDuration(0)
 	d.LogoPreview.SetContent(a.logoView.AsControl())
 	d.OnTransition = func(t models.Transition) { a.event(func() { a.setTransition(t) }) }
+	d.OnScreenTransition = func(m models.OutputMode, t models.ScreenTransition) {
+		a.event(func() { a.setScreenTransition(m, t) }) // transitions.go
+	}
 	d.OnOutputScreen = func(i int) { a.event(func() { a.fail("output screen", a.setOutputScreen(i)) }) }
 	d.OnChooseLogo = func() { a.event(a.chooseLogoDialog) }
 	d.OnDefaultLogo = func() { a.event(func() { a.setLogo(core.LogoBackground(a.logoDir)) }) }
@@ -305,6 +318,7 @@ func (a *App) settingsValues() ui.SettingsValues {
 		Alerts:       a.settings.Alerts,
 	}
 	v.PauseOnBlack = a.settings.PauseOnBlack
+	v.Screens = a.settings.Screens
 	if a.st() != nil {
 		v.LibraryPath = a.st().Path()
 	}
@@ -378,7 +392,21 @@ func (a *App) handleSettingsCommand(cmd *control.Command, args actionArgs) bool 
 		// GET-like: the reply's state carries the settings.
 		a.answer(cmd, nil)
 	case "transition":
-		// {kind, duration}: either part may be left out to keep the current one.
+		// {kind, duration}: either part may be left out to keep the current
+		// one. {mode: "black"|"clear"|"logo", kind, duration} sets that
+		// screen's transition instead; kind "same" follows the slide's.
+		if args.Mode != "" && args.Mode != "slide" {
+			m, err := models.ParseScreenMode(args.Mode)
+			if err == nil {
+				err = a.screenTransitionCommand(m, args)
+			}
+			if err != nil {
+				cmd.RespondErr(fmt.Errorf("transition: %w", err))
+				return true
+			}
+			a.answer(cmd, nil)
+			return true
+		}
 		t := a.settings.Transition
 		if args.Kind != "" {
 			k, err := models.ParseTransitionKind(args.Kind)
@@ -487,10 +515,20 @@ func (a *App) applySetting(key string, raw json.RawMessage) error {
 			return fmt.Errorf("set-setting %s: %w", key, err)
 		}
 		a.setPauseOnBlack(on)
+
+	case core.SettingScreenTransition(models.ModeBlack), core.SettingScreenTransition(models.ModeClear),
+		core.SettingScreenTransition(models.ModeLogo), "transition.black", "transition.clear", "transition.logo":
+		// "same" or a transition object (models.ScreenTransition).
+		_, screen, _ := strings.Cut(strings.TrimPrefix(key, "settings."), ".")
+		var st models.ScreenTransition
+		if err := json.Unmarshal(raw, &st); err != nil {
+			return fmt.Errorf("set-setting %s: %w", key, err)
+		}
+		a.setScreenTransition(models.OutputMode(screen), st) // transitions.go
 	case core.SettingAlertStyles, "alerts":
 		return a.applyAlertStyles(key, raw)
 	default:
-		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, stage, remote.enabled, remote.port, alerts, playback.pauseOnBlack)", key)
+		return fmt.Errorf("set-setting: unknown key %q (transition, transition.black, transition.clear, transition.logo, output.screen, output.logo, ui.interfaceColor, stage, remote.enabled, remote.port, alerts, playback.pauseOnBlack)", key)
 	}
 	return nil
 }

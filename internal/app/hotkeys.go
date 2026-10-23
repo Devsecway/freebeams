@@ -60,6 +60,33 @@ func init() {
 	}
 }
 
+// loadHotkeys reads the stored keymap (loadSettings): core.SettingHotkeys,
+// or, when only an older build has saved one, core.SettingHotkeysLegacy
+// migrated (there "ctrl" meant Ctrl or ⌘; on a Mac it becomes both). The
+// migrated keymap is written under the new key on its first change. nil
+// means the defaults.
+func (a *App) loadHotkeys() core.Keymap {
+	var km core.Keymap
+	found, err := a.st().GetSetting(a.ctx(), core.SettingHotkeys, &km)
+	if err != nil {
+		a.fail("read setting "+core.SettingHotkeys, err)
+	}
+	if found {
+		return km
+	}
+	var legacy core.Keymap
+	found, err = a.st().GetSetting(a.ctx(), core.SettingHotkeysLegacy, &legacy)
+	if err != nil {
+		a.fail("read setting "+core.SettingHotkeysLegacy, err)
+	}
+	if !found {
+		return nil
+	}
+	km = core.MigrateKeymap(legacy)
+	log.Printf("[freebeams] hotkeys: migrated %s (⌘ and Control told apart: %v)", core.SettingHotkeysLegacy, core.MacModifiers())
+	return km
+}
+
 // ---- events ----------------------------------------------------------------------
 
 // setHotkeys replaces the keymap: applied to the hotkeys at once, persisted.

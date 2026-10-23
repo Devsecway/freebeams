@@ -274,6 +274,17 @@ type State struct {
 	// BibleManager is the Bible Manager: every translation it can add or
 	// remove, the Bibles folder and the running task (biblemanager.go).
 	BibleManager BibleManagerState `json:"bibleManager"`
+
+	// LiveTransition is the transition running on the output (the live
+	// monitor when the output is closed): the slide transition, or Black's,
+	// Clear's or Logo's. Null when none runs.
+	LiveTransition *models.Transition `json:"liveTransition"`
+
+	// NativeAppearance is the appearance the app gave the OS-drawn chrome
+	// (title bars, native menus, Open/Save panels): on macOS the name of
+	// NSApp's effective appearance ("NSAppearanceNameDarkAqua"), on Windows
+	// "dark" / "light" (DWMWA_USE_IMMERSIVE_DARK_MODE), "" elsewhere.
+	NativeAppearance string `json:"nativeAppearance"`
 }
 
 // StateInput is everything BuildState reads. The app fills it on the main
@@ -324,6 +335,9 @@ type StateInput struct {
 	TransitionProgress float64
 
 	BibleManager BibleManagerState
+
+	LiveTransition   *models.Transition
+	NativeAppearance string
 }
 
 // deckState summarises deck d with slide i selected.
@@ -410,6 +424,7 @@ func BuildState(in StateInput) State {
 	}
 	st.Bundled = in.Bundled
 	st.BibleManager = in.BibleManager
+	st.LiveTransition, st.NativeAppearance = in.LiveTransition, in.NativeAppearance
 	if st.BibleManager.Entries == nil {
 		st.BibleManager.Entries = []BibleEntry{}
 	}

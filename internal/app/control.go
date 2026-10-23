@@ -111,6 +111,9 @@ func (a *App) state() core.State {
 		TransitionProgress: a.transitionProgress(),
 
 		BibleManager: a.bibleManagerStateDoc(),
+
+		LiveTransition:   a.liveTransition(),   // transitions.go
+		NativeAppearance: a.nativeAppearance(), // appearance.go
 	})
 }
 

@@ -206,7 +206,7 @@ func (h *Hotkeys) Handle(ev KeyEvent, focus Focus) (cmd Command, consumed bool) 
 	}
 	key := ev.Key
 	c := ChordOf(ev)
-	mod := c.Ctrl || c.Alt
+	mod := c.Ctrl || c.Alt || c.Cmd
 
 	if !mod {
 		if d, ok := digit(key); ok {

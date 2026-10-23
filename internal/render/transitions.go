@@ -37,6 +37,25 @@ func (v *SlideView) SetTransition(t models.Transition) {
 	v.SetTransitionDuration(t.Duration)
 }
 
+// SetScreenTransitions selects the Black, Clear and Logo transitions for
+// subsequent changes (the default follows SetTransition). The change into
+// or out of a screen picks its transition when it starts
+// (models.ScreenTransitions.For), so changing them mid-way never alters a
+// running transition.
+func (v *SlideView) SetScreenTransitions(s models.ScreenTransitions) { v.screens = s }
+
+// changeTransition is the transition of a change from mode from to the
+// current frame's mode.
+func (v *SlideView) changeTransition(from, to models.OutputMode) models.Transition {
+	slide := models.Transition{Kind: v.transitionKind(), Duration: v.transitionDuration()}
+	return v.screens.For(slide, from, to) // thumbnails: zero screens follow their 0 ms slide
+}
+
+// RunningTransition is the transition running now (ok false when none).
+func (v *SlideView) RunningTransition() (models.Transition, bool) {
+	return v.run, v.transitioning
+}
+
 // Transition returns the configured transition.
 func (v *SlideView) Transition() models.Transition {
 	return models.Transition{Kind: v.transitionKind(), Duration: v.transitionDuration()}
@@ -49,10 +68,15 @@ func (v *SlideView) transitionKind() models.TransitionKind {
 	return v.kind
 }
 
-// frameAt is the layers' state at progress t for the current size.
+// frameAt is the layers' state at progress t for the current size, for
+// the running change's kind.
 func (v *SlideView) frameAt(t float64) layout.TransitionFrame {
 	r, _ := v.area()
-	return layout.Transition(v.transitionKind(), t, r.W, r.H)
+	kind := v.run.Kind
+	if !kind.Valid() {
+		kind = models.TransitionBlend
+	}
+	return layout.Transition(kind, t, r.W, r.H)
 }
 
 // beginTransition puts the layers in their starting state. show calls it once

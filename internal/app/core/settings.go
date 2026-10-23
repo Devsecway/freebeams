@@ -52,7 +52,22 @@ type Settings struct {
 	// and leaving them plays it again if it was playing (CoverPlayback).
 	// Off by default: as in EasyWorship, a clip plays on under Black.
 	PauseOnBlack bool `json:"pauseOnBlack"`
+
+	// Screens are Options ▸ Transition's Black, Clear and Logo transitions
+	// (SettingScreenTransition); each is "same" (the slide Transition) by
+	// default.
+	Screens models.ScreenTransitions `json:"screenTransitions"`
 }
+
+// SettingScreenTransition is the setting of one screen's transition:
+// "settings.transition.black", ".clear" or ".logo" (models.ScreenTransition).
+func SettingScreenTransition(mode models.OutputMode) string {
+	return SettingTransition + "." + string(mode)
+}
+
+// ScreenModes are the screens with a transition of their own, in the
+// Options dialog's order (EasyWorship's Slide / Black / Clear / Logo).
+var ScreenModes = []models.OutputMode{models.ModeBlack, models.ModeClear, models.ModeLogo}
 
 // DefaultSettings returns the built-in settings: a 500 ms blend, the automatic
 // output display, the logo from logoDir (LogoBackground) and the dark
@@ -65,6 +80,7 @@ func DefaultSettings(logoDir string) Settings {
 		InterfaceColor: ColorDark,
 		Alerts:         models.DefaultAlertStyles(),
 		Hotkeys:        DefaultKeymap(),
+		Screens:        models.DefaultScreenTransitions(),
 	}
 }
 
@@ -84,6 +100,10 @@ func (s Settings) Normalized(logoDir string) Settings {
 	}
 	s.Alerts = s.Alerts.Normalized()
 	s.Hotkeys = s.Hotkeys.Normalized()
+	for _, m := range ScreenModes {
+		st, _ := s.Screens.Get(m)
+		s.Screens = s.Screens.With(m, st) // a zero value is "same"
+	}
 	return s
 }
 
