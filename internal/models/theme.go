@@ -69,6 +69,21 @@ type Theme struct {
 	// Text ▸ changes. A custom copy keeps its look when the saved theme is
 	// edited; library themes never have it (store.SaveTheme clears it).
 	Custom bool `json:"custom,omitempty"`
+
+	// Box fills the text box (the Margins rect) with a translucent band
+	// behind the words: a lower third over a video, or legibility over a
+	// busy image. The zero value draws nothing.
+	Box TextBox `json:"box,omitzero"`
+}
+
+// TextBox is a theme's band behind the text. Padding (canvas units) grows
+// the band beyond the margins rect on every side; FullWidth runs it from
+// the left edge of the canvas to the right one.
+type TextBox struct {
+	Enabled   bool    `json:"enabled"`
+	Color     RGBA    `json:"color"`
+	Padding   float32 `json:"padding"`
+	FullWidth bool    `json:"fullWidth,omitempty"`
 }
 
 // SameLook reports whether a and b draw the same: every field but the ID,
