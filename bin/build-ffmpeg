@@ -5,11 +5,17 @@
 # The source is the pinned release tarball from ffmpeg.org, verified against
 # its SHA-256. It is configured without --enable-gpl / --enable-nonfree and
 # with no external libraries (--disable-autodetect, zlib aside), so the
-# programs are LGPL v2.1+, and linked statically, so they need no DLLs / .so
-# files beside them.
+# programs are LGPL v2.1+. The FFmpeg libraries are built shared and sit next
+# to the two programs (avcodec-62.dll / libavcodec.so.62, ...; found through
+# the exe's folder on Windows, an $ORIGIN rpath on Linux, @loader_path on
+# macOS): ffmpeg and ffprobe then share one copy of libavcodec instead of
+# carrying one each, which halves what a package spends on them. libgcc is
+# linked in statically; on Windows zlib1.dll comes along from the toolchain,
+# Linux uses the system's libz.so.1.
 #
 #   bin/build-ffmpeg            # builds once into the cache, prints nothing else on stdout
-#   bin/build-ffmpeg --prefix   # prints the install prefix (bin/ffmpeg[.exe], bin/ffprobe[.exe], LICENSE / NOTICE)
+#   bin/build-ffmpeg --prefix   # prints the install prefix (bin/: ffmpeg[.exe], ffprobe[.exe] and the
+#                               # shared libraries; LICENSE.txt / NOTICE.txt)
 #
 # Runs natively on Linux (gcc, make, nasm) and on Windows under MSYS2 UCRT64
 # (mingw-w64-ucrt-x86_64-gcc, make, nasm, zlib); also on macOS for a local
@@ -40,7 +46,7 @@ arch="$(uname -m)"
 CACHE="${FFMPEG_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/freebeams}"
 # A Windows path from the workflow (D:\a\_temp\...) becomes /d/a/_temp/... under MSYS2.
 command -v cygpath >/dev/null 2>&1 && CACHE="$(cygpath -u "$CACHE")"
-PREFIX="${FFMPEG_PREFIX:-$CACHE/ffmpeg-$FFMPEG_VERSION-$os-$arch}"
+PREFIX="${FFMPEG_PREFIX:-$CACHE/ffmpeg-$FFMPEG_VERSION-$os-$arch-shared}"
 
 if [ "${1:-}" = "--prefix" ]; then
 	echo "$PREFIX"
@@ -91,7 +97,7 @@ cd "$WORK/ffmpeg-$FFMPEG_VERSION"
 flags=(
 	--prefix="$PREFIX"
 	--disable-debug --disable-doc --disable-ffplay
-	--enable-static --disable-shared
+	--enable-shared --disable-static
 	--disable-autodetect --enable-zlib
 	--disable-network --disable-devices
 	--disable-encoders --enable-encoder=mjpeg,png,rawvideo,wrapped_avframe,pcm_f32le,pcm_s16le
@@ -99,8 +105,15 @@ flags=(
 	--pkg-config-flags=--static
 )
 case "$os" in
-windows) flags+=(--extra-ldflags=-static) ;;
-linux) flags+=(--extra-ldflags=-static) ;;
+windows) flags+=(--extra-ldflags=-static-libgcc) ;;
+linux)
+	# Each library and program finds the others in its own folder. make runs
+	# the link through sh: \$$ reaches it as a literal $ORIGIN. The old-style
+	# DT_RPATH (not RUNPATH) also covers the libraries' own dependencies.
+	# shellcheck disable=SC2016
+	flags+=('--extra-ldflags=-Wl,-rpath,\$$ORIGIN -Wl,--disable-new-dtags')
+	;;
+macos) flags+=(--install-name-dir=@loader_path) ;;
 esac
 step "configure ${flags[*]}"
 ./configure "${flags[@]}" >configure.out 2>&1 || {
@@ -116,7 +129,38 @@ step "make -j$jobs"
 make -j"$jobs" >&2
 rm -rf "${PREFIX:?}"
 make install >&2
+# The shared libraries go next to the programs, by the names they load them
+# by (the SONAME; Windows installs its DLLs into bin/ already).
+if [ "$os" != windows ]; then
+	for so in "$PREFIX"/lib/lib*.so.* "$PREFIX"/lib/lib*.*.dylib; do
+		[ -e "$so" ] || continue
+		case "$so" in
+		*.so.*.* | *.*.*.*.dylib) continue ;; # the versioned files; the SONAME link resolves to them
+		esac
+		cp -fL "$so" "$PREFIX/bin/"
+	done
+fi
 rm -rf "${PREFIX:?}/include" "${PREFIX:?}/lib" "${PREFIX:?}/share"
+rm -f "$PREFIX"/bin/*.lib "$PREFIX"/bin/*.def "$PREFIX"/bin/*.dll.a
+if [ "$os" = windows ]; then
+	# DLLs from the toolchain that the build links (zlib1.dll; nothing else is
+	# expected): copied next to the programs, anything else is an error.
+	command -v objdump >/dev/null 2>&1 || fail "objdump not found (binutils) to check the DLLs' dependencies"
+	gccdir="$(dirname "$(command -v gcc)")"
+	for f in "$PREFIX"/bin/*.exe "$PREFIX"/bin/*.dll; do
+		for dep in $(objdump -p "$f" | awk '/DLL Name/{print $3}'); do
+			[ -f "$PREFIX/bin/$dep" ] && continue
+			case "$(tr '[:upper:]' '[:lower:]' <<<"$dep")" in
+			api-ms-win-* | kernel32.dll | user32.dll | gdi32.dll | advapi32.dll | ole32.dll | oleaut32.dll | shell32.dll | \
+				bcrypt.dll | ws2_32.dll | secur32.dll | psapi.dll | shlwapi.dll | msvcrt.dll | ucrtbase.dll | mfplat.dll | \
+				mfuuid.dll | strmiids.dll | ncrypt.dll | crypt32.dll | winmm.dll) continue ;;
+			esac
+			[ -f "$gccdir/$dep" ] || fail "$(basename "$f") needs $dep, which is neither a system DLL nor in $gccdir"
+			cp -f "$gccdir/$dep" "$PREFIX/bin/"
+			echo "    bundled $dep" >&2
+		done
+	done
+fi
 
 # configure ignores a component name it does not know: check that what the
 # app runs is there (ffmpeg -f rawvideo / f32le / image2, -c:v mjpeg).

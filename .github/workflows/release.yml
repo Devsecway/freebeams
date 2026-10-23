@@ -9,6 +9,12 @@ name: Release
 # (the version job fails otherwise), or run it by hand for a dry run that only
 # uploads workflow artifacts.
 #
+# The engine: each job exports with FreeBeams' size-optimised Godot template
+# (bin/build-engine: the stock source at the pinned tag, optimize=size + LTO,
+# unused classes and modules left out). Building one takes a while the first
+# time; the result is cached per platform, keyed on bin/build-engine and
+# packaging/engine/.
+#
 # Signing is optional and gated on secrets (none are required for a build):
 #   macOS    MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD, APPLE_API_KEY_P8_BASE64,
 #            APPLE_API_KEY_ID, APPLE_API_ISSUER_ID  (see bin/sign-notarize)
@@ -72,8 +78,22 @@ jobs:
             ~/Library/Application Support/Godot/export_templates
           key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
 
+      - name: Cache the custom engine template
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/engine-cache/templates
+          key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
+
+      - name: Build the engine template (cached)
+        env:
+          ENGINE_CACHE: ${{ runner.temp }}/engine-cache
+        run: |
+          pipx install scons
+          bin/build-engine macos
+
       - name: Build (and sign + notarize when the secrets are set)
         env:
+          ENGINE_CACHE: ${{ runner.temp }}/engine-cache
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
@@ -149,11 +169,28 @@ jobs:
             ~/AppData/Roaming/Godot/export_templates
           key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
 
+      - name: Cache the custom engine template
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/engine-cache/templates
+          key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
+
+      # MSVC builds the engine (scons finds Visual Studio), from Git Bash the
+      # way Godot's own CI does; the MSYS2 build below finds it in the cache.
+      - name: Build the engine template (cached)
+        shell: bash
+        env:
+          ENGINE_CACHE: ${{ runner.temp }}/engine-cache
+        run: |
+          pipx install scons
+          bin/build-engine windows
+
       - name: Build bundle, zip and installer
         shell: msys2 {0}
         env:
           SIGNTOOL_CMD: ${{ secrets.SIGNTOOL_CMD }}
           FFMPEG_CACHE: ${{ runner.temp }}/ffmpeg-cache
+          ENGINE_CACHE: ${{ runner.temp }}/engine-cache
         run: bin/build-windows
 
       # The media player's tests, decoding with the ffmpeg.exe / ffprobe.exe
@@ -174,7 +211,7 @@ jobs:
           if-no-files-found: error
 
   linux:
-    name: Linux tar.gz + AppImage
+    name: Linux tar.xz + AppImage
     needs: version
     # ubuntu-22.04 on purpose: an older glibc keeps the binary's floor low so
     # the AppImage runs on newer distros too.
@@ -196,8 +233,8 @@ jobs:
       - name: Packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends file libfuse2 desktop-file-utils \
-            nasm zlib1g-dev pkg-config ffmpeg
+          sudo apt-get install -y --no-install-recommends file libfuse2 desktop-file-utils appstream \
+            nasm zlib1g-dev pkg-config ffmpeg libwayland-bin
 
       - name: Cache the bundled ffmpeg build
         uses: actions/cache@v6
@@ -216,9 +253,23 @@ jobs:
             ~/.local/share/godot/export_templates
           key: godot-${{ runner.os }}-${{ hashFiles('go.mod') }}
 
-      - name: Build bundle, tar.gz and AppImage
+      - name: Cache the custom engine template
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/engine-cache/templates
+          key: engine-${{ runner.os }}-${{ hashFiles('bin/build-engine', 'packaging/engine/**') }}
+
+      - name: Build the engine template (cached)
+        env:
+          ENGINE_CACHE: ${{ runner.temp }}/engine-cache
+        run: |
+          pipx install scons
+          bin/build-engine linux
+
+      - name: Build bundle, tar.xz and AppImage
         env:
           FFMPEG_CACHE: ${{ runner.temp }}/ffmpeg-cache
+          ENGINE_CACHE: ${{ runner.temp }}/engine-cache
         run: bin/build-linux
 
       - name: Test the player against the bundled ffmpeg
@@ -231,7 +282,7 @@ jobs:
         with:
           name: FreeBeams-linux
           path: |
-            releases/*.tar.gz
+            releases/*.tar.xz
             releases/*.AppImage
           if-no-files-found: error
 

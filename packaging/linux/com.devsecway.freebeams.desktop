@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=FreeBeams
+GenericName=Worship Presentation
+Comment=Show songs, scriptures and media on a projector
+Exec=freebeams %F
+Icon=freebeams
+Terminal=false
+Categories=Office;Presentation;
+Keywords=worship;church;lyrics;songs;bible;scripture;projector;presentation;
+MimeType=application/x-freebeams-schedule;application/x-freebeams-bible;
+StartupWMClass=FreeBeams
+StartupNotify=true

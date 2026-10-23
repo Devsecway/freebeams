@@ -978,7 +978,7 @@ act "dismiss the error" dismiss '' 'not s["dialog"].get("message") and s["dialog
 # Menus through the control API.
 act "Help ▸ About" menu '{"item":"about"}' 's["dialog"]["message"]["title"] == "About FreeBeams" and s["dialog"]["host"] == "main"'
 wait_idle
-shot about dialog
+shot about message
 act "close About" dismiss '' 'not s["dialog"].get("message")'
 act "unknown menu item is rejected" menu '{"item":"bogus"}' 'not r["ok"]'
 act "File ▸ New Schedule (clean schedule, no question)" menu '{"item":"new-schedule"}' 's["schedule"]["title"] == "Untitled" and not s["schedule"]["dirty"] and s["focus"] != "dialog"'

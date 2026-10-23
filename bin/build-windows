@@ -23,6 +23,9 @@
 #       no certificate is part of this repository)
 #   NO_INSTALLER=1   skip Inno Setup on Windows
 #   NO_FFMPEG=1      do not bundle ffmpeg / ffprobe
+#   STOCK_ENGINE=1   export with Godot's stock template instead of bin/build-engine's
+#                    size-optimised one (built with MSVC on Windows; a cross build
+#                    from macOS / Linux always uses the stock template)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -68,9 +71,21 @@ else
 fi
 
 # --- build -------------------------------------------------------------------
+# The export template: bin/build-engine's (cached after the first build), set
+# in the preset for this export only.
+if [ "${STOCK_ENGINE:-0}" != "1" ] && [ "$native" = 1 ] && [ "$GOARCH" = amd64 ]; then
+	step "engine template"
+	"$ROOT/bin/build-engine" windows >/dev/null
+	"$ROOT/bin/build-engine" --use windows
+	trap '"$ROOT/bin/build-engine" --restore' EXIT
+else
+	echo "    stock engine template"
+fi
 step "GOOS=windows GOARCH=$GOARCH bin/gd build"
 rc=0
 GOOS=windows "$ROOT/bin/gd" build || rc=$?
+"$ROOT/bin/build-engine" --restore
+trap - EXIT
 # Godot's headless export can crash on teardown on GPU-less machines after
 # writing the exe, so trust the artifacts, not only the exit status.
 if [ ! -f "$EXE" ] || [ ! -f "$DLL" ]; then
@@ -137,12 +152,17 @@ if [ "$native" = 1 ]; then
 		--set-icon graphics/icon.ico \
 		--set-version-string ProductName "FreeBeams" \
 		--set-version-string FileDescription "FreeBeams worship presentation software" \
-		--set-version-string CompanyName "FreeBeams" \
-		--set-version-string LegalCopyright "Copyright 2026 FreeBeams contributors" \
+		--set-version-string CompanyName "Devsecway" \
+		--set-version-string LegalCopyright "Copyright (c) 2026 Devsecway" \
 		--set-file-version "$V.0" --set-product-version "$V.0"
 else
 	echo "    skipped (rcedit runs on Windows)"
 fi
+
+# --- licence ------------------------------------------------------------------
+step "licence and third-party notices"
+cp -f LICENSE "$OUT/LICENSE.txt"
+cp -f THIRD-PARTY-NOTICES.txt "$OUT/THIRD-PARTY-NOTICES.txt"
 
 # --- sign (placeholder) ------------------------------------------------------
 sign_files() { # sign_files FILE...
@@ -170,9 +190,9 @@ zipdir() { # zipdir OUT.zip DIR  (archive the directory's contents under FreeBea
 	mkdir -p "$stage/FreeBeams"
 	cp -R "$dir"/. "$stage/FreeBeams/"
 	if command -v zip >/dev/null 2>&1; then
-		(cd "$stage" && zip -qr "$OLDPWD/$out" FreeBeams)
+		(cd "$stage" && zip -q -9 -r "$OLDPWD/$out" FreeBeams)
 	elif command -v 7z >/dev/null 2>&1; then
-		(cd "$stage" && 7z a -bso0 -bsp0 "$OLDPWD/$out" FreeBeams)
+		(cd "$stage" && 7z a -tzip -mx=9 -bso0 -bsp0 "$OLDPWD/$out" FreeBeams)
 	elif command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
 		local py=python3
 		command -v python3 >/dev/null 2>&1 || py=python
@@ -211,7 +231,6 @@ else
 	# Disable MSYS2 path mangling of the /D and /O switches for this native exe.
 	MSYS2_ARG_CONV_EXCL='*' "$iscc" \
 		"/DAppVersion=$V" \
-		"/DIconFile=$(cygpath -w "$ROOT/graphics/icon.ico")" \
 		"/DSourceDir=$(cygpath -w "$ROOT/$OUT")" \
 		"/O$(cygpath -w "$ROOT/releases")" \
 		packaging/windows/freebeams.iss

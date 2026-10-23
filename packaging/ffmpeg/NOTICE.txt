@@ -2,9 +2,11 @@ FFmpeg in FreeBeams
 ===================
 
 This copy of FreeBeams includes the programs ffmpeg and ffprobe from the
-FFmpeg project (https://ffmpeg.org/). FreeBeams runs them as separate
-programs to read the metadata of videos and audio files, to make poster
-frames, and to decode videos and audio for playback.
+FFmpeg project (https://ffmpeg.org/), with the FFmpeg libraries they share
+(avcodec, avformat, avfilter, avutil, swscale, swresample: the avcodec-*.dll
+... files on Windows, libavcodec.so.* ... on Linux). FreeBeams runs the
+programs as separate processes to read the metadata of videos and audio
+files, to make poster frames, and to decode videos and audio for playback.
 
 FFmpeg is free software licensed under the GNU Lesser General Public License
 (LGPL) version 2.1 or later; the full text is in FFMPEG-LICENSE.txt next to
@@ -18,4 +20,4 @@ FreeBeams is not affiliated with the FFmpeg project.
 Source code: the exact source used is the release tarball below (from
 ffmpeg.org, verified by its SHA-256), built unmodified by the script
 bin/build-ffmpeg in the FreeBeams repository with the configure line below.
-You may replace ffmpeg / ffprobe in this folder with any other build.
+You may replace ffmpeg / ffprobe and these libraries with any other build.

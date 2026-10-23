@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata (share/metainfo): what software centres and AppImage
+     integrators show. bin/build-linux fills in @VERSION@ and @DATE@. -->
+<component type="desktop-application">
+  <id>com.devsecway.freebeams</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>FreeBeams</name>
+  <summary>Worship presentation: songs, scriptures and media on a projector</summary>
+  <developer id="com.devsecway">
+    <name>Devsecway</name>
+  </developer>
+  <description>
+    <p>
+      FreeBeams puts song lyrics, Bible passages, images, videos and presentations on a
+      projector or TV during a service, with a preview and a live view for the operator,
+      a schedule for the order of service, themes, transitions, alerts, a stage display
+      and a remote control from a phone.
+    </p>
+    <p>
+      Its layout and hotkeys follow EasyWorship, and it imports an EasyWorship library
+      (songs, Bibles, media) on its first start. The King James Version, the American
+      Standard Version and the Reina-Valera Antigua (1909) come with it.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.devsecway.freebeams.desktop</launchable>
+  <url type="homepage">https://github.com/Devsecway/freebeams</url>
+  <url type="bugtracker">https://github.com/Devsecway/freebeams/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>Presentation</category>
+  </categories>
+  <keywords>
+    <keyword>worship</keyword>
+    <keyword>church</keyword>
+    <keyword>lyrics</keyword>
+    <keyword>bible</keyword>
+    <keyword>projector</keyword>
+  </keywords>
+  <provides>
+    <binary>freebeams</binary>
+    <mediatype>application/x-freebeams-schedule</mediatype>
+    <mediatype>application/x-freebeams-bible</mediatype>
+  </provides>
+  <requires>
+    <display_length compare="ge">1024</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

@@ -97,5 +97,6 @@ jobs:
         run: |
           shellcheck --version | head -2
           shellcheck bin/gd bin/version bin/release-dmg bin/sign-notarize bin/build-ffmpeg \
-            bin/build-windows bin/build-linux \
-            packaging/linux/AppRun packaging/icons/make-icons.sh
+            bin/build-windows bin/build-linux bin/build-engine \
+            packaging/linux/AppRun packaging/linux/install.sh packaging/icons/make-icons.sh \
+            packaging/notices/make-notices.sh
