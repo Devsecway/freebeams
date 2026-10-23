@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"freebeams/internal/models"
 )
@@ -18,25 +20,64 @@ import (
 // an action missing from the stored map keeps its default keys, so actions
 // added later get theirs.
 
-// SettingHotkeys is the setting that holds the Keymap.
-const SettingHotkeys = "settings.hotkeys"
+// SettingHotkeys is the setting that holds the Keymap, with ⌘ and Control
+// told apart (Chord.Cmd). SettingHotkeysLegacy is where builds before
+// 2026-10-23 kept it, when "ctrl" meant Ctrl or ⌘: the app reads it once
+// through MigrateKeymap while the new key is missing.
+const (
+	SettingHotkeys       = "settings.hotkeys.v2"
+	SettingHotkeysLegacy = "settings.hotkeys"
+)
 
-// Chord is one key with its modifiers. Ctrl means Ctrl or ⌘: EasyWorship's
-// Ctrl hotkeys are ⌘ on a Mac and both work, so they are one chord.
+// macModifiers reports whether ⌘ and Control are separate hotkey modifiers:
+// on macOS they are different keys (⌘B and ⌃B are two chords). Elsewhere
+// there is no ⌘: a chord's Cmd folds into Ctrl (a "cmd+b" from a Mac's
+// keymap is Ctrl+B there), and the Windows / Super key (KeyEvent.Meta)
+// counts as Ctrl, as it always did. Tests switch it (setMacModifiers).
+var macModifiers = runtime.GOOS == "darwin"
+
+// MacModifiers reports whether ⌘ and Control are told apart (macOS).
+func MacModifiers() bool { return macModifiers }
+
+// Chord is one key with its modifiers. On macOS Ctrl is the Control (⌃) key
+// and Cmd the Command (⌘) key; elsewhere Cmd is always false (platform).
 type Chord struct {
 	Key   string // a core key name (KeyEvent.Key)
 	Ctrl  bool
 	Alt   bool
 	Shift bool
+
+	Cmd bool // ⌘ (macOS only)
 }
 
 // ChordOf is the chord of a key press.
 func ChordOf(ev KeyEvent) Chord {
+	if macModifiers {
+		return Chord{Key: ev.Key, Ctrl: ev.Ctrl, Cmd: ev.Meta, Alt: ev.Alt, Shift: ev.Shift}
+	}
 	return Chord{Key: ev.Key, Ctrl: ev.Ctrl || ev.Meta, Alt: ev.Alt, Shift: ev.Shift}
 }
 
+// platform folds ⌘ into Ctrl where there is no ⌘ key.
+func (c Chord) platform() Chord {
+	if !macModifiers && c.Cmd {
+		c.Ctrl, c.Cmd = true, false
+	}
+	return c
+}
+
+// command reports whether the chord holds the platform's menu modifier (⌘
+// on macOS, Ctrl elsewhere): the modifier of Quit, Save, Copy and Paste.
+func (c Chord) command() bool {
+	if macModifiers {
+		return c.Cmd
+	}
+	return c.Ctrl || c.Cmd
+}
+
 // String is the chord's stored form: lower-case modifiers in the order ctrl,
-// alt, shift, then the key name ("ctrl+b", "right", "alt+shift+f5").
+// alt, shift, cmd, then the key name ("ctrl+b", "cmd+b", "right",
+// "alt+shift+f5"). "ctrl" is the Control key and "cmd" the ⌘ key.
 func (c Chord) String() string {
 	var b strings.Builder
 	if c.Ctrl {
@@ -48,13 +89,36 @@ func (c Chord) String() string {
 	if c.Shift {
 		b.WriteString("shift+")
 	}
+	if c.Cmd {
+		b.WriteString("cmd+")
+	}
 	b.WriteString(c.Key)
 	return b.String()
 }
 
-// Label is the chord's display name ("Ctrl+B", "→", "Shift+F5").
+// macSigns are the Mac's modifier symbols in Apple's order (⌃⌥⇧⌘).
+var macSigns = []macSign{{'⌃', "ctrl"}, {'⌥', "alt"}, {'⇧', "shift"}, {'⌘', "cmd"}}
+
+type macSign struct {
+	sign rune
+	mod  string // a modifierNames value
+}
+
+// Label is the chord's display name: "Ctrl+B", "→", "Shift+F5" off macOS;
+// the Mac's symbols in Apple's order on macOS: "⌘B", "⌃B", "⇧F5", "⌥⇧⌘K".
 func (c Chord) Label() string {
 	var b strings.Builder
+	if macModifiers {
+		on := map[string]bool{"ctrl": c.Ctrl, "alt": c.Alt, "shift": c.Shift, "cmd": c.Cmd}
+		for _, m := range macSigns {
+			if on[m.mod] {
+				b.WriteRune(m.sign)
+			}
+		}
+		b.WriteString(KeyLabel(c.Key))
+		return b.String()
+	}
+	c = c.platform()
 	if c.Ctrl {
 		b.WriteString("Ctrl+")
 	}
@@ -81,31 +145,53 @@ func (c *Chord) UnmarshalText(b []byte) error {
 	return nil
 }
 
-// modifierNames maps the modifier spellings ParseChord accepts.
+// modifierNames maps the modifier spellings ParseChord accepts. "meta" is
+// the control API's name for ⌘ (KeyEvent.Meta).
 var modifierNames = map[string]string{
-	"ctrl": "ctrl", "control": "ctrl", "cmd": "ctrl", "command": "ctrl", "meta": "ctrl", "⌘": "ctrl",
+	"ctrl": "ctrl", "control": "ctrl", "⌃": "ctrl",
+	"cmd": "cmd", "command": "cmd", "meta": "cmd", "super": "cmd", "⌘": "cmd",
 	"alt": "alt", "option": "alt", "opt": "alt", "⌥": "alt",
 	"shift": "shift", "⇧": "shift",
 }
 
-// ParseChord reads a chord: "Ctrl+B", "cmd+b", "⌘+B", "Right", "→",
-// "Shift+F5", "PgDn". Cmd and Meta are Ctrl (see Chord). The key must be one
-// the hotkeys know (KnownKey).
+// ParseChord reads a chord: "Ctrl+B", "cmd+b", "⌘+B", "⌘B", "⌃⇧F5",
+// "Right", "→", "Shift+F5", "PgDn". Ctrl / Control / ⌃ is the Control key;
+// Cmd / Command / Meta / ⌘ is the ⌘ key, which is Ctrl off macOS (see
+// macModifiers). The key must be one the hotkeys know (KnownKey).
 func ParseChord(s string) (Chord, error) {
-	parts := strings.Split(strings.TrimSpace(s), "+")
-	if len(parts) == 0 || strings.TrimSpace(parts[len(parts)-1]) == "" {
-		return Chord{}, fmt.Errorf("key %q: no key named", s)
-	}
 	var c Chord
-	for _, m := range parts[:len(parts)-1] {
-		switch modifierNames[strings.ToLower(strings.TrimSpace(m))] {
+	set := func(m string) bool {
+		switch m {
 		case "ctrl":
 			c.Ctrl = true
+		case "cmd":
+			c.Cmd = true
 		case "alt":
 			c.Alt = true
 		case "shift":
 			c.Shift = true
 		default:
+			return false
+		}
+		return true
+	}
+	// Leading Mac symbols, with or without a "+" ("⇧⌘S", "⌘+L").
+	rest := strings.TrimSpace(s)
+	for rest != "" {
+		r, n := utf8.DecodeRuneInString(rest)
+		i := slices.IndexFunc(macSigns, func(m macSign) bool { return m.sign == r })
+		if i < 0 || n == len(rest) {
+			break
+		}
+		set(macSigns[i].mod)
+		rest = strings.TrimPrefix(strings.TrimSpace(rest[n:]), "+")
+	}
+	parts := strings.Split(rest, "+")
+	if strings.TrimSpace(parts[len(parts)-1]) == "" {
+		return Chord{}, fmt.Errorf("key %q: no key named", s)
+	}
+	for _, m := range parts[:len(parts)-1] {
+		if !set(modifierNames[strings.ToLower(strings.TrimSpace(m))]) {
 			return Chord{}, fmt.Errorf("key %q: unknown modifier %q", s, m)
 		}
 	}
@@ -113,7 +199,38 @@ func ParseChord(s string) (Chord, error) {
 	if !KnownKey(c.Key) {
 		return Chord{}, fmt.Errorf("key %q: unknown key %q", s, parts[len(parts)-1])
 	}
-	return c, nil
+	return c.platform(), nil
+}
+
+// legacyChords expands chords written when Ctrl meant "Ctrl or ⌘" (keymaps
+// saved before ⌘ and Control were told apart, EasyWorship's "C-" keys and
+// the built-in defaults) for this platform: on macOS each such Ctrl chord
+// becomes the ⌘ chord and the Control chord, so both keys keep working;
+// elsewhere they are unchanged.
+func legacyChords(cs []Chord) []Chord {
+	out := make([]Chord, 0, len(cs))
+	for _, c := range cs {
+		if macModifiers && c.Ctrl && !c.Cmd {
+			cmd := c
+			cmd.Ctrl, cmd.Cmd = false, true
+			out = append(out, cmd)
+		}
+		out = append(out, c.platform())
+	}
+	return out
+}
+
+// MigrateKeymap converts a keymap stored under SettingHotkeysLegacy, where
+// "ctrl" meant Ctrl or ⌘, into today's chords (legacyChords), normalized.
+func MigrateKeymap(km Keymap) Keymap {
+	if km == nil {
+		return Keymap(nil).Normalized()
+	}
+	out := make(Keymap, len(km))
+	for id, cs := range km {
+		out[id] = legacyChords(cs)
+	}
+	return out.Normalized()
 }
 
 // keyFromLabel reads a key name or its display label ("→", "Page Down").
@@ -161,8 +278,12 @@ type HotkeyAction struct {
 
 	act     Action             // ActJumpSection / ActJumpSlide for the jumps
 	section models.SectionKind // ActJumpSection
-	def     []Chord
+	def     []Chord            // EasyWorship's keys; Ctrl is "Ctrl or ⌘" (defaults)
 }
+
+// defaults are the action's default chords on this platform: EasyWorship's
+// Ctrl keys are both ⌘ and Control on a Mac (legacyChords).
+func (h HotkeyAction) defaults() []Chord { return legacyChords(h.def) }
 
 // jumps reports whether the action waits for a number afterwards.
 func (h HotkeyAction) jumps() bool { return h.act == ActJumpSection || h.act == ActJumpSlide }
@@ -242,7 +363,7 @@ type Keymap map[string][]Chord
 func DefaultKeymap() Keymap {
 	km := Keymap{}
 	for _, a := range hotkeyActions {
-		km[a.ID] = slices.Clone(a.def)
+		km[a.ID] = a.defaults()
 	}
 	return km
 }
@@ -279,10 +400,11 @@ func (km Keymap) Normalized() Keymap {
 	for _, a := range hotkeyActions {
 		cs, ok := km[a.ID]
 		if !ok {
-			cs = a.def
+			cs = a.defaults()
 		}
 		kept := []Chord{}
 		for _, c := range cs {
+			c = c.platform()
 			if !KnownKey(c.Key) || taken[c] {
 				continue
 			}
@@ -324,33 +446,48 @@ var ErrReserved = errors.New("reserved")
 // ErrAlreadyBound is returned when the action already has the chord.
 var ErrAlreadyBound = errors.New("already assigned")
 
-// reservedCtrl are the Ctrl/⌘ chords the app, the menus or macOS own.
-var reservedCtrl = map[string]string{
+// reservedCommand are the chords of the platform's menu modifier (⌘ on
+// macOS, Ctrl elsewhere) that the app, the menus or the system own.
+var reservedCommand = map[string]string{
 	"q": "Quit", "w": "Close Window", "h": "Hide", "m": "Minimize",
 	"n": "New Schedule", "o": "Open Schedule", "s": "Save Schedule",
 	"v": "Paste", "x": "Cut", "a": "Select All", "z": "Undo",
 	"tab": "switching windows", "space": "Spotlight",
 }
 
+// reservedMacControl are the Control (⌃) chords macOS keeps for itself.
+var reservedMacControl = map[string]string{
+	"space": "switching input sources",
+	"left":  "moving between Spaces", "right": "moving between Spaces",
+	"up": "Mission Control", "down": "App Exposé",
+}
+
 // Reserved reports whether a chord cannot be a hotkey, and why. Digits are
 // the numbers typed after a jump key; Escape closes dialogs; Tab moves the
-// focus; Ctrl/⌘ Q, W, H, M, N, O, S, V, X, A and Z belong to the menus,
-// macOS and text editing. (Ctrl+C is EasyWorship's Clear: hotkeys are off
-// while a text field has focus, so ⌘C still copies there.)
+// focus; ⌘ (Ctrl off macOS) Q, W, H, M, N, O, S, V, X, A and Z belong to
+// the menus, macOS and text editing; on a Mac, Control with Space or an
+// arrow belongs to macOS. (⌘C / Ctrl+C is EasyWorship's Clear: hotkeys are
+// off while a text field has focus, so ⌘C still copies there.)
 func Reserved(c Chord) (string, bool) {
-	if _, ok := digit(c.Key); ok && !c.Ctrl && !c.Alt {
+	c = c.platform()
+	if _, ok := digit(c.Key); ok && !c.Ctrl && !c.Alt && !c.Cmd {
 		return "digits are the numbers typed after a jump key", true
 	}
 	switch c.Key {
 	case "escape":
 		return "Esc closes dialogs", true
 	case "tab":
-		if !c.Ctrl {
+		if !c.Ctrl && !c.Cmd {
 			return "Tab moves the keyboard focus", true
 		}
 	}
-	if c.Ctrl {
-		if what, ok := reservedCtrl[c.Key]; ok {
+	if macModifiers && c.Ctrl && !c.Cmd {
+		if what, ok := reservedMacControl[c.Key]; ok {
+			return what, true
+		}
+	}
+	if c.command() {
+		if what, ok := reservedCommand[c.Key]; ok {
 			if c.Key == "s" && c.Shift {
 				what = "Save Schedule As"
 			}
@@ -367,6 +504,7 @@ func Reserved(c Chord) (string, bool) {
 // reserved key (ErrReserved), a chord the action has already
 // (ErrAlreadyBound) or a *ConflictError naming its current owner.
 func (km Keymap) Check(id string, c Chord) error {
+	c = c.platform()
 	if _, ok := hotkeyAction(id); !ok {
 		return fmt.Errorf("unknown hotkey action %q", id)
 	}
@@ -389,6 +527,7 @@ func (km Keymap) Check(id string, c Chord) error {
 // WithKey returns km with c added to action id. A chord owned by another
 // action is a *ConflictError unless reassign, which moves it.
 func (km Keymap) WithKey(id string, c Chord, reassign bool) (Keymap, error) {
+	c = c.platform()
 	err := km.Check(id, c)
 	var conflict *ConflictError
 	switch {
@@ -524,7 +663,8 @@ func vkKey(code int) string {
 
 // ParseEWHotkeys reads EasyWorship's HotKeys.2.ini ([HotKeys] entries such as
 // "SlideNextKeys=78, 39, 32" and "BlackScreenKeys=C-66": Windows virtual-key
-// codes, "C-" for Ctrl, "S-" for Shift, "A-" for Alt). Actions EasyWorship
+// codes, "C-" for Ctrl, which is both ⌘ and Control on a Mac
+// (legacyChords), "S-" for Shift, "A-" for Alt). Actions EasyWorship
 // does not have (Go Live) keep their keys from base. Keys that cannot be
 // read or that FreeBeams reserves are skipped and reported in skipped.
 func ParseEWHotkeys(text string, base Keymap) (km Keymap, skipped []string, err error) {
@@ -563,7 +703,7 @@ func ParseEWHotkeys(text string, base Keymap) (km Keymap, skipped []string, err 
 			}
 			chords = append(chords, c)
 		}
-		km[id] = chords
+		km[id] = legacyChords(chords) // "C-" is Ctrl or ⌘, like the defaults
 	}
 	if !found {
 		return base, nil, errors.New("no [HotKeys] entries found")
