@@ -140,7 +140,7 @@ func TestAdvancePlayback(t *testing.T) {
 	song := &models.Slide{Kind: models.SlideSong, Text: "Amazing grace"}
 	// The operator paused the clip, turned looping off, set the volume and sought.
 	set := Playback{Key: "/v.mp4", Playing: false, Loop: false, Volume: 0.3, SeekSeq: 4, SeekTo: 2}
-	frame := func(m models.Mode, s *models.Slide) models.Frame { return models.Frame{Mode: m, Slide: s} }
+	frame := func(m models.OutputMode, s *models.Slide) models.Frame { return models.Frame{Mode: m, Slide: s} }
 	steps := []struct {
 		name    string
 		f       models.Frame

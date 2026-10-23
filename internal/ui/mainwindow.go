@@ -65,6 +65,10 @@ type MainWindow struct {
 	PreviewTransport *Transport `gd:"-"`
 	LiveTransport    *Transport `gd:"-"`
 
+	// ResourceTransport is the resource preview's mini video controls
+	// (shown while it previews a video or audio file).
+	ResourceTransport *MiniTransport `gd:"-"`
+
 	// Splitters, for persisting their percentages (OnChanged) and restoring
 	// them (SetPercent).
 	MainSplit        *Splitter `gd:"-"`
@@ -528,6 +532,8 @@ func (w *MainWindow) buildResourcePreview() Control.Instance {
 	footer.AsControl().SetCustomMinimumSize(Vector2.New(0, 28))
 	w.resCapL = label("", vCaption)
 	add(footer, w.resCapL.AsControl())
-	add(col, w.ResourcePreview.AsControl(), w.resTitleL.AsControl(), grow, footer.AsControl())
+	w.ResourceTransport = NewMiniTransport()
+	w.ResourceTransport.AsControl().AsCanvasItem().SetVisible(false)
+	add(col, w.ResourcePreview.AsControl(), w.ResourceTransport.AsControl(), w.resTitleL.AsControl(), grow, footer.AsControl())
 	return bg.AsControl()
 }

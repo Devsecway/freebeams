@@ -10,6 +10,8 @@ import (
 	"freebeams/internal/models"
 	"freebeams/internal/render"
 	"freebeams/internal/ui"
+
+	"graphics.gd/classdb/Control"
 )
 
 // Video and audio playback: the transport bars under the Preview Output and
@@ -27,10 +29,44 @@ import (
 type playbackState struct {
 	live    core.Playback
 	preview core.Playback
+
+	// resource is the resource preview's mini transport.
+	resource core.Playback
 }
 
-// monitorRoles lists the monitors with a transport bar.
-var monitorRoles = []render.VideoRole{render.RoleLive, render.RolePreview}
+// monitorRoles lists the views with a transport bar: the two output
+// monitors and the resource preview.
+var monitorRoles = []render.VideoRole{render.RoleLive, render.RolePreview, render.RoleResource}
+
+// transportBar is a transport view: the monitors' Transport or the
+// resource preview's MiniTransport.
+type transportBar interface {
+	AsControl() Control.Instance
+	SetState(ui.TransportState)
+	Callbacks() *ui.TransportCallbacks
+}
+
+// roleIndex is the role's slot in the view cache's memos.
+func roleIndex(role render.VideoRole) int {
+	switch role {
+	case render.RolePreview:
+		return 1
+	case render.RoleResource:
+		return 2
+	}
+	return 0
+}
+
+// targetRole maps a control action's target to its player role.
+func targetRole(t core.Target) render.VideoRole {
+	switch t {
+	case core.TargetPreview:
+		return render.RolePreview
+	case core.TargetResource:
+		return render.RoleResource
+	}
+	return render.RoleLive
+}
 
 // initPlayback picks the media player and sets the starting volume. Called
 // from Ready, before buildUI.
@@ -38,28 +74,39 @@ func (a *App) initPlayback() {
 	a.selectMediaPlayer()
 	a.pb.live.Volume = 1
 	a.pb.preview.Volume = 1
+	a.pb.resource.Volume = 1
 }
 
 // playback returns the state for a monitor.
 func (a *App) playback(role render.VideoRole) *core.Playback {
-	if role == render.RoleLive {
+	switch role {
+	case render.RoleLive:
 		return &a.pb.live
+	case render.RoleResource:
+		return &a.pb.resource
 	}
 	return &a.pb.preview
 }
 
 // playbackFrame is the monitor's frame (what it shows).
 func (a *App) playbackFrame(role render.VideoRole) models.Frame {
-	if role == render.RoleLive {
+	switch role {
+	case render.RoleLive:
 		return a.pres.LiveFrame()
+	case render.RoleResource:
+		f, _, _ := a.resourcePreviewFrame()
+		return f
 	}
 	return a.pres.PreviewFrame()
 }
 
 // transport is the monitor's transport bar.
-func (a *App) transport(role render.VideoRole) *ui.Transport {
-	if role == render.RoleLive {
+func (a *App) transport(role render.VideoRole) transportBar {
+	switch role {
+	case render.RoleLive:
 		return a.win.LiveTransport
+	case render.RoleResource:
+		return a.win.ResourceTransport
 	}
 	return a.win.PreviewTransport
 }
@@ -69,8 +116,9 @@ func (a *App) transport(role render.VideoRole) *ui.Transport {
 func (a *App) wirePlayback() {
 	a.liveView.SetVideoRole(render.RoleLive)       // shares the output's player
 	a.previewView.SetVideoRole(render.RolePreview) // its own, paused
+	a.resView.SetVideoRole(render.RoleResource)    // its own too: previews a clip off the output
 	for _, role := range monitorRoles {
-		t := a.transport(role)
+		t := a.transport(role).Callbacks()
 		t.OnPlayPause = func() { a.event(func() { a.togglePlay(role) }) }
 		t.OnSeek = func(frac float64) {
 			a.event(func() { a.seekTo(role, core.SeekFraction(frac, a.playbackDuration(role))) })
@@ -96,23 +144,18 @@ func (a *App) wirePlayback() {
 // file that reached its end with looping off is no longer playing. It
 // reports whether anything changed. Called every frame from Process.
 func (a *App) playbackEvents() bool {
+	if render.AnyMediaActive() {
+		render.PumpMedia() // a file held under Black has no layer pumping it (render/hold.go)
+	}
 	changed := false
 	for _, role := range monitorRoles {
 		pb := a.playback(role)
-		bg, ok := core.FrameMedia(a.playbackFrame(role))
-		key := ""
-		if ok {
-			key = bg.Path
-		}
-		if key != pb.Key {
-			if ok {
-				*pb = core.PlaybackDefaults(bg, role == render.RoleLive, *pb)
-			} else {
-				*pb = core.NoPlayback(*pb)
-			}
+		next, c := core.AdvancePlayback(*pb, a.playbackFrame(role), role == render.RoleLive)
+		if c {
+			*pb = next
 			changed = true
 		}
-		if src := render.Current(role); src != nil && src.Path() == key && src.TakeEnded() && pb.Playing {
+		if src := render.Source(role, pb.Key); src != nil && src.TakeEnded() && pb.Playing {
 			pb.Playing = false
 			changed = true
 		}
@@ -149,8 +192,8 @@ func (a *App) seekTo(role render.VideoRole, secs float64) {
 // playbackDuration is the monitor's file duration as the player reports it
 // (0 while loading).
 func (a *App) playbackDuration(role render.VideoRole) float64 {
-	src := render.Current(role)
-	if src == nil || src.Path() != a.playback(role).Key {
+	src := render.Source(role, a.playback(role).Key)
+	if src == nil {
 		return 0
 	}
 	return src.State().Duration
@@ -164,12 +207,12 @@ func (a *App) playbackDuration(role render.VideoRole) float64 {
 func (a *App) renderPlayback() {
 	for _, role := range monitorRoles {
 		pb := a.playback(role)
-		idx := 0
-		if role == render.RolePreview {
-			idx = 1
-		}
-		src := render.Current(role)
-		if src != nil && pb.Key != "" && src.Path() == pb.Key {
+		idx := roleIndex(role)
+		// The player stays open for the file the state is about, also while
+		// Black or Logo hides it (render/hold.go): its position goes on.
+		render.Hold(role, pb.Key)
+		src := render.Source(role, pb.Key)
+		if src != nil {
 			src.SetLoop(pb.Loop)
 			src.SetVolume(pb.Volume)
 			if pb.Playing != src.Playing() {
@@ -200,15 +243,15 @@ func (a *App) renderPlayback() {
 func (a *App) playbackStateDoc(role render.VideoRole) core.PlaybackState {
 	st := core.PlaybackState{Native: render.NativeVideoSupported(), Player: render.MediaPlayer()}
 	frame := a.playbackFrame(role)
-	bg, ok := core.FrameMedia(frame)
+	bg, shown, ok := core.MonitorMedia(frame)
 	if !ok {
 		return st
 	}
 	pb := a.playback(role)
-	st.Media = true
+	st.Media, st.Hidden = true, !shown
 	st.Title = frame.Slide.Label
 	st.Playing, st.Loop, st.Volume = pb.Playing, pb.Loop, pb.Volume
-	if src := render.Current(role); src != nil && src.Path() == bg.Path {
+	if src := render.Source(role, bg.Path); src != nil {
 		p := src.State()
 		st.Position, st.Duration = p.Position, p.Duration
 		st.HasVideo, st.HasAudio, st.Failed = p.HasVideo, p.HasAudio, p.Failed
@@ -220,7 +263,8 @@ func (a *App) playbackStateDoc(role render.VideoRole) core.PlaybackState {
 
 // playbackStates is the /state document's "playback" object.
 func (a *App) playbackStates() core.PlaybackStates {
-	return core.PlaybackStates{Live: a.playbackStateDoc(render.RoleLive), Preview: a.playbackStateDoc(render.RolePreview)}
+	return core.PlaybackStates{Live: a.playbackStateDoc(render.RoleLive), Preview: a.playbackStateDoc(render.RolePreview),
+		Resource: a.playbackStateDoc(render.RoleResource)}
 }
 
 // ---- control actions ------------------------------------------------------------------
@@ -234,17 +278,14 @@ func (a *App) handlePlaybackCommand(cmd *control.Command, args actionArgs) bool 
 	default:
 		return false
 	}
-	live, ok := core.PlaybackTarget(args.Target)
+	target, ok := core.PlaybackTarget(args.Target)
 	if !ok {
 		cmd.RespondErr(core.PlaybackError(cmd.Action, args.Target))
 		return true
 	}
-	role := render.RolePreview
-	if live {
-		role = render.RoleLive
-	}
+	role := targetRole(target)
 	if a.playback(role).Key == "" {
-		cmd.RespondErr(fmt.Errorf("%s: the %s monitor shows no video or audio", cmd.Action, map[bool]string{true: "live", false: "preview"}[live]))
+		cmd.RespondErr(fmt.Errorf("%s: the %s monitor shows no video or audio", cmd.Action, target))
 		return true
 	}
 	switch cmd.Action {

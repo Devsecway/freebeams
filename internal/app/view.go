@@ -64,7 +64,7 @@ type viewCache struct {
 	presView, presSort   string
 
 	// Playback (playback.go): the seek request last applied per monitor (live, preview).
-	seekApplied [2]int
+	seekApplied [3]int
 
 	// The remote control's dialog and toolbar menu (remote.go).
 	remote remoteView

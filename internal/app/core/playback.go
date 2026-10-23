@@ -70,10 +70,13 @@ func FrameMedia(f models.Frame) (models.Background, bool) {
 // got to), so shown is false then. ok is false when the frame's slide is no
 // video or audio at all.
 func MonitorMedia(f models.Frame) (bg models.Background, shown, ok bool) {
-	if f.Slide == nil || f.Slide.Background == nil {
+	if f.Slide == nil {
 		return models.Background{}, false, false
 	}
-	bg = *f.Slide.Background
+	bg = f.Theme.Background
+	if f.Slide.Background != nil {
+		bg = *f.Slide.Background
+	}
 	if !bg.Kind.Plays() || bg.Path == "" {
 		return models.Background{}, false, false
 	}
