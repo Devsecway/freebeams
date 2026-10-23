@@ -37,6 +37,7 @@ func (a *App) wireMediaMenu() {
 	m.OnView = func(view string) { a.event(func() { a.fail("media view", a.setMediaView(core.ItemView(view))) }) }
 	m.OnSort = func(sort string) { a.event(func() { a.fail("media sort", a.setMediaSort(core.ItemSort(sort))) }) }
 	m.OnRefresh = func() { a.event(func() { a.refreshMedia(nil, false) }) }
+	a.wireMediaProperties() // Edit Properties… (mediaprops.go)
 }
 
 // wirePresentationMenu connects the Presentations panel's tile-menu
@@ -83,49 +84,18 @@ func (a *App) setMediaOptions(i int, aspect models.MediaAspect, repeat models.Me
 		a.answer(cmd, fmt.Errorf("no media item at index %d", i))
 		return
 	}
-	m := &a.md.list[i]
-	if aspect == "" {
-		aspect = m.Aspect.Normalized()
-	}
-	if repeat == "" {
-		repeat = m.Repeat.Normalized()
-	}
-	if !aspect.Valid() || !repeat.Valid() {
+	if (aspect != "" && !aspect.Valid()) || (repeat != "" && !repeat.Valid()) {
 		a.answer(cmd, fmt.Errorf("media options: unknown aspect %q or repeat %q", aspect, repeat))
 		return
 	}
-	if m.Aspect.Normalized() == aspect && m.Repeat.Normalized() == repeat {
-		a.answer(cmd, nil)
-		return
+	p := a.md.list[i].Properties()
+	if aspect != "" {
+		p.Aspect = aspect
 	}
-	m.Aspect, m.Repeat = aspect, repeat
-	a.md.thumbVer++
-	if a.md.item != nil && a.md.item.ID == m.ID {
-		old := a.md.deck
-		cp := *m
-		a.md.item = &cp
-		deck := core.MediaDeck(cp, a.lookupPlayable)
-		a.md.deck = &deck
-		if old != nil && core.SameDeck(a.pres.State.Preview, old) {
-			a.setPreview(&deck)
-		}
+	if repeat != "" {
+		p.Repeat = repeat
 	}
-	log.Printf("[freebeams] media %d %q: aspect %s, repeat %s", m.ID, m.Title, aspect, repeat)
-	st := a.st()
-	if st == nil {
-		a.answer(cmd, errNoLibrary)
-		return
-	}
-	id, title := m.ID, m.Title
-	a.async(cmd, func(ctx context.Context) func() error {
-		err := st.SetMediaOptions(ctx, id, aspect, repeat)
-		return func() error {
-			if err != nil {
-				a.alert("Media Options", fmt.Errorf("Could not save the options of %q.\n\n%w", title, err))
-			}
-			return err
-		}
-	})
+	a.setMediaProperties(i, p, cmd) // mediaprops.go
 }
 
 // useMediaAsLogo makes media item i the logo screen's background.
@@ -546,7 +516,7 @@ func (a *App) presentationItemArg(args actionArgs) int {
 
 const mediaMenuItems = "add-to-schedule|go-live|aspect-fill|aspect-fit|aspect-stretch|repeat-loop|repeat-once|logo-background|" +
 	"remove|delete-file|update-schedule|reveal|view-large|view-medium|view-small|view-details|sort-name|sort-date|sort-kind|refresh|" +
-	"add-to-playlist"
+	"add-to-playlist|properties"
 
 // mediaMenuAction runs one item of the media tile menu, as a click would:
 // `media-menu {item, index|title, confirm}`. Items that act on a tile use the
@@ -588,6 +558,11 @@ func (a *App) mediaMenuAction(cmd *control.Command, args actionArgs) {
 		}
 		if i, ok := target(); ok {
 			a.setMediaOptions(i, "", repeat, cmd)
+		}
+	case item == "properties":
+		if i, ok := target(); ok {
+			a.openMediaProperties(i)
+			a.answer(cmd, nil)
 		}
 	case item == "logo-background":
 		if i, ok := target(); ok {

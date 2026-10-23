@@ -17,8 +17,14 @@ ffmpeg (<path>)`); **`FREEBEAMS_PLAYER=ffmpeg|avfoundation|theora`** forces one,
 is verified on a Mac (`FREEBEAMS_PLAYER=ffmpeg test/smoke.sh`). **`FREEBEAMS_FFMPEG_DIR=<folder>`** makes
 `media.Locate` take ffmpeg / ffprobe from that folder before the bundled copy and PATH.
 
-ffmpeg / ffprobe are also used, when present, for metadata (`Describe`: size and duration) and poster frames
-(`Thumbnail`); without them videos show a plain tile and play all the same on macOS. A native player never
+Poster frames and metadata (`Describe`: size and duration): on macOS AVFoundation first (`media.AVFoundation`,
+`internal/media/avasset_darwin.go`: `AVURLAsset` for the duration and the first video track's display size,
+`AVAssetImageGenerator` for the frame one second in, else frame 0, drawn into a `CGBitmapContext` over a C buffer in
+the frame's own colour space and written as a 640 px JPEG by Go), with ffmpeg / ffprobe, when present, for what it
+cannot read (`media.Chain`: WebM without a system decoder, WebP / BMP stills). So a Mac needs no ffmpeg for video
+thumbnails at all. It runs in the media pipeline's goroutine (Core Graphics without AppKit is thread-safe).
+Elsewhere ffmpeg / ffprobe do it; without them videos show a plain tile. `/state.media.posters` says which:
+`avfoundation`, `ffmpeg` or `""`. A native player never
 transcodes (`media.Processor.Native`, set by the app from `render.NativeVideoSupported()`), so the "Needs libtheora"
 badge and the "videos cannot play" footer note only appear on the Theora fallback, where audio items say
 `Needs ffmpeg` and the footer `ffmpeg not found: audio cannot play` (or `videos and audio`).
@@ -109,7 +115,8 @@ A `MediaSource` is keyed by `(role, path)` and refcounted:
 - `RoleLive`: the Live Output monitor **and** the projector window (`render.Output` gives its view `RoleLive`), so one
   decoder feeds both and the sound plays once;
 - `RolePreview`: the Preview Output monitor, its own decoder, paused at 0 by default;
-- `RoleNone` (thumbnails, the resource preview): no player, the poster still only.
+- `RoleResource`: the resource preview, its own decoder, paused at 0 (its mini transport);
+- `RoleNone` (thumbnails): no player, the poster still only.
 
 A source owns the native player, one RGBA8 `Image` and the `ImageTexture` every attached layer draws
 (`ImageTexture.Update` when the size is unchanged, `SetImage` otherwise). Views with a role keep `Process` on while they
@@ -117,21 +124,45 @@ hold a source and call `pumpSources()` once per engine frame (`Engine.GetProcess
 the tracks once ready, pending play / seek, a new frame if there is one. `AcquireAnimating` is held while a source
 plays (low-processor mode off), released when it pauses, ends, fails or closes.
 
-Layers (`layer.native`, a `TextureRect` between the poster and the text, `StretchKeepAspectCovered`) acquire their
-source when they have a path, a role and are visible in the tree, and release it when hidden: the outgoing side of a
-finished crossfade keeps its last frame on its (now hidden) texture rect and drops the player. A quick Black and back
-(inside the 500 ms fade) therefore keeps the decoder; a longer one re-opens the file from 0.
+Layers (`layer.native`, a `TextureRect` between the poster and the text, stretched by the item's Aspect Ratio)
+acquire their source when they have a path, a role and are visible in the tree, and release it when hidden: the
+outgoing side of a finished crossfade keeps its last frame on its (now hidden) texture rect and drops its reference.
+
+**Holds** (`render/hold.go`): the app also holds the file each playback state is about (`render.Hold(role,
+path)`, from `renderPlayback`, idempotent), so the player stays open whatever the layers do. `render.Source(role,
+path)` finds it even while another file (a Logo video) is the role's `Current`. Held sources no view pumps are
+pumped by the app (`playbackEvents` calls `render.PumpMedia()` while any source is open).
+
+`RoleResource` is the resource preview's own player (its mini transport), so a clip can be previewed without
+touching the Preview or Live players.
 
 `render.Current(role)` is the source most recently opened for a role (what the monitor shows now).
 `render.CloseSources()` runs from `ReleaseCaches()` at shutdown.
+
+## Black, Clear and Logo
+
+EasyWorship's Black and Logo cover the output; they do not stop a video. The decoded forms have no setting for it
+(Form_VideoProperties has Media Usage, Repeating, Aspect Ratio and Volume / Mute, nothing about Black), and in
+EasyWorship a clip keeps running, with its sound, under Black. FreeBeams does the same:
+
+- `core.MonitorMedia(frame)` is the media a monitor keeps playing: the slide's (or the theme's) video or audio in
+  the normal and clear modes (shown) and **also under Black and Logo** (`shown` false, `/state.playback.*.hidden`).
+- `core.AdvancePlayback` keeps the operator's playback (play / pause, loop, volume, seek count) while the file stays
+  the same, Black / Logo and back included; a new file gets its defaults.
+- The hold keeps the player open, so the position carries on and the **sound goes on under Black**; coming back
+  shows the clip where it has got to (paused under Black: exactly where it was). The transport bar stays visible
+  under Black, so the operator can pause the sound there.
+- Going live with another item under Black starts that item's playback (hidden) as it would without Black.
+- To silence a clip with the output, the operator pauses it (or uses the volume); a "pause on Black" option is
+  not in EasyWorship's forms and is left out.
 
 ## Playback state (`internal/app/playback.go`)
 
 State-machine rule: what the operator wants of each monitor is app state, `core.Playback{Key, Playing, Loop, Volume,
 SeekSeq, SeekTo}` per monitor. Events mutate it:
 
-- a new video / audio item arriving on a monitor (`core.FrameMedia` on the live / preview frame; Black and Logo count
-  as "no media", Clear keeps the background playing) gets `core.PlaybackDefaults`: live autoplays, preview waits
+- a new video / audio item arriving on a monitor (`core.AdvancePlayback` over `core.MonitorMedia`: Black, Logo and
+  Clear keep the file, see above) gets `core.PlaybackDefaults`: live autoplays, preview waits
   paused at 0, the item's `Background.Loop` is the default (videos loop, audio does not), the volume carries over;
 - the transport bar's callbacks and the control actions;
 - the player reaching the end with looping off (`MediaSource.TakeEnded`, polled every frame in `Process`).
@@ -151,10 +182,39 @@ callbacks `OnPlayPause`, `OnSeek(frac)`, `OnVolume(v)`, `OnLoop(on)`, `OnSkip(di
 the track or a keyboard step seeks at once. Icons: `play`, `pause`, `skip_back`, `skip_fwd`, `loop`, `volume`,
 `knob` (the sliders' grabber), `audio` (the library's Audio row); the `HSlider` styling is `buildSliderTheme`.
 
+## Resource preview transport (`internal/ui/minitransport.go`)
+
+EasyWorship's `Frame_VideoControlsMini` under the resource preview: a 28 px mini toolbar with skip to start, a round
+24 px play / pause, skip to end, the progress slider, `0:00 / 0:30` and the volume (an icon and a slider: the
+mute button and the volume dropdown of EasyWorship are folded into it). The bar clips its parts instead of
+widening the pane: when the pane is too narrow it drops the volume, then the time (`MiniTransport.fit`; at the
+default split it shows the time but not the volume). It is shown while the resource preview
+shows a video or audio file (also a theme's video) and drives `RoleResource`: its own decoder, paused at 0, its own
+volume, never the Preview or Live players nor the output. Same dumb-view contract as `ui.Transport`
+(`ui.TransportCallbacks`, `SetState`); the state is `App.pb.resource`, `/state.playback.resource`, and the
+transport actions take `"target": "resource"`.
+
+## Per-item properties (Edit Properties…)
+
+The media tile menu has **Edit Properties…** (EasyWorship's Edit Video / Audio Properties, `Form_VideoProperties`),
+a small dialog (`ui.MediaPropertiesDialog`, titled Video / Audio / Image Properties) with what FreeBeams keeps per
+item: **Title**, **Aspect Ratio** (Fill / Fit / Stretch: EasyWorship's maintain / zoom / stretch), **Repeating**
+(Loop / Play Once; videos and audio, also in the tile menu's Repeating ▸ now) and **Tags** (the Info tab's Tags memo,
+comma-separated, normalised by `models.NormalizeTags`, matched by the library search). Saved by
+`store.SetMediaProperties` (a targeted update; migration 7 adds `media.tags`; the pipeline's whole-row saves re-read
+title, tags, aspect and repeat first). `Media.Background()` turns Aspect / Repeating into `Background.Fit` /
+`Loop`, so the library deck, Preview and **schedule items** (their snapshot, made when added; Update items in
+Schedule refreshes it) play once or loop and letterbox / stretch as set. Left out: Mark In / Out, Media Usage,
+Alpha Channel, Select Thumbnail, Author / Copyright / Description, per-item volume.
+
+Control: `media-menu {item: "properties", index|title}` opens it; `media-properties {props: {title, tags, aspect,
+repeat}}` fills it and presses OK, `{cancel: true}` presses Cancel; `/state.dialog.mediaProperties`,
+`/state.media.tags`; screenshot window `media-properties`.
+
 ## Control actions
 
 `play`, `pause`, `toggle-play`, `seek {"seconds"}`, `volume {"value"}`, `loop {"on"}`, each with `"target": "live"`
-(default) or `"preview"`. `search-media {"kind": "audio"}` lists the Audio collection; `/state.media` has `audio`
+(default), `"preview"` or `"resource"`. `search-media {"kind": "audio"}` lists the Audio collection; `/state.media` has `audio`
 (count) and `native`.
 
 ## Audio playlist (background audio)
@@ -244,9 +304,7 @@ failed`. Actions: `audio-play {index}`, `audio-pause`, `audio-toggle`, `audio-st
 
 ## Not done
 
-- Poster frames through `AVAssetImageGenerator` (videos still need ffmpeg for a thumbnail on macOS).
-- A per-item Repeat / Aspect property on `models.Media`: `models.Background.Loop` is the hook (`Media.Background()`
-  sets it; `PlaybackDefaults` reads it).
+- EasyWorship's Mark In / Out, Media Usage, per-item volume and mute, and a "pause on Black" option.
 - The ffmpeg player on a real Windows or Linux machine: verified on macOS (`FREEBEAMS_PLAYER=ffmpeg`, Homebrew ffmpeg
   and the bundled LGPL build), and its pure-Go tests run in CI on `windows-latest` / `ubuntu-latest`, but the app
   itself has not run there yet. Hardware decoding (the bundled build has none: `--disable-autodetect`), a

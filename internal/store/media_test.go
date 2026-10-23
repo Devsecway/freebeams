@@ -253,3 +253,51 @@ func TestSearchMedia(t *testing.T) {
 		}
 	}
 }
+
+func TestMediaProperties(t *testing.T) {
+	ctx := context.Background()
+	st := openTemp(t)
+	m := models.Media{Path: "/m/walk_in loop.mp4", Kind: models.MediaVideo}
+	if err := st.SaveMedia(ctx, &m); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name    string
+		p       models.MediaProperties
+		want    models.Media // Title, Tags, Aspect, Repeat
+		wantErr bool
+	}{
+		{"everything", models.MediaProperties{Title: " Walk-in ", Tags: "intro, Calm,intro", Aspect: models.AspectFit, Repeat: models.RepeatOnce},
+			models.Media{Title: "Walk-in", Tags: "intro, Calm", Aspect: models.AspectFit, Repeat: models.RepeatOnce}, false},
+		{"a blank title keeps the title", models.MediaProperties{Title: " ", Tags: "", Aspect: models.AspectStretch, Repeat: models.RepeatLoop},
+			models.Media{Title: "Walk-in", Tags: "", Aspect: models.AspectStretch, Repeat: models.RepeatLoop}, false},
+		{"an unknown aspect is refused", models.MediaProperties{Title: "x", Aspect: "zoom"},
+			models.Media{Title: "Walk-in", Aspect: models.AspectStretch, Repeat: models.RepeatLoop}, true},
+	}
+	for _, tc := range tests {
+		err := st.SetMediaProperties(ctx, m.ID, tc.p)
+		if (err != nil) != tc.wantErr {
+			t.Fatalf("%s: err = %v", tc.name, err)
+		}
+		got, _ := st.GetMedia(ctx, m.ID)
+		if got.Title != tc.want.Title || got.Tags != tc.want.Tags || got.Aspect != tc.want.Aspect || got.Repeat != tc.want.Repeat {
+			t.Fatalf("%s: got %q %q %q %q", tc.name, got.Title, got.Tags, got.Aspect, got.Repeat)
+		}
+	}
+	// The pipeline's whole-row save leaves the tags alone; the search finds them.
+	if err := st.SetMediaProperties(ctx, m.ID, models.MediaProperties{Tags: "sunrise"}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := st.GetMedia(ctx, m.ID)
+	got.ThumbPath = "/c/t.jpg"
+	got.Tags = ""
+	if err := st.SaveMedia(ctx, &got); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := st.SearchMedia(ctx, "sunrise", "", 0); err != nil || len(res) != 1 || res[0].Tags != "sunrise" {
+		t.Fatalf("search by tag = %+v, %v", res, err)
+	}
+	if err := st.SetMediaProperties(ctx, 999, models.MediaProperties{}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing id: %v", err)
+	}
+}

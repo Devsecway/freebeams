@@ -11,7 +11,7 @@ import (
 	"freebeams/internal/models"
 )
 
-const mediaColumns = `id, path, kind, title, duration, width, height, thumb_path, transcoded_path, added, aspect, repeat`
+const mediaColumns = `id, path, kind, title, duration, width, height, thumb_path, transcoded_path, added, aspect, repeat, tags`
 
 // scanMedia reads one media row (see mediaColumns).
 func scanMedia(sc interface{ Scan(...any) error }) (models.Media, error) {
@@ -21,15 +21,40 @@ func scanMedia(sc interface{ Scan(...any) error }) (models.Media, error) {
 		added      string
 		aspect     string
 		repeat     string
+		tags       string
 	)
 	if err := sc.Scan(&m.ID, &m.Path, &m.Kind, &m.Title, &durationMS, &m.Width, &m.Height,
-		&m.ThumbPath, &m.TranscodedPath, &added, &aspect, &repeat); err != nil {
+		&m.ThumbPath, &m.TranscodedPath, &added, &aspect, &repeat, &tags); err != nil {
 		return models.Media{}, err
 	}
 	m.Duration = time.Duration(durationMS) * time.Millisecond
 	m.Added, _ = time.Parse(timeLayout, added)
 	m.Aspect, m.Repeat = models.MediaAspect(aspect).Normalized(), models.MediaRepeat(repeat).Normalized()
+	m.Tags = tags
 	return m, nil
+}
+
+// SetMediaProperties saves the Properties dialog: the title ("" keeps the
+// current one), the tags, Aspect Ratio and Repeating, without touching
+// the derived columns the pipeline writes. A missing id returns ErrNotFound.
+func (s *Store) SetMediaProperties(ctx context.Context, id int64, p models.MediaProperties) error {
+	if p.Aspect != "" && !p.Aspect.Valid() {
+		return fmt.Errorf("set media %d properties: unknown aspect ratio %q", id, p.Aspect)
+	}
+	if p.Repeat != "" && !p.Repeat.Valid() {
+		return fmt.Errorf("set media %d properties: unknown repeat mode %q", id, p.Repeat)
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE media SET
+			title = CASE WHEN ? = '' THEN title ELSE ? END, tags = ?, aspect = ?, repeat = ? WHERE id = ?`,
+		strings.TrimSpace(p.Title), strings.TrimSpace(p.Title), models.NormalizeTags(p.Tags),
+		string(p.Aspect.Normalized()), string(p.Repeat.Normalized()), id)
+	if err != nil {
+		return fmt.Errorf("set media %d properties: %w", id, err)
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return fmt.Errorf("set media %d properties: %w", id, ErrNotFound)
+	}
+	return nil
 }
 
 // SetMediaOptions sets an item's Aspect Ratio and Repeating choices without
@@ -246,7 +271,7 @@ func (s *Store) SearchMedia(ctx context.Context, query string, kind models.Media
 		if err != nil {
 			return nil, fmt.Errorf("search media %q: %w", query, err)
 		}
-		if !matchesAll(terms, m.Title, m.Path) {
+		if !matchesAll(terms, m.Title, m.Path, m.Tags) {
 			continue
 		}
 		out = append(out, m)

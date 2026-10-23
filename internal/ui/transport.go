@@ -30,11 +30,7 @@ import (
 // intent through the On… callbacks. It is shown only while the monitor's
 // slide is a video or an audio file (the app sets Visible).
 type Transport struct {
-	OnPlayPause func()
-	OnSeek      func(frac float64) // the seek slider: fraction of the duration
-	OnVolume    func(v float64)    // 0..1
-	OnLoop      func(on bool)
-	OnSkip      func(dir int) // -1: to the start, +1: to the end
+	TransportCallbacks
 
 	root    PanelContainer.Instance
 	seek    HSlider.Instance
@@ -49,6 +45,19 @@ type Transport struct {
 	state   TransportState
 	seeking bool // the operator is dragging the seek slider
 }
+
+// TransportCallbacks are a transport's intents (the big bar under the
+// monitors and the resource preview's MiniTransport report the same ones).
+type TransportCallbacks struct {
+	OnPlayPause func()
+	OnSeek      func(frac float64) // the seek slider: fraction of the duration
+	OnVolume    func(v float64)    // 0..1
+	OnLoop      func(on bool)
+	OnSkip      func(dir int) // -1: to the start, +1: to the end
+}
+
+// Callbacks returns the bar's callbacks, to be set by the app.
+func (t *Transport) Callbacks() *TransportCallbacks { return &t.TransportCallbacks }
 
 // TransportState is what the bar shows.
 type TransportState struct {

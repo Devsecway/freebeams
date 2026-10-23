@@ -202,6 +202,7 @@ func CloseSources() {
 	for _, s := range sources {
 		s.close()
 	}
+	releaseHolds()
 }
 
 // Path is the file the source plays.

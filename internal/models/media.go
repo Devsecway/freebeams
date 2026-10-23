@@ -91,6 +91,59 @@ type Media struct {
 	// the defaults (AspectFill, RepeatLoop).
 	Aspect MediaAspect `json:"aspect,omitempty"`
 	Repeat MediaRepeat `json:"repeat,omitempty"`
+
+	// Tags are the item's keywords (the Properties dialog), comma-separated
+	// as NormalizeTags writes them; the library search matches them.
+	Tags string `json:"tags,omitempty"`
+}
+
+// MediaProperties is what the media item's Properties dialog edits
+// (EasyWorship's Form_VideoProperties: Title, Aspect Ratio, Repeating, Tags).
+type MediaProperties struct {
+	Title  string      `json:"title"`
+	Tags   string      `json:"tags"`
+	Aspect MediaAspect `json:"aspect"`
+	Repeat MediaRepeat `json:"repeat"`
+}
+
+// Properties returns the item's current properties (effective Repeating).
+func (m Media) Properties() MediaProperties {
+	return MediaProperties{Title: m.Title, Tags: m.Tags, Aspect: m.Aspect.Normalized(), Repeat: m.RepeatMode()}
+}
+
+// WithProperties returns m with p applied: a blank title keeps m's, the tags
+// are normalized, an invalid aspect or repeat keeps m's.
+func (m Media) WithProperties(p MediaProperties) Media {
+	if t := strings.TrimSpace(p.Title); t != "" {
+		m.Title = t
+	}
+	m.Tags = NormalizeTags(p.Tags)
+	if p.Aspect.Valid() {
+		m.Aspect = p.Aspect
+	}
+	if p.Repeat.Valid() {
+		m.Repeat = p.Repeat
+	}
+	return m
+}
+
+// NormalizeTags cleans a tag list typed by the operator: commas or new
+// lines separate tags, each is trimmed with inner whitespace collapsed,
+// empty ones and case-insensitive repeats are dropped (the first spelling
+// wins); the result is joined with ", ".
+func NormalizeTags(s string) string {
+	seen := map[string]bool{}
+	var out []string
+	for _, t := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' || r == ';' }) {
+		t = strings.Join(strings.Fields(t), " ")
+		k := strings.ToLower(t)
+		if t == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, t)
+	}
+	return strings.Join(out, ", ")
 }
 
 // MediaAspect is how a media item is scaled to the slide (the tile menu's

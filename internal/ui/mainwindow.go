@@ -65,6 +65,10 @@ type MainWindow struct {
 	PreviewTransport *Transport `gd:"-"`
 	LiveTransport    *Transport `gd:"-"`
 
+	// ResourceTransport is the resource preview's mini video controls
+	// (shown while it previews a video or audio file).
+	ResourceTransport *MiniTransport `gd:"-"`
+
 	// Splitters, for persisting their percentages (OnChanged) and restoring
 	// them (SetPercent).
 	MainSplit        *Splitter `gd:"-"`
@@ -84,6 +88,9 @@ type MainWindow struct {
 
 	// StageMessage is Live ▸ Stage Message… (stage_message.go).
 	StageMessage *StageMessageDialog `gd:"-"`
+
+	// MediaProperties is the media tile menu's Edit Properties… (mediaprops.go).
+	MediaProperties *MediaPropertiesDialog `gd:"-"`
 
 	// AudioPlaylist is the background audio under the schedule (playlist.go).
 	AudioPlaylist *AudioPlaylist `gd:"-"`
@@ -156,6 +163,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.buildAlertDialogs()
 	w.buildPreviewMenu()
 	w.BibleManager = NewBibleManager()
+	w.MediaProperties = NewMediaPropertiesDialog()
 	for _, d := range w.dialogs() {
 		d.host = w.dialogHost
 		d.setTheme(theme)
@@ -168,7 +176,7 @@ func NewMainWindow(p Palette) *MainWindow {
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
 	return append([]*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg, w.Remote.dlg},
-		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg, w.Editor.sp.dlg.dlg, w.BibleManager.dlg)...)
+		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg, w.Editor.sp.dlg.dlg, w.BibleManager.dlg, w.MediaProperties.dlg)...)
 }
 
 // dialogName names a dialog window node for TopDialogHost.
@@ -203,6 +211,9 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 	}
 	if n.ID() == w.BibleManager.dlg.win.AsNode().ID() {
 		return "bible-manager"
+	}
+	if n.ID() == w.MediaProperties.dlg.win.AsNode().ID() {
+		return "media-properties"
 	}
 	return "other"
 }
@@ -528,6 +539,8 @@ func (w *MainWindow) buildResourcePreview() Control.Instance {
 	footer.AsControl().SetCustomMinimumSize(Vector2.New(0, 28))
 	w.resCapL = label("", vCaption)
 	add(footer, w.resCapL.AsControl())
-	add(col, w.ResourcePreview.AsControl(), w.resTitleL.AsControl(), grow, footer.AsControl())
+	w.ResourceTransport = NewMiniTransport()
+	w.ResourceTransport.AsControl().AsCanvasItem().SetVisible(false)
+	add(col, w.ResourcePreview.AsControl(), w.ResourceTransport.AsControl(), w.resTitleL.AsControl(), grow, footer.AsControl())
 	return bg.AsControl()
 }

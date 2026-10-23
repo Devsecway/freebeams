@@ -148,6 +148,12 @@ INSERT INTO alerts (name, json, created, updated) VALUES
 	('Parent Needed', '{"name":"Parent Needed","message":"Parents of {child}, please come to the {room}.","display":"scroll","align":"center","end":"count","count":3}', datetime('now'), datetime('now')),
 	('Service Starting', '{"name":"Service Starting","message":"Service starts in {countdown}","display":"static","align":"center","end":"token","count":1,"endToken":"countdown"}', datetime('now'), datetime('now'));
 `,
+
+	// 7: a media item's tags (the Video / Audio Properties dialog's Info,
+	// EasyWorship's Tags memo): a comma-separated list, searched like the title.
+	`
+ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '';
+`,
 }
 
 // migrate brings the schema up to date. Each migration runs in its own

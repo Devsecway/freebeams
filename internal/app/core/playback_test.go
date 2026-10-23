@@ -89,15 +89,82 @@ func TestTransportTime(t *testing.T) {
 
 func TestPlaybackTarget(t *testing.T) {
 	for _, tc := range []struct {
-		target   string
-		live, ok bool
-	}{{"", true, true}, {"live", true, true}, {"preview", false, true}, {"output", false, false}} {
-		live, ok := PlaybackTarget(tc.target)
-		if live != tc.live || ok != tc.ok {
-			t.Errorf("PlaybackTarget(%q) = %v, %v", tc.target, live, ok)
+		target string
+		want   Target
+		ok     bool
+	}{{"", TargetLive, true}, {"live", TargetLive, true}, {"preview", TargetPreview, true},
+		{"resource", TargetResource, true}, {"output", TargetLive, false}} {
+		got, ok := PlaybackTarget(tc.target)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("PlaybackTarget(%q) = %v, %v", tc.target, got, ok)
+		}
+		if ok && tc.target != "" && got.String() != tc.target {
+			t.Errorf("%v.String() = %q", got, got.String())
 		}
 	}
-	if err := PlaybackError("seek", "x"); err == nil || err.Error() != `seek: target must be "live" or "preview", got "x"` {
+	if err := PlaybackError("seek", "x"); err == nil || err.Error() != `seek: target must be "live", "preview" or "resource", got "x"` {
 		t.Errorf("PlaybackError = %v", err)
+	}
+}
+
+func TestMonitorMedia(t *testing.T) {
+	video := &models.Background{Kind: models.BackgroundVideo, Path: "/v.mp4", Loop: true}
+	slide := &models.Slide{Kind: models.SlideMedia, Background: video}
+	tests := []struct {
+		name      string
+		f         models.Frame
+		want      string
+		shown, ok bool
+	}{
+		{"normal", models.Frame{Mode: models.ModeNormal, Slide: slide}, "/v.mp4", true, true},
+		{"clear", models.Frame{Mode: models.ModeClear, Slide: slide}, "/v.mp4", true, true},
+		{"black plays on hidden", models.Frame{Mode: models.ModeBlack, Slide: slide}, "/v.mp4", false, true},
+		{"logo plays on hidden", models.Frame{Mode: models.ModeLogo, Slide: slide}, "/v.mp4", false, true},
+		{"black over a song", models.Frame{Mode: models.ModeBlack, Slide: &models.Slide{Text: "x"}}, "", false, false},
+		{"nothing", models.Frame{Mode: models.ModeBlack}, "", false, false},
+	}
+	for _, tc := range tests {
+		bg, shown, ok := MonitorMedia(tc.f)
+		if bg.Path != tc.want || shown != tc.shown || ok != tc.ok {
+			t.Errorf("%s: MonitorMedia = %q, %v, %v; want %q, %v, %v", tc.name, bg.Path, shown, ok, tc.want, tc.shown, tc.ok)
+		}
+	}
+}
+
+// TestAdvancePlayback is the position bookkeeping across Black / Clear /
+// Logo: the operator's settings for a clip survive them (the player keeps
+// its position), a new clip starts from its defaults.
+func TestAdvancePlayback(t *testing.T) {
+	clip := &models.Slide{Kind: models.SlideMedia, Background: &models.Background{Kind: models.BackgroundVideo, Path: "/v.mp4", Loop: true}}
+	other := &models.Slide{Kind: models.SlideMedia, Background: &models.Background{Kind: models.BackgroundAudio, Path: "/a.mp3"}}
+	song := &models.Slide{Kind: models.SlideSong, Text: "Amazing grace"}
+	// The operator paused the clip, turned looping off, set the volume and sought.
+	set := Playback{Key: "/v.mp4", Playing: false, Loop: false, Volume: 0.3, SeekSeq: 4, SeekTo: 2}
+	frame := func(m models.OutputMode, s *models.Slide) models.Frame { return models.Frame{Mode: m, Slide: s} }
+	steps := []struct {
+		name    string
+		f       models.Frame
+		live    bool
+		want    Playback
+		changed bool
+	}{
+		{"black keeps everything", frame(models.ModeBlack, clip), true, set, false},
+		{"back from black: unchanged", frame(models.ModeNormal, clip), true, set, false},
+		{"logo keeps everything", frame(models.ModeLogo, clip), true, set, false},
+		{"clear keeps everything", frame(models.ModeClear, clip), true, set, false},
+		{"a new file starts from its defaults", frame(models.ModeNormal, other), true,
+			Playback{Key: "/a.mp3", Playing: true, Loop: false, Volume: 0.3, SeekSeq: 4}, true},
+		{"a song: nothing plays", frame(models.ModeNormal, song), true, Playback{Volume: 0.3, SeekSeq: 4}, true},
+		{"black over the song: still nothing", frame(models.ModeBlack, song), true, Playback{Volume: 0.3, SeekSeq: 4}, false},
+		{"the clip on preview waits paused", frame(models.ModeNormal, clip), false,
+			Playback{Key: "/v.mp4", Playing: false, Loop: true, Volume: 0.3, SeekSeq: 4}, true},
+	}
+	pb := set
+	for _, st := range steps {
+		next, changed := AdvancePlayback(pb, st.f, st.live)
+		if next != st.want || changed != st.changed {
+			t.Fatalf("%s: AdvancePlayback = %+v, %v; want %+v, %v", st.name, next, changed, st.want, st.changed)
+		}
+		pb = next
 	}
 }
