@@ -35,6 +35,9 @@ const (
 	mediaMenuAddToPlaylist
 )
 
+// Use As Theme Background (images and videos; app/themepolish.go).
+const mediaMenuThemeBackground = 200
+
 // MediaRow is one tile of the media grid.
 type MediaRow struct {
 	Title string
@@ -98,6 +101,9 @@ type MediaPanel struct {
 
 	// OnAddToPlaylist is Add to Audio Playlist (audio tiles only).
 	OnAddToPlaylist func(i int)
+
+	// OnThemeBackground is Use As Theme Background (images and videos).
+	OnThemeBackground func(i int)
 
 	split   *Splitter
 	search  *searchLocator
@@ -240,6 +246,7 @@ func (p *MediaPanel) buildMenu() *mediaMenu {
 	})
 	pm.AddSeparator()
 	pm.MoreArgs().AddItem("Use As Logo Background", mediaMenuLogo, 0)
+	pm.MoreArgs().AddItem("Use As Theme Background", mediaMenuThemeBackground, 0)
 	pm.AddSeparator()
 	pm.MoreArgs().AddItem("Remove from Library", mediaMenuRemove, 0)
 	pm.MoreArgs().AddItem("Delete File…", mediaMenuDeleteFile, 0)
@@ -425,6 +432,8 @@ func (p *MediaPanel) enableMenu(m *mediaMenu) {
 			m.menu.SetItemDisabled(idx, !video)
 		case mediaMenuAddToPlaylist:
 			m.menu.SetItemDisabled(idx, none || p.rows[p.selected].Kind != models.MediaAudio)
+		case mediaMenuThemeBackground:
+			m.menu.SetItemDisabled(idx, none || p.rows[p.selected].Kind == models.MediaAudio)
 		}
 	}
 }
@@ -459,6 +468,8 @@ func (p *MediaPanel) menuPressed(id int) {
 		call(p.OnReveal)
 	case mediaMenuAddToPlaylist:
 		call(p.OnAddToPlaylist)
+	case mediaMenuThemeBackground:
+		call(p.OnThemeBackground)
 	case mediaMenuRefresh:
 		if p.OnRefresh != nil {
 			p.OnRefresh()

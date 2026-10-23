@@ -42,17 +42,21 @@ func NoPlayback(prev Playback) Playback {
 }
 
 // FrameMedia returns the video or audio background a frame shows, if any: a
-// media slide's background in the normal and clear modes (clear only hides
-// the text). Black and logo show no media, so nothing plays.
+// media slide's background, or the theme's motion background behind a text
+// slide, in the normal and clear modes (clear only hides the text). Black
+// and logo show no media, so nothing plays.
 func FrameMedia(f models.Frame) (models.Background, bool) {
-	if f.Slide == nil || f.Slide.Background == nil {
+	if f.Slide == nil {
 		return models.Background{}, false
 	}
 	switch f.Mode {
 	case models.ModeBlack, models.ModeLogo:
 		return models.Background{}, false
 	}
-	bg := *f.Slide.Background
+	bg := f.Theme.Background
+	if f.Slide.Background != nil {
+		bg = *f.Slide.Background
+	}
 	if !bg.Kind.Plays() || bg.Path == "" {
 		return models.Background{}, false
 	}

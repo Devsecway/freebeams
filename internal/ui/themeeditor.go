@@ -46,6 +46,15 @@ type ThemeEditor struct {
 	// the native file dialog and calls SetBackgroundImage.
 	OnBrowseImage func()
 
+	// OnBrowseVideo is the video "Browse…" button (a file outside the media
+	// library); OnPickMedia is "Library…" (the media picker). The app calls
+	// SetBackgroundMedia with the choice.
+	OnBrowseVideo func()
+	OnPickMedia   func()
+	// OnApplyToSchedule reports the footer's "Apply changes to items in
+	// schedule" checkbox (SetApplyToSchedule projects it).
+	OnApplyToSchedule func(on bool)
+
 	// Preview is the 16:9 slot for the live preview.
 	Preview *MonitorHost
 
@@ -60,7 +69,7 @@ type ThemeEditor struct {
 	bgColor2Lbl       Control.Instance
 	bgImageRow        Control.Instance
 	bgPath            LineEdit.Instance
-	font              OptionButton.Instance
+	font              *fontPicker
 	size, minSize     SpinBox.Instance
 	lineSpacing       SpinBox.Instance
 	bold, italic      CheckBox.Instance
@@ -87,13 +96,28 @@ type ThemeEditor struct {
 	// an item's own copy, so the name is fixed and OK / Apply restyle the
 	// item instead of saving a theme (the app tells them apart).
 	itemMode bool
+
+	// Video backgrounds, the text box band and the footer's apply choice.
+	bgFitRow        Control.Instance
+	bgFit           OptionButton.Instance
+	bgLoop          CheckBox.Instance
+	bgBrowse        Button.Instance
+	bgFits          []models.MediaAspect
+	boxOn           CheckBox.Instance
+	boxColor        ColorPickerButton.Instance
+	boxPad          SpinBox.Instance
+	boxFull         CheckBox.Instance
+	boxCaption      Label.Instance
+	applySchedule   CheckBox.Instance
+	applyScheduleOn bool
 }
 
 // NewThemeEditor builds the dialog. Add AsWindow() to the scene tree
 // (MainWindow does this for its own editor).
 func NewThemeEditor() *ThemeEditor {
 	e := &ThemeEditor{
-		bgKinds: []models.BackgroundKind{models.BackgroundColor, models.BackgroundGradient, models.BackgroundImage},
+		bgKinds: []models.BackgroundKind{models.BackgroundColor, models.BackgroundGradient, models.BackgroundImage, models.BackgroundVideo},
+		bgFits:  []models.MediaAspect{models.AspectFill, models.AspectFit, models.AspectStretch},
 		hAligns: []models.HAlign{models.AlignLeft, models.AlignCenter, models.AlignRight},
 		vAligns: []models.VAlign{models.AlignTop, models.AlignMiddle, models.AlignBottom},
 	}
@@ -123,6 +147,7 @@ func NewThemeEditor() *ThemeEditor {
 	e.buildText(fields)
 	e.buildOutlineShadow(fields)
 	e.buildLayout(fields)
+	e.buildBox(fields)
 	scroll := ScrollContainer.New()
 	scroll.SetHorizontalScrollMode(ScrollContainer.ScrollModeDisabled)
 	fields.AsControl().SetSizeFlagsHorizontal(Control.SizeExpandFill)
@@ -152,7 +177,14 @@ func NewThemeEditor() *ThemeEditor {
 	e.apply.SetText("Apply")
 	e.apply.AsControl().SetCustomMinimumSize(Vector2.New(75, 25))
 	e.apply.AsBaseButton().OnPressed(e.applyPressed)
-	add(e.dlg.footer, e.errLbl.AsControl(), e.apply.AsControl(), e.dlg.ok.AsControl(), e.dlg.cancel.AsControl())
+	e.applySchedule = e.check("Apply changes to items in schedule", func(on bool) {
+		e.applyScheduleOn = on
+		if e.OnApplyToSchedule != nil {
+			e.OnApplyToSchedule(on)
+		}
+	})
+	e.applySchedule.AsControl().SetTooltipText("Off: schedule items keep the look they had when they were added")
+	add(e.dlg.footer, e.applySchedule.AsControl(), e.errLbl.AsControl(), e.apply.AsControl(), e.dlg.ok.AsControl(), e.dlg.cancel.AsControl())
 	e.dlg.win.AsNode().SetName("ThemeEditor")
 	e.render()
 	return e
@@ -162,10 +194,18 @@ func NewThemeEditor() *ThemeEditor {
 
 func (e *ThemeEditor) buildBackground(col interface{ AsControl() Control.Instance }) {
 	add(col, sectionLabel("Background"))
-	e.bgKind = e.option([]string{"Solid color", "Gradient", "Image"}, func(i int) {
+	e.bgKind = e.option([]string{"Solid color", "Gradient", "Image", "Video"}, func(i int) {
 		e.change(func(t *models.Theme) {
 			if i >= 0 && i < len(e.bgKinds) {
-				t.Background.Kind = e.bgKinds[i]
+				if k := e.bgKinds[i]; k != t.Background.Kind {
+					if k.Plays() || t.Background.Kind.Plays() {
+						t.Background.Path, t.Background.Poster = "", "" // an image is no video
+					}
+					t.Background.Kind = k
+					if k == models.BackgroundVideo && t.Background.Path == "" {
+						t.Background.Loop = true
+					}
+				}
 			}
 		})
 	})
@@ -179,41 +219,54 @@ func (e *ThemeEditor) buildBackground(col interface{ AsControl() Control.Instanc
 	e.bgPath.SetPlaceholderText("No image chosen")
 	e.bgPath.AsControl().SetSizeFlagsHorizontal(Control.SizeExpandFill)
 	e.bgPath.AsControl().SetCustomMinimumSize(Vector2.New(0, 26))
-	browse := Button.New()
-	browse.SetText("Browse…")
-	browse.AsBaseButton().OnPressed(func() {
-		if e.OnBrowseImage != nil {
+	library := Button.New()
+	library.SetText("Library…")
+	library.AsControl().SetTooltipText("Choose an image or a video from the media library")
+	library.AsBaseButton().OnPressed(func() {
+		if e.OnPickMedia != nil {
+			e.OnPickMedia()
+		}
+	})
+	e.bgBrowse = Button.New()
+	e.bgBrowse.SetText("Browse…")
+	e.bgBrowse.AsBaseButton().OnPressed(func() {
+		if e.theme.Background.Kind == models.BackgroundVideo {
+			if e.OnBrowseVideo != nil {
+				e.OnBrowseVideo()
+			}
+		} else if e.OnBrowseImage != nil {
 			e.OnBrowseImage()
 		}
 	})
 	clear := Button.New()
 	clear.SetText("Clear")
-	clear.AsBaseButton().OnPressed(func() { e.SetBackgroundImage("") })
-	e.bgImageRow = fieldRow("Image", e.bgPath.AsControl(), browse.AsControl(), clear.AsControl())
+	clear.AsBaseButton().OnPressed(func() {
+		e.change(func(t *models.Theme) { t.Background.Path, t.Background.Poster = "", "" })
+	})
+	e.bgImageRow = fieldRow("File", e.bgPath.AsControl(), library.AsControl(), e.bgBrowse.AsControl(), clear.AsControl())
 	add(col, e.bgImageRow)
+
+	e.bgFit = e.option([]string{"Fill", "Fit", "Stretch"}, func(i int) {
+		e.change(func(t *models.Theme) {
+			if i >= 0 && i < len(e.bgFits) {
+				t.Background.Fit = e.bgFits[i]
+			}
+		})
+	})
+	e.bgFit.AsControl().SetTooltipText("Fill crops to cover the slide, Fit letterboxes it, Stretch distorts it")
+	e.bgLoop = e.check("Loop", func(on bool) { e.change(func(t *models.Theme) { t.Background.Loop = on }) })
+	e.bgFitRow = fieldRow("Scale", e.bgFit.AsControl(), e.bgLoop.AsControl())
+	add(col, e.bgFitRow)
 }
 
 func (e *ThemeEditor) buildText(col interface{ AsControl() Control.Instance }) {
 	add(col, sectionLabel("Text"))
 	e.fonts = fontFamilies()
-	names := make([]string, len(e.fonts))
-	for i, f := range e.fonts {
-		names[i] = f
-	}
-	names[0] = "Default (Helvetica Neue)"
-	e.font = e.option(names, func(i int) {
-		e.change(func(t *models.Theme) {
-			if i >= 0 && i < len(e.fonts) {
-				t.Font.Family = e.fonts[i]
-			}
-		})
-	})
-	e.font.SetFitToLongestItem(false)
-	e.font.AsControl().SetCustomMinimumSize(Vector2.New(220, 26))
-	e.font.AsControl().SetSizeFlagsHorizontal(Control.SizeExpandFill)
+	e.font = newFontPicker(func(family string) { e.change(func(t *models.Theme) { t.Font.Family = family }) })
+	e.font.setNames(e.fonts)
 	e.bold = e.check("Bold", func(on bool) { e.change(func(t *models.Theme) { t.Font.Bold = on }) })
 	e.italic = e.check("Italic", func(on bool) { e.change(func(t *models.Theme) { t.Font.Italic = on }) })
-	add(col, fieldRow("Font", e.font.AsControl(), e.bold.AsControl(), e.italic.AsControl()))
+	add(col, fieldRow("Font", e.font.button.AsControl(), e.bold.AsControl(), e.italic.AsControl()), e.font.panel)
 
 	e.size = e.spin(8, 400, 1, func(v float64) { e.change(func(t *models.Theme) { t.Font.Size = float32(v) }) })
 	e.minSize = e.spin(8, 400, 1, func(v float64) { e.change(func(t *models.Theme) { t.Font.MinSize = float32(v) }) })
@@ -381,6 +434,7 @@ func (e *ThemeEditor) Open(t models.Theme) {
 	e.theme = t
 	e.errText = ""
 	e.itemMode = false
+	e.font.open, e.font.query = false, ""
 	title := "Edit Theme"
 	if t.ID == 0 {
 		title = "New Theme"
@@ -399,6 +453,7 @@ func (e *ThemeEditor) OpenItem(t models.Theme, item string) {
 	e.theme = t
 	e.errText = ""
 	e.itemMode = true
+	e.font.open, e.font.query = false, ""
 	e.dlg.win.SetTitle("Edit Theme for This Item · " + item)
 	e.render()
 	e.notify()
@@ -468,9 +523,19 @@ func (e *ThemeEditor) render() {
 	e.bgColor2.SetColor(toGodotColor(t.Background.Color2))
 	gradient := t.Background.Kind == models.BackgroundGradient
 	image := t.Background.Kind == models.BackgroundImage
+	video := t.Background.Kind == models.BackgroundVideo
 	e.bgColor2Lbl.AsCanvasItem().SetVisible(gradient)
 	e.bgColor2.AsCanvasItem().SetVisible(gradient)
-	e.bgImageRow.AsCanvasItem().SetVisible(image)
+	e.bgImageRow.AsCanvasItem().SetVisible(image || video)
+	e.bgFitRow.AsCanvasItem().SetVisible(image || video)
+	e.bgLoop.AsCanvasItem().SetVisible(video)
+	e.bgFit.Select(indexOf(e.bgFits, t.Background.Fit.Normalized(), 0))
+	e.bgLoop.AsBaseButton().SetPressedNoSignal(t.Background.Loop)
+	if video {
+		e.bgPath.SetPlaceholderText("No video chosen")
+	} else {
+		e.bgPath.SetPlaceholderText("No image chosen")
+	}
 	if e.bgPath.Text() != t.Background.Path {
 		e.bgPath.SetText(t.Background.Path)
 	}
@@ -479,7 +544,7 @@ func (e *ThemeEditor) render() {
 		e.bgPath.SetPlaceholderText(filepath.Base(t.Background.Path))
 	}
 
-	e.font.Select(e.fontIndex(t.Font.Family))
+	e.font.setFamily(e.fontIndex(t.Font.Family))
 	e.size.AsRange().SetValueNoSignal(Float.X(t.Font.Size))
 	e.minSize.AsRange().SetValueNoSignal(Float.X(t.Font.MinSize))
 	e.lineSpacing.AsRange().SetValueNoSignal(Float.X(t.Font.LineSpacing))
@@ -511,6 +576,9 @@ func (e *ThemeEditor) render() {
 	e.mB.AsRange().SetValueNoSignal(Float.X(t.Margins.Bottom))
 	e.footerSize.AsRange().SetValueNoSignal(Float.X(t.FooterSize))
 	e.footerColor.SetColor(toGodotColor(t.FooterColor))
+	e.renderBox()
+	e.applySchedule.AsBaseButton().SetPressedNoSignal(e.applyScheduleOn)
+	e.applySchedule.AsCanvasItem().SetVisible(!e.itemMode)
 
 	e.previewCaption.SetText("Preview · " + strings.TrimSpace(t.Name))
 	e.errLbl.SetText(e.errText)
@@ -529,8 +597,7 @@ func (e *ThemeEditor) fontIndex(family string) int {
 		return 0
 	}
 	e.fonts = append(e.fonts, family)
-	e.font.AddItem(family)
-	return len(e.fonts) - 1
+	return e.font.appendName(family)
 }
 
 // indexOf is the index of v in list, or fallback (what the renderer does

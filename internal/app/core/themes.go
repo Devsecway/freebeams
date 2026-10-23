@@ -188,6 +188,15 @@ type ThemesState struct {
 	CountText        string   `json:"countText"`
 	Editor           bool     `json:"editor"`            // the theme editor is open
 	Editing          string   `json:"editing,omitempty"` // name of the theme in the editor
+
+	// The theme polish (app/themepolish.go): the editor's apply choice, the
+	// edited theme's background and band, and the font search.
+	ApplyToSchedule bool               `json:"applyToSchedule"`
+	EditBackground  *models.Background `json:"editBackground,omitempty"`
+	EditBox         *models.TextBox    `json:"editBox,omitempty"`
+	EditFont        string             `json:"editFont,omitempty"`
+	FontList        bool               `json:"fontList,omitempty"`    // the font list is open
+	FontMatches     int                `json:"fontMatches,omitempty"` // entries it shows
 }
 
 // BuildThemesState fills a ThemesState from the listed themes and defaults.
