@@ -838,6 +838,49 @@ Recorded 2026-10-22 on the same machine. Formats, policy and behaviour: [BIBLES.
 - `test/smoke.sh` (`FREEBEAMS_BIBLES_DIR`, the bundled checks now expect RVA, the `# ---- bible manager` block),
   `docs/BIBLES.md`.
 
+## Settings: ⌘ vs Control, screen transitions, native chrome
+
+Recorded 2026-10-24 on the same machine (Mac in Dark mode, left in Dark mode).
+
+| Criterion | Status | Verification |
+|---|---|---|
+| ⌘ and Control are separate hotkey modifiers on macOS | **pass** | `core.Chord.Cmd` (⌘, `KeyEvent.Meta`) beside `Ctrl` (the Control key). `ChordOf`, `Reserved` (⌘ Q W H M N O S V X A Z Tab Space; on a Mac Control + Space / arrows are macOS's, Control+Q is free), labels in Apple's order with the Mac symbols (`⌘B`, `⌃B`, `⇧⌘S`), stored as `cmd+b` / `ctrl+b`; `ParseChord` reads both spellings and the symbols with or without `+`. EasyWorship's Ctrl keys are both ⌘ and ⌃ by default (`black: ["cmd+b","ctrl+b"]`), so nothing an operator pressed before stops working, and either can now be moved alone. `TestParseChordModifiers`, `TestChordOfModifiers`, `TestDefaultKeymapModifiers`, `TestHotkeysModifiers`, `TestReservedModifiers`, `TestParseEWHotkeysModifiers` (EasyWorship's `C-` = both). |
+| Windows / Linux: Ctrl stays Ctrl | **pass** | There is no ⌘ key: a chord's ⌘ folds into Ctrl (`Chord.platform`), so a `cmd+b` from a Mac's keymap is Ctrl+B there, and the Windows / Super key (`Meta`) still counts as Ctrl, as before. The core tests pin these portable rules in `TestMain` whatever the host is; the Mac rules are tested with `setMacModifiers`. |
+| Keymaps saved by older builds keep working | **pass** | The keymap moved to `settings.hotkeys.v2`. While it is missing, `App.loadHotkeys` reads the old `settings.hotkeys` (where `ctrl` meant Ctrl or ⌘) through `core.MigrateKeymap`: on a Mac every such chord becomes ⌘ and ⌃ (a ⌃ chord macOS reserves, e.g. ⌃→, is dropped, ⌘→ kept). `TestMigrateKeymap` (Mac and portable, missing actions get their defaults, the migrated map round-trips); end to end in a scratch run (below). |
+| Options ▸ Hotkeys shows and records the right modifier | **pass** | Add Key… records ⌃B as `ctrl+b` and ⌘B as `cmd+b`; the table and status line use the Mac symbols; the hint explains that ⌘B and ⌃B differ (Windows/Linux text says Ctrl). Smoke `# ---- ⌘ and Control in hotkeys (macOS)`: Black on ⌘B only, Control+B captured for Logo (`⌃B added to Logo.`), ⌘B is Black's (Reassign question), native ⌃B is Logo and ⌘B Black in the main window, ⌃→ refused, ⌘→ and ⌃Q accepted, `reset-hotkeys` restores both. The `native Ctrl+B` / `native Cmd+B` checks earlier in the smoke still pass (both are Black by default) and the `# ---- hotkeys editing` expectations were updated to the two-chord defaults. Screenshots `settings-hotkeys.png`, `settings-hotkeys-cmd.png`. |
+| Separate Black / Clear / Logo transitions, "same as the slide transition" by default | **pass** | EasyWorship's Options ▸ Transitions has Slide / Black / Clear / Logo tabs (`Frame_Options` `Button_TranSlide…Button_TranClear`). `models.ScreenTransition` (`"same"` or a transition; zero value = same) and `ScreenTransitions.For(slide, from, to)`: entering Black/Clear/Logo uses that screen's transition, leaving it too, the screen entered wins (Black → Logo is Logo's), a slide change uses the slide's (`TestScreenTransitionFor`, `TestScreenTransitionJSON`, `TestScreenTransitionsWith`). Persisted one key each: `settings.transition.black` / `.clear` / `.logo` (`TestScreenTransitionSettings`). A change leaving Clear because the slide changed uses Clear's transition (the view cannot tell the two apart). |
+| Render picks the right one | **pass** | `render.SlideView.SetScreenTransitions`; `show` picks the change's transition from the previous and the new frame's mode and latches it for the run (`v.run`), so a settings change mid-way never alters a running transition; the live monitor and the output both get it (`App.applyTransitions`). `/state.liveTransition` is the running one. Smoke `# ---- black / clear / logo transitions`: Black on a 4 s push-left while slides blend: `black on runs Black's push`, mid-way pixel checks (old slide on the left, black pushing in from the right, `screens-black-mid.png`), `black off pushes too`, `a slide change blends`, Logo as a cut (`logo on is a cut`, `not transitioning`). |
+| Options ▸ Transition and the control API | **pass** | A "Black, Clear and Logo" card under the slide card: per screen a kind picker whose first entry is "Same as Slide" and a duration (editable only for a transition of its own; shows the slide's while same). Cancel restores them. `transition {mode: black\|clear\|logo, kind, duration}` (`kind: "same"`; a duration alone keeps the kind), `set-setting {key: "transition.black"\|"settings.transition.black"…, value: "same"\|{kind, duration}}`, `/state.settings.screenTransitions`. Screenshot `settings-transition-screens.png`. |
+| Native window chrome follows the interface colour | **pass (macOS)** | `appearance_darwin.go` sets `NSApp.appearance` to Dark Aqua / Aqua from `settings.interfaceColor` at startup and on every change (`App.renderNativeAppearance`, a per-frame projection that acts only on a change); `/state.nativeAppearance` reads `NSApp.effectiveAppearance` back and appends ` (window: …)` if any window differs. Smoke: `the native chrome starts Dark Aqua`, `light interface: the native chrome is Aqua (whatever the system's mode)` while the system stays in Dark mode, `dark interface: … Dark Aqua again`. Windows: `appearance_windows.go` sets `DWMWA_USE_IMMERSIVE_DARK_MODE` (20, falling back to 19) on every window of `DisplayServer.GetWindowList()` through `syscall` (no cgo), new windows at once and all of them every 120 frames because Godot resets the attribute from the system theme; `/state.nativeAppearance` is `dark` / `light`. Linux: no-op. `GOOS=windows go vet ./...` and `GOOS=linux go vet ./...` pass. |
+
+Smoke on 2026-10-24: `test/smoke.sh` **1591/1591 PASS** (second run; the first failed on one smoke check of my own
+that read the state of a refused reply, see CLAUDE.md), log hygiene and the keepalive walk clean. The new blocks
+add 30 (`screens`) and 17 (`⌘`) checks plus 3 native-appearance checks. A scratch run on a fresh library with a
+legacy `settings.hotkeys` row (`{"black":["ctrl+b"],"logo":["ctrl+f2"],"next":["right","ctrl+right"]}`) started
+with `black: ["cmd+b","ctrl+b"]`, `logo: ["cmd+f2","ctrl+f2"]`, `next: ["right","cmd+right"]` and logged
+`hotkeys: migrated settings.hotkeys`. The Transition and Hotkeys pages were checked by eye (nothing clips; the
+⌘ ⌃ ⌥ ⇧ symbols render).
+
+Not verified: the Windows title bar on a real Windows machine (it compiles and vets only); EasyWorship's own
+behaviour for ⌘ vs Control on a Mac (its `HotKeys.2.ini` only says `C-`), hence "both" as the default.
+
+### Shared files touched (⌘ vs Control, screen transitions, native chrome)
+
+- New: `internal/models/screentransition.go` (+ test), `internal/app/core/keymap_cmd_test.go`,
+  `core/platform_test.go`, `internal/app/appearance.go`, `appearance_darwin.go`, `appearance_windows.go`,
+  `appearance_other.go`, `internal/ui/settings_screens.go`.
+- `internal/app/core/keymap.go` (Chord.Cmd, parsing, labels, reserved keys, legacy migration, the v2 key),
+  `core/hotkeys.go` (one line), `core/settings.go` (`Screens` block, `SettingScreenTransition`, `ScreenModes`),
+  `core/state.go` (`LiveTransition` / `NativeAppearance` blocks), `core/settings_test.go`.
+- `internal/render/slideview.go` (`screens` / `run` fields, `show(from)`), `render/transitions.go`.
+- `internal/app/app.go` (a `look` field block, one `Process` line), `control.go` (two `BuildState` lines),
+  `settings.go`, `hotkeys.go` (`loadHotkeys`), `transitions.go`, `view.go` (two lines).
+- `internal/ui/settings.go` (`Screens` / `OnScreenTransition` / `screenCtl` blocks, the card), `settings_hotkeys.go`
+  (the hint).
+- `test/smoke.sh`: updated hotkey expectations, native-appearance checks next to the interface colour checks, the
+  `# ---- black / clear / logo transitions` block before `# ---- hotkeys editing` and the `# ---- ⌘ and Control in
+  hotkeys (macOS)` block before `# ---- default themes`. `docs/UI-SPEC.md` §3.7, `CLAUDE.md`.
+
 ## Remaining for Phase 2
 
 - **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the
@@ -851,11 +894,12 @@ Recorded 2026-10-22 on the same machine. Formats, policy and behaviour: [BIBLES.
   transcode that theme backgrounds do not look up yet); a poster for a theme video browsed from outside the
   library (its tiles show the plain colour); a drag handle for the text box on the preview (the margins are
   numbers only).
-- **Settings**: the Options dialog has Output, Transition (with Zoom), Logo, Library, editable Hotkeys and default
-  Themes per item type. Still open: EasyWorship's separate Black / Clear / Logo transitions (one transition serves
-  all), per-item transitions (default themes for media and presentations are not needed, see "Theme polish"), and
-  telling ⌘ and Ctrl apart in a binding (they are one chord). The native menus cannot be driven by automation (the
-  `menu {item}` action covers the handlers).
+- **Settings**: the Options dialog has Output, Transition (with Zoom and separate Black / Clear / Logo
+  transitions), Logo, Library, editable Hotkeys (⌘ and Control told apart on a Mac) and default Themes per item
+  type; the native chrome follows the interface colour (see "Settings: ⌘ vs Control, screen transitions, native
+  chrome"). Still open: per-item transitions (default themes for media and presentations are not needed, see
+  "Theme polish"); the Windows dark title bar is untested on Windows. The native menus cannot be driven by
+  automation (the `menu {item}` action covers the handlers).
 - **Packaging** (PLAN §4 M6): the release build, scripts, CI workflows and docs are in place, see
   [RELEASE.md](RELEASE.md). Still open: signing and notarization (needs credentials), and the Windows and Linux
   builds, which are unverified until the release workflow has run.

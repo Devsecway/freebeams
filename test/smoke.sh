@@ -222,8 +222,10 @@ act "jump chorus or verse 1" jump '{"kind":"verse","n":1}' 's["live"]["label"] =
 act "native Right (next)" native-key '{"name":"right"}' 's["live"]["index"] == 1'
 act "native V" native-key '{"name":"v"}' 's["live"]["label"] == "Verse 1"'
 act "native 3 within 1s (Verse 3)" native-key '{"name":"3"}' 's["live"]["label"] == "Verse 3"'
-act "native Ctrl+B" native-key '{"name":"b","ctrl":true}' 's["mode"] == "black" and s["transitioning"]'
-act "native Cmd+B" native-key '{"name":"b","meta":true}' 's["mode"] == "normal"'
+# ⌘ and Control are separate modifiers on a Mac; EasyWorship's Ctrl+B is both ⌘B and ⌃B by default
+# (the "⌘ and Control" block below moves one of them).
+act "native Ctrl+B (⌃B is Black by default)" native-key '{"name":"b","ctrl":true}' 's["mode"] == "black" and s["transitioning"]'
+act "native Cmd+B (⌘B is Black too)" native-key '{"name":"b","meta":true}' 's["mode"] == "normal"'
 act "focus the search field" focus '{"target":"song-search"}' 's["focus"] == "text"'
 act "N types into the search field (no hotkey)" native-key '{"name":"n"}' 's["live"]["label"] == "Verse 3"'
 act "Cmd+C in a text field is not Clear" native-key '{"name":"c","meta":true}' 's["mode"] == "normal"'
@@ -940,12 +942,17 @@ pixel "the output shows the logo image" "$OUT/logo-blue-output.png" has 1f3f9f 0
 act "logo off" logo '' 's["mode"] == "normal"'
 act "default logo" set-setting '{"key":"output.logo","value":""}' 'not s["settings"]["logo"].get("path", "").endswith("smoke-blue.png")'
 # Interface color (View ▸ Interface Color) rebuilds the theme at runtime.
+act "the native chrome starts Dark Aqua" settings '' 's["nativeAppearance"] == "NSAppearanceNameDarkAqua"'
 act "light interface" set-setting '{"key":"ui.interfaceColor","value":"light"}' 's["settings"]["interfaceColor"] == "light"'
 wait_idle
+
+act "light interface: the native chrome is Aqua (whatever the system's mode)" settings '' 's["nativeAppearance"] == "NSAppearanceNameAqua"'
 shot light-main main
 pixel "light interface has content" "$OUT/light-main.png" notblank
 act "dark interface via the menu" menu '{"item":"interface-dark"}' 's["settings"]["interfaceColor"] == "dark"'
 wait_idle
+
+act "dark interface: the native chrome is Dark Aqua again" settings '' 's["nativeAppearance"] == "NSAppearanceNameDarkAqua"'
 # Options dialog (Edit ▸ Options…): a child of the main window; hotkeys off;
 # Cancel restores the settings from when it opened.
 act "Options… opens the dialog" menu '{"item":"options"}' 's["dialog"]["settings"] and s["dialog"]["host"] == "main" and s["focus"] == "dialog"'
@@ -989,38 +996,95 @@ act "File ▸ New Schedule (clean schedule, no question)" menu '{"item":"new-sch
 act "open the saved schedule again" open-schedule "{\"path\":\"$SCHED\"}" 'not s["schedule"]["dirty"] and s["schedule"]["title"] == "smoke-schedule"'
 act "Songs tab again" tab '{"tab":"songs"}' 's["tab"] == 0'
 
+# ---- black / clear / logo transitions --------------------------------------------------------
+# Options ▸ Transition: Black, Clear and Logo each follow the slide transition ("same") until the
+# operator gives one its own. The change into a screen and back out of it uses that screen's
+# transition; a slide change keeps the slide transition. /state.liveTransition is the transition
+# running on the output.
+wait_idle
+act "screens: same as the slide by default" settings '' 's["settings"]["screenTransitions"] == {"black":"same","clear":"same","logo":"same"} and s["liveTransition"] is None'
+act "screens: green" select-media '{"title":"smoke-green"}' 's["media"]["current"] == "smoke-green"'
+act "screens: green live" go-live '' 's["live"]["title"] == "smoke-green"'
+wait_idle
+act "screens: a 4 s blend for slides" transition '{"kind":"blend","duration":4000}' 's["settings"]["transition"] == {"kind":"blend","duration":4000}'
+act "screens: Black pushes left" transition '{"mode":"black","kind":"push-left","duration":4000}' 's["settings"]["screenTransitions"]["black"] == {"kind":"push-left","duration":4000} and s["settings"]["transition"] == {"kind":"blend","duration":4000}'
+act "screens: black on runs Black's push" black '' 's["mode"] == "black" and s["liveTransition"] == {"kind":"push-left","duration":4000}'
+act "screens: Black's push reaches 45 %" wait-transition '{"percent":0.45}' '0.45 <= s["transitionProgress"] < 1'
+shot screens-black-mid output
+pixel "mid-black: the left edge still shows the slide" "$OUT/screens-black-mid.png" has 2a7f62 0.0 0.3 0.15 0.7 200
+pixel "mid-black: black pushes in from the right" "$OUT/screens-black-mid.png" has 000000 0.85 0.3 1.0 0.7 200
+wait_idle
+act "screens: black off pushes too" black '' 's["mode"] == "normal" and s["liveTransition"] == {"kind":"push-left","duration":4000}'
+wait_idle
+act "screens: blue" select-media '{"title":"smoke-blue"}' 's["preview"]["title"] == "smoke-blue"'
+act "screens: a slide change blends" go-live '' 's["live"]["title"] == "smoke-blue" and s["liveTransition"] == {"kind":"blend","duration":4000}'
+wait_idle
+act "screens: Logo cuts" set-setting '{"key":"transition.logo","value":{"kind":"cut"}}' 's["settings"]["screenTransitions"]["logo"] == {"kind":"cut","duration":0} and s["settings"]["screenTransitions"]["black"]["kind"] == "push-left"'
+act "screens: logo on is a cut" logo '' 's["mode"] == "logo" and not s["transitioning"] and s["liveTransition"] is None'
+wait_idle
+shot screens-logo output
+pixel "screens: the logo is up at once" "$OUT/screens-logo.png" lacks 1f3f9f 0.25 0.25 0.75 0.75 50
+act "screens: logo off is a cut" logo '' 's["mode"] == "normal" and not s["transitioning"]'
+act "screens: Clear wipes up" set-setting '{"key":"settings.transition.clear","value":{"kind":"wipe-up","duration":300}}' 's["settings"]["screenTransitions"]["clear"] == {"kind":"wipe-up","duration":300}'
+act "screens: Clear same as the slide again" transition '{"mode":"clear","kind":"same"}' 's["settings"]["screenTransitions"]["clear"] == "same"'
+act "screens: a duration alone keeps Black's kind" transition '{"mode":"black","duration":2500}' 's["settings"]["screenTransitions"]["black"] == {"kind":"push-left","duration":2500}'
+act "screens: an unknown screen is rejected" transition '{"mode":"stage","kind":"cut"}' 'not r["ok"]'
+act "screens: a kind name is not a screen value" set-setting '{"key":"transition.clear","value":"blend"}' 'not r["ok"] and "want \"same\"" in r["error"]'
+act "screens: Clear is unchanged" settings '' 's["settings"]["screenTransitions"]["clear"] == "same"'
+wait_idle
+python3 - "$LIB" <<'PY' || fail "the screen transitions were not persisted"
+import json, sqlite3, sys
+db = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
+get = lambda k: json.loads((db.execute("select value from settings where key = ?", (k,)).fetchone() or ["null"])[0])
+ok = (get("settings.transition.black") == {"kind": "push-left", "duration": 2500}
+      and get("settings.transition.logo") == {"kind": "cut", "duration": 0}
+      and get("settings.transition.clear") == "same")
+sys.exit(0 if ok else 1)
+PY
+log "ok: the screen transitions are persisted"
+act "screens: the Transition page" options '{"page":"transition"}' 's["dialog"]["settings"]'
+wait_idle
+shot settings-transition-screens settings
+pixel "screens: the Transition page has content" "$OUT/settings-transition-screens.png" notblank
+act "screens: a change while Options is open" transition '{"mode":"clear","kind":"iris","duration":800}' 's["settings"]["screenTransitions"]["clear"] == {"kind":"iris","duration":800}'
+act "screens: Cancel restores them" dismiss '' 'not s["dialog"]["settings"] and s["settings"]["screenTransitions"]["clear"] == "same" and s["settings"]["screenTransitions"]["black"]["kind"] == "push-left"'
+act "screens: Black same again" transition '{"mode":"black","kind":"same"}' 's["settings"]["screenTransitions"]["black"] == "same"'
+act "screens: Logo same again" set-setting '{"key":"transition.logo","value":"same"}' 's["settings"]["screenTransitions"] == {"black":"same","clear":"same","logo":"same"}'
+act "screens: the default blend again" transition '{"kind":"blend","duration":500}' 's["settings"]["transition"] == {"kind":"blend","duration":500}'
+act "screens: Songs tab" tab '{"tab":"songs"}' 's["tab"] == 0'
+
 # ---- hotkeys editing -------------------------------------------------------------------------
 # Options ▸ Hotkeys: Add Key… captures the next key press in the dialog
 # (native-key into the settings window), refuses reserved keys, asks before
 # taking another action's key, and the new key works at once in the main
 # window. set-hotkey / reset-hotkeys are the control API's way in.
-act "hotkeys: defaults in /state" hotkeys '' 's["settings"]["hotkeys"]["next"] == ["right","space","n"] and s["settings"]["hotkeys"]["black"] == ["ctrl+b"] and s["options"]["hotkeyCapture"] == ""'
+act "hotkeys: defaults in /state" hotkeys '' 's["settings"]["hotkeys"]["next"] == ["right","space","n"] and s["settings"]["hotkeys"]["black"] == ["cmd+b","ctrl+b"] and s["options"]["hotkeyCapture"] == ""'
 act "Add Key… for Next" hotkey-capture '{"action":"next"}' 's["dialog"]["settings"] and s["options"]["hotkeyCapture"] == "next" and s["focus"] == "dialog"'
 wait_idle
 shot settings-hotkeys-capture settings
 pixel "the hotkey editor has content" "$OUT/settings-hotkeys-capture.png" notblank
 act "F is captured for Next" native-key '{"name":"f","window":"settings"}' 's["options"]["hotkeyCapture"] == "" and s["settings"]["hotkeys"]["next"] == ["right","space","n","f"] and s["dialog"]["settings"]'
 act "Add Key… again" hotkey-capture '{"action":"next"}' 's["options"]["hotkeyCapture"] == "next"'
-act "Cmd+Q is refused as a reserved key" native-key '{"name":"q","meta":true,"window":"settings"}' 's["options"]["hotkeyRefused"] and "reserved" in s["options"]["hotkeyStatus"] and "ctrl+q" not in str(s["settings"]["hotkeys"]) and s["dialog"]["settings"]'
+act "Cmd+Q is refused as a reserved key" native-key '{"name":"q","meta":true,"window":"settings"}' 's["options"]["hotkeyRefused"] and "reserved" in s["options"]["hotkeyStatus"] and "cmd+q" not in str(s["settings"]["hotkeys"]) and "ctrl+q" not in str(s["settings"]["hotkeys"]) and s["dialog"]["settings"]'
 wait_idle
 shot settings-hotkeys-refused settings
 act "Add Key… then Esc cancels the capture, not the dialog" hotkey-capture '{"action":"next"}' 's["options"]["hotkeyCapture"] == "next"'
 act "Esc during a capture" native-key '{"name":"escape","window":"settings"}' 's["options"]["hotkeyCapture"] == "" and s["dialog"]["settings"] and s["settings"]["hotkeys"]["next"] == ["right","space","n","f"]'
 act "Add Key… for Next (conflict)" hotkey-capture '{"action":"next"}' 's["options"]["hotkeyCapture"] == "next"'
-act "Ctrl+B belongs to Black: asks first" native-key '{"name":"b","ctrl":true,"window":"settings"}' 's["dialog"]["confirm"] == "Reassign Key" and s["settings"]["hotkeys"]["black"] == ["ctrl+b"]'
+act "Ctrl+B belongs to Black: asks first" native-key '{"name":"b","ctrl":true,"window":"settings"}' 's["dialog"]["confirm"] == "Reassign Key" and s["settings"]["hotkeys"]["black"] == ["cmd+b","ctrl+b"]'
 wait_idle
 shot settings-hotkeys-conflict dialog
-act "cancel keeps Ctrl+B on Black" dismiss '' 's["dialog"].get("confirm", "") == "" and s["dialog"]["settings"] and s["settings"]["hotkeys"]["black"] == ["ctrl+b"]'
+act "cancel keeps Ctrl+B on Black" dismiss '' 's["dialog"].get("confirm", "") == "" and s["dialog"]["settings"] and s["settings"]["hotkeys"]["black"] == ["cmd+b","ctrl+b"]'
 act "Add Key… for Logo (conflict)" hotkey-capture '{"action":"logo"}' 's["options"]["hotkeyCapture"] == "logo"'
 act "F belongs to Next: asks first" native-key '{"name":"f","window":"settings"}' 's["dialog"]["confirm"] == "Reassign Key"'
-act "reassign moves F to Logo" accept '' 's["settings"]["hotkeys"]["logo"] == ["ctrl+l","f"] and s["settings"]["hotkeys"]["next"] == ["right","space","n"]'
-act "set-hotkey: Next on F and Right only" set-hotkey '{"action":"next","keys":["F","Right"],"reassign":true}' 's["settings"]["hotkeys"]["next"] == ["f","right"] and s["settings"]["hotkeys"]["logo"] == ["ctrl+l"]'
+act "reassign moves F to Logo" accept '' 's["settings"]["hotkeys"]["logo"] == ["cmd+l","ctrl+l","f"] and s["settings"]["hotkeys"]["next"] == ["right","space","n"]'
+act "set-hotkey: Next on F and Right only" set-hotkey '{"action":"next","keys":["F","Right"],"reassign":true}' 's["settings"]["hotkeys"]["next"] == ["f","right"] and s["settings"]["hotkeys"]["logo"] == ["cmd+l","ctrl+l"]'
 act "OK closes Options" options '{"on":false}' 'not s["dialog"]["settings"] and s["settings"]["hotkeys"]["next"] == ["f","right"]'
 wait_idle
 python3 - "$LIB" <<'PY2' || fail "the hotkeys were not persisted"
 import json, sqlite3, sys
 db = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True)
-row = db.execute("select value from settings where key = 'settings.hotkeys'").fetchone()
+row = db.execute("select value from settings where key = 'settings.hotkeys.v2'").fetchone()
 sys.exit(0 if row and json.loads(row[0])["next"] == ["f", "right"] else 1)
 PY2
 log "ok: the hotkeys are persisted"
@@ -1044,11 +1108,35 @@ act "native 1 within 1s (slide 1)" native-key '{"name":"1"}' 's["live"]["index"]
 # Cancel in Options restores the hotkeys from when it opened.
 act "Options again" options '{"page":"hotkeys"}' 's["dialog"]["settings"]'
 act "a change while Options is open" set-hotkey '{"action":"black","keys":["f2"]}' 's["settings"]["hotkeys"]["black"] == ["f2"]'
-act "Cancel restores the hotkeys" dismiss '' 'not s["dialog"]["settings"] and s["settings"]["hotkeys"]["black"] == ["ctrl+b"]'
+act "Cancel restores the hotkeys" dismiss '' 'not s["dialog"]["settings"] and s["settings"]["hotkeys"]["black"] == ["cmd+b","ctrl+b"]'
 act "reset-hotkeys" reset-hotkeys '' 's["settings"]["hotkeys"]["next"] == ["right","space","n"] and s["settings"]["hotkeys"]["jump-verse"] == ["v"] and s["settings"]["hotkeys"]["jump-slide"] == ["s"]'
 act "no focus (reset)" focus '{"target":"none"}' 's["focus"] == "none"'
 act "Right is Next again (native)" native-key '{"name":"right"}' 's["live"]["index"] == 1'
 act "F is no hotkey again (native)" native-key '{"name":"f"}' 's["live"]["index"] == 1'
+
+# ---- ⌘ and Control in hotkeys (macOS) ---------------------------------------------------------
+# On a Mac ⌘ and Control are separate modifiers: EasyWorship's Ctrl keys are both by default, and
+# each can be moved on its own. Options ▸ Hotkeys records the modifier that was held and labels it
+# with the Mac's symbols (⌘B, ⌃B).
+act "⌘: the defaults bind ⌘B and ⌃B to Black" hotkeys '' 's["settings"]["hotkeys"]["black"] == ["cmd+b","ctrl+b"] and s["settings"]["hotkeys"]["logo"] == ["cmd+l","ctrl+l"]'
+act "⌘: Black on ⌘B only" set-hotkey '{"action":"black","keys":["⌘B"]}' 's["settings"]["hotkeys"]["black"] == ["cmd+b"]'
+act "⌘: Add Key… for Logo" hotkey-capture '{"action":"logo"}' 's["options"]["hotkeyCapture"] == "logo" and s["dialog"]["settings"]'
+act "⌘: Control+B is recorded as ⌃B" native-key '{"name":"b","ctrl":true,"window":"settings"}' 's["options"]["hotkeyCapture"] == "" and s["settings"]["hotkeys"]["logo"] == ["cmd+l","ctrl+l","ctrl+b"] and s["settings"]["hotkeys"]["black"] == ["cmd+b"] and s["options"]["hotkeyStatus"] == "⌃B added to Logo."'
+wait_idle
+shot settings-hotkeys-cmd settings
+pixel "⌘: the hotkey table has content" "$OUT/settings-hotkeys-cmd.png" notblank
+act "⌘: Add Key… for Next" hotkey-capture '{"action":"next"}' 's["options"]["hotkeyCapture"] == "next"'
+act "⌘: ⌘B belongs to Black: asks first" native-key '{"name":"b","meta":true,"window":"settings"}' 's["dialog"]["confirm"] == "Reassign Key" and s["options"]["hotkeyStatus"].startswith("⌘B is assigned to Black")'
+act "⌘: cancel keeps ⌘B on Black" dismiss '' 's["dialog"].get("confirm", "") == "" and s["settings"]["hotkeys"]["black"] == ["cmd+b"]'
+act "⌘: OK closes Options" options '{"on":false}' 'not s["dialog"]["settings"]'
+act "⌘: no focus" focus '{"target":"none"}' 's["focus"] == "none"'
+act "⌘: native ⌃B is Logo now" native-key '{"name":"b","ctrl":true}' 's["mode"] == "logo"'
+act "⌘: native ⌘B is still Black" native-key '{"name":"b","meta":true}' 's["mode"] == "black"'
+act "⌘: native ⌘B again" native-key '{"name":"b","meta":true}' 's["mode"] == "normal"'
+act "⌘: ⌃→ belongs to macOS (Spaces)" set-hotkey '{"action":"next","keys":["right","ctrl+right"]}' 'not r["ok"] and "reserved" in r["error"]'
+act "⌘: ⌘→ does not" set-hotkey '{"action":"next","keys":["right","cmd+right"]}' 's["settings"]["hotkeys"]["next"] == ["right","cmd+right"]'
+act "⌘: Control+Q is free on a Mac, ⌘Q is not" set-hotkey '{"action":"jump-tag","keys":["ctrl+q"]}' 's["settings"]["hotkeys"]["jump-tag"] == ["ctrl+q"]'
+act "⌘: reset-hotkeys restores both" reset-hotkeys '' 's["settings"]["hotkeys"]["black"] == ["cmd+b","ctrl+b"] and s["settings"]["hotkeys"]["next"] == ["right","space","n"] and s["settings"]["hotkeys"]["jump-tag"] == ["t"]'
 
 # ---- default themes --------------------------------------------------------------------------
 # Options ▸ Themes: a default theme per item type, the same state as the
