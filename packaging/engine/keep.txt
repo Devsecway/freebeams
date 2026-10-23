@@ -13,3 +13,7 @@ PortableCompressedTexture2D
 CompressedTexture2D
 # Short sound files Godot can decode itself.
 AudioStreamWAV
+# Mesh's create_outline / generate_triangle_mesh / create_*_shape are bound in
+# ArrayMesh::_bind_methods (on Mesh, by their pointer type): graphics.gd links
+# them through Mesh, so ArrayMesh must register.
+ArrayMesh

@@ -9,7 +9,6 @@
 		"AnimationNode",
 		"AnimationNodeStateMachinePlayback",
 		"AnimationNodeStateMachineTransition",
-		"ArrayMesh",
 		"AspectRatioContainer",
 		"AtlasTexture",
 		"AudioEffectAmplify",
