@@ -273,6 +273,13 @@ func TestMediaProperties(t *testing.T) {
 			models.Media{Title: "Walk-in", Tags: "", Aspect: models.AspectStretch, Repeat: models.RepeatLoop}, false},
 		{"an unknown aspect is refused", models.MediaProperties{Title: "x", Aspect: "zoom"},
 			models.Media{Title: "Walk-in", Aspect: models.AspectStretch, Repeat: models.RepeatLoop}, true},
+
+		{"volume and mute", models.MediaProperties{Aspect: models.AspectStretch, Repeat: models.RepeatLoop, Volume: 40, Mute: true},
+			models.Media{Title: "Walk-in", Aspect: models.AspectStretch, Repeat: models.RepeatLoop, Volume: 40, Mute: true}, false},
+		{"a volume above 100 is refused", models.MediaProperties{Volume: 101},
+			models.Media{Title: "Walk-in", Aspect: models.AspectStretch, Repeat: models.RepeatLoop, Volume: 40, Mute: true}, true},
+		{"volume 0 is none", models.MediaProperties{Aspect: models.AspectStretch, Repeat: models.RepeatLoop},
+			models.Media{Title: "Walk-in", Aspect: models.AspectStretch, Repeat: models.RepeatLoop}, false},
 	}
 	for _, tc := range tests {
 		err := st.SetMediaProperties(ctx, m.ID, tc.p)
@@ -280,19 +287,24 @@ func TestMediaProperties(t *testing.T) {
 			t.Fatalf("%s: err = %v", tc.name, err)
 		}
 		got, _ := st.GetMedia(ctx, m.ID)
-		if got.Title != tc.want.Title || got.Tags != tc.want.Tags || got.Aspect != tc.want.Aspect || got.Repeat != tc.want.Repeat {
-			t.Fatalf("%s: got %q %q %q %q", tc.name, got.Title, got.Tags, got.Aspect, got.Repeat)
+		if got.Title != tc.want.Title || got.Tags != tc.want.Tags || got.Aspect != tc.want.Aspect || got.Repeat != tc.want.Repeat ||
+			got.Volume != tc.want.Volume || got.Mute != tc.want.Mute {
+			t.Fatalf("%s: got %q %q %q %q %d %v", tc.name, got.Title, got.Tags, got.Aspect, got.Repeat, got.Volume, got.Mute)
 		}
 	}
-	// The pipeline's whole-row save leaves the tags alone; the search finds them.
-	if err := st.SetMediaProperties(ctx, m.ID, models.MediaProperties{Tags: "sunrise"}); err != nil {
+	// The pipeline's whole-row save leaves the tags, volume and mute alone;
+	// the search finds the tags.
+	if err := st.SetMediaProperties(ctx, m.ID, models.MediaProperties{Tags: "sunrise", Volume: 70, Mute: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := st.GetMedia(ctx, m.ID)
 	got.ThumbPath = "/c/t.jpg"
-	got.Tags = ""
+	got.Tags, got.Volume, got.Mute = "", 0, false
 	if err := st.SaveMedia(ctx, &got); err != nil {
 		t.Fatal(err)
+	}
+	if again, _ := st.GetMedia(ctx, m.ID); again.Volume != 70 || !again.Mute {
+		t.Fatalf("SaveMedia clobbered volume / mute: %d %v", again.Volume, again.Mute)
 	}
 	if res, err := st.SearchMedia(ctx, "sunrise", "", 0); err != nil || len(res) != 1 || res[0].Tags != "sunrise" {
 		t.Fatalf("search by tag = %+v, %v", res, err)

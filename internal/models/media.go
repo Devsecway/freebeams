@@ -95,24 +95,46 @@ type Media struct {
 	// Tags are the item's keywords (the Properties dialog), comma-separated
 	// as NormalizeTags writes them; the library search matches them.
 	Tags string `json:"tags,omitempty"`
+
+	// Volume is the item's own playback volume in percent (the Properties
+	// dialog's Volume, EasyWorship's Form_VideoProperties TrackBar_Volume):
+	// 1..100, or 0 for none, which lets the monitor's volume carry over from
+	// the previous item. Mute starts the item silent; the operator's
+	// transport can still raise it for that playback. Videos and audio only.
+	Volume int  `json:"volume,omitempty"`
+	Mute   bool `json:"mute,omitempty"`
 }
 
+// MaxMediaVolume is a media item's full volume in percent.
+const MaxMediaVolume = 100
+
+// ClampMediaVolume keeps an item volume inside 0 (none) .. MaxMediaVolume.
+func ClampMediaVolume(v int) int { return min(max(v, 0), MaxMediaVolume) }
+
 // MediaProperties is what the media item's Properties dialog edits
-// (EasyWorship's Form_VideoProperties: Title, Aspect Ratio, Repeating, Tags).
+// (EasyWorship's Form_VideoProperties: Title, Aspect Ratio, Repeating, Tags,
+// Volume / Mute).
 type MediaProperties struct {
 	Title  string      `json:"title"`
 	Tags   string      `json:"tags"`
 	Aspect MediaAspect `json:"aspect"`
 	Repeat MediaRepeat `json:"repeat"`
+
+	// Volume is the item's own volume in percent (0 = none: the monitor's
+	// volume carries over); Mute starts it silent (see Media.Volume).
+	Volume int  `json:"volume"`
+	Mute   bool `json:"mute"`
 }
 
 // Properties returns the item's current properties (effective Repeating).
 func (m Media) Properties() MediaProperties {
-	return MediaProperties{Title: m.Title, Tags: m.Tags, Aspect: m.Aspect.Normalized(), Repeat: m.RepeatMode()}
+	return MediaProperties{Title: m.Title, Tags: m.Tags, Aspect: m.Aspect.Normalized(), Repeat: m.RepeatMode(),
+		Volume: m.Volume, Mute: m.Mute}
 }
 
 // WithProperties returns m with p applied: a blank title keeps m's, the tags
-// are normalized, an invalid aspect or repeat keeps m's.
+// are normalized, an invalid aspect or repeat keeps m's, the volume is
+// clamped to 0..MaxMediaVolume (a still keeps no volume or mute).
 func (m Media) WithProperties(p MediaProperties) Media {
 	if t := strings.TrimSpace(p.Title); t != "" {
 		m.Title = t
@@ -123,6 +145,10 @@ func (m Media) WithProperties(p MediaProperties) Media {
 	}
 	if p.Repeat.Valid() {
 		m.Repeat = p.Repeat
+	}
+	m.Volume, m.Mute = ClampMediaVolume(p.Volume), p.Mute
+	if !m.Kind.Plays() {
+		m.Volume, m.Mute = 0, false
 	}
 	return m
 }
@@ -243,7 +269,8 @@ func (m Media) PlayablePath() string {
 }
 
 // Background is the slide background this item provides, scaled by its
-// Aspect (Fit) and looping by its effective Repeat (Loop, see RepeatMode). A
+// Aspect (Fit) and looping by its effective Repeat (Loop, see RepeatMode),
+// a video or audio file starting at its Volume / Mute. A
 // still covers the slide. A video background names the source file (so a
 // schedule saved on one computer still identifies the clip on another) with
 // the thumbnail as its poster; the app substitutes the playable file when it
@@ -255,9 +282,11 @@ func (m Media) Background() Background {
 		bg.Kind = BackgroundVideo
 		bg.Poster = m.ThumbPath
 		bg.Loop = m.RepeatMode() == RepeatLoop
+		bg.Volume, bg.Mute = ClampMediaVolume(m.Volume), m.Mute
 	case MediaAudio:
 		bg.Kind = BackgroundAudio
 		bg.Loop = m.RepeatMode() == RepeatLoop
+		bg.Volume, bg.Mute = ClampMediaVolume(m.Volume), m.Mute
 	default:
 		bg.Kind = BackgroundImage
 	}

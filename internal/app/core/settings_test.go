@@ -12,7 +12,7 @@ import (
 func TestSettingsDefaultsAndNormalized(t *testing.T) {
 	def := DefaultSettings("")
 	if def.Transition != models.DefaultTransition() || def.OutputScreen != AutoScreen ||
-		def.Logo != LogoGradient() || def.InterfaceColor != ColorDark || def.Alerts != models.DefaultAlertStyles() {
+		def.Logo != LogoGradient() || def.InterfaceColor != ColorDark || def.Alerts != models.DefaultAlertStyles() || def.PauseOnBlack {
 		t.Fatalf("defaults = %+v", def)
 	}
 	tests := []struct {
@@ -24,6 +24,8 @@ func TestSettingsDefaultsAndNormalized(t *testing.T) {
 		{"kept", Settings{Transition: models.Transition{Kind: models.TransitionIris, Duration: time.Second}, OutputScreen: 2, Logo: models.Background{Kind: models.BackgroundColor}, InterfaceColor: ColorLight},
 			Settings{Transition: models.Transition{Kind: models.TransitionIris, Duration: time.Second}, OutputScreen: 2, Logo: models.Background{Kind: models.BackgroundColor}, InterfaceColor: ColorLight}},
 		{"negative screen", Settings{OutputScreen: -7, InterfaceColor: "blue"}, Settings{Transition: models.Transition{Kind: models.TransitionBlend}, OutputScreen: AutoScreen, Logo: LogoGradient(), InterfaceColor: ColorDark}},
+
+		{"pause on black is kept", Settings{PauseOnBlack: true}, Settings{Transition: models.Transition{Kind: models.TransitionBlend}, Logo: LogoGradient(), InterfaceColor: ColorDark, PauseOnBlack: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

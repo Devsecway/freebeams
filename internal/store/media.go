@@ -11,7 +11,7 @@ import (
 	"freebeams/internal/models"
 )
 
-const mediaColumns = `id, path, kind, title, duration, width, height, thumb_path, transcoded_path, added, aspect, repeat, tags`
+const mediaColumns = `id, path, kind, title, duration, width, height, thumb_path, transcoded_path, added, aspect, repeat, tags, volume, mute`
 
 // scanMedia reads one media row (see mediaColumns).
 func scanMedia(sc interface{ Scan(...any) error }) (models.Media, error) {
@@ -22,21 +22,25 @@ func scanMedia(sc interface{ Scan(...any) error }) (models.Media, error) {
 		aspect     string
 		repeat     string
 		tags       string
+		volume     int
+		mute       bool
 	)
 	if err := sc.Scan(&m.ID, &m.Path, &m.Kind, &m.Title, &durationMS, &m.Width, &m.Height,
-		&m.ThumbPath, &m.TranscodedPath, &added, &aspect, &repeat, &tags); err != nil {
+		&m.ThumbPath, &m.TranscodedPath, &added, &aspect, &repeat, &tags, &volume, &mute); err != nil {
 		return models.Media{}, err
 	}
 	m.Duration = time.Duration(durationMS) * time.Millisecond
 	m.Added, _ = time.Parse(timeLayout, added)
 	m.Aspect, m.Repeat = models.MediaAspect(aspect).Normalized(), models.MediaRepeat(repeat).Normalized()
 	m.Tags = tags
+	m.Volume, m.Mute = models.ClampMediaVolume(volume), mute
 	return m, nil
 }
 
 // SetMediaProperties saves the Properties dialog: the title ("" keeps the
-// current one), the tags, Aspect Ratio and Repeating, without touching
-// the derived columns the pipeline writes. A missing id returns ErrNotFound.
+// current one), the tags, Aspect Ratio, Repeating, Volume and Mute,
+// without touching the derived columns the pipeline writes. A volume outside
+// 0..100 is an error. A missing id returns ErrNotFound.
 func (s *Store) SetMediaProperties(ctx context.Context, id int64, p models.MediaProperties) error {
 	if p.Aspect != "" && !p.Aspect.Valid() {
 		return fmt.Errorf("set media %d properties: unknown aspect ratio %q", id, p.Aspect)
@@ -44,10 +48,14 @@ func (s *Store) SetMediaProperties(ctx context.Context, id int64, p models.Media
 	if p.Repeat != "" && !p.Repeat.Valid() {
 		return fmt.Errorf("set media %d properties: unknown repeat mode %q", id, p.Repeat)
 	}
+	if p.Volume != models.ClampMediaVolume(p.Volume) {
+		return fmt.Errorf("set media %d properties: volume %d is not 0..%d", id, p.Volume, models.MaxMediaVolume)
+	}
 	res, err := s.db.ExecContext(ctx, `UPDATE media SET
-			title = CASE WHEN ? = '' THEN title ELSE ? END, tags = ?, aspect = ?, repeat = ? WHERE id = ?`,
+			title = CASE WHEN ? = '' THEN title ELSE ? END, tags = ?, aspect = ?, repeat = ?,
+			volume = ?, mute = ? WHERE id = ?`,
 		strings.TrimSpace(p.Title), strings.TrimSpace(p.Title), models.NormalizeTags(p.Tags),
-		string(p.Aspect.Normalized()), string(p.Repeat.Normalized()), id)
+		string(p.Aspect.Normalized()), string(p.Repeat.Normalized()), p.Volume, p.Mute, id)
 	if err != nil {
 		return fmt.Errorf("set media %d properties: %w", id, err)
 	}

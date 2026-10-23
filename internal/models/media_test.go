@@ -230,3 +230,35 @@ func TestNormalizeTagsAndProperties(t *testing.T) {
 		t.Fatalf("WithProperties = %+v", n)
 	}
 }
+
+func TestMediaVolume(t *testing.T) {
+	tests := []struct {
+		name       string
+		m          Media
+		p          MediaProperties
+		wantVolume int
+		wantMute   bool
+	}{
+		{"audio volume and mute", Media{Kind: MediaAudio}, MediaProperties{Volume: 60, Mute: true}, 60, true},
+		{"video volume clamped", Media{Kind: MediaVideo}, MediaProperties{Volume: 140}, 100, false},
+		{"negative is none", Media{Kind: MediaVideo, Volume: 50}, MediaProperties{Volume: -3}, 0, false},
+		{"0 clears an item volume", Media{Kind: MediaVideo, Volume: 50, Mute: true}, MediaProperties{}, 0, false},
+		{"a still keeps none", Media{Kind: MediaImage}, MediaProperties{Volume: 60, Mute: true}, 0, false},
+	}
+	for _, tc := range tests {
+		n := tc.m.WithProperties(tc.p)
+		if n.Volume != tc.wantVolume || n.Mute != tc.wantMute {
+			t.Errorf("%s: WithProperties = volume %d mute %v; want %d %v", tc.name, n.Volume, n.Mute, tc.wantVolume, tc.wantMute)
+		}
+		if p := n.Properties(); p.Volume != n.Volume || p.Mute != n.Mute {
+			t.Errorf("%s: Properties = %+v", tc.name, p)
+		}
+		if bg := n.Background(); bg.Volume != n.Volume || bg.Mute != n.Mute {
+			t.Errorf("%s: Background = volume %d mute %v; want the item's", tc.name, bg.Volume, bg.Mute)
+		}
+	}
+	// A still's background never carries a volume, even from a bad row.
+	if bg := (Media{Kind: MediaImage, Volume: 40, Mute: true}).Background(); bg.Volume != 0 || bg.Mute {
+		t.Errorf("still background = %+v", bg)
+	}
+}

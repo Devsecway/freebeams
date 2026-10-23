@@ -16,6 +16,10 @@ const (
 	SettingInterfaceColor = "ui.interfaceColor"   // "dark" (default) or "light"
 )
 
+// SettingPauseOnBlack is Options ▸ Logo's Pause on Black (bool, off by
+// default): Black and Logo pause the live video or audio.
+const SettingPauseOnBlack = "playback.pauseOnBlack"
+
 // AutoScreen is the output screen setting that picks the first non-primary
 // display (or the only one).
 const AutoScreen = -1
@@ -42,6 +46,12 @@ type Settings struct {
 	// Hotkeys is Options ▸ Hotkeys: the keys of every hotkey action
 	// (SettingHotkeys, keymap.go).
 	Hotkeys Keymap `json:"hotkeys"`
+
+	// PauseOnBlack is Options ▸ Logo's "Pause video and audio under Black
+	// and Logo" (SettingPauseOnBlack): Black and Logo pause the live file
+	// and leaving them plays it again if it was playing (CoverPlayback).
+	// Off by default: as in EasyWorship, a clip plays on under Black.
+	PauseOnBlack bool `json:"pauseOnBlack"`
 }
 
 // DefaultSettings returns the built-in settings: a 500 ms blend, the automatic

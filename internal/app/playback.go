@@ -72,9 +72,9 @@ func targetRole(t core.Target) render.VideoRole {
 // from Ready, before buildUI.
 func (a *App) initPlayback() {
 	a.selectMediaPlayer()
-	a.pb.live.Volume = 1
-	a.pb.preview.Volume = 1
-	a.pb.resource.Volume = 1
+	a.pb.live = core.NewPlayback()
+	a.pb.preview = core.NewPlayback()
+	a.pb.resource = core.NewPlayback()
 }
 
 // playback returns the state for a monitor.
@@ -140,9 +140,12 @@ func (a *App) wirePlayback() {
 // ---- events -------------------------------------------------------------------------
 
 // playbackEvents turns what happened since the last frame into state: a new
-// item on a monitor gets its defaults (live autoplays, preview waits), a
-// file that reached its end with looping off is no longer playing. It
-// reports whether anything changed. Called every frame from Process.
+// item on a monitor gets its defaults (live autoplays, preview waits; the
+// item's own volume or Mute), Black / Logo covering or uncovering the live
+// file pauses or resumes it under the Pause on Black option
+// (core.CoverPlayback), a file that reached its end with looping off is no
+// longer playing. It reports whether anything changed. Called every frame
+// from Process.
 func (a *App) playbackEvents() bool {
 	if render.AnyMediaActive() {
 		render.PumpMedia() // a file held under Black has no layer pumping it (render/hold.go)
@@ -150,8 +153,15 @@ func (a *App) playbackEvents() bool {
 	changed := false
 	for _, role := range monitorRoles {
 		pb := a.playback(role)
-		next, c := core.AdvancePlayback(*pb, a.playbackFrame(role), role == render.RoleLive)
+		frame := a.playbackFrame(role)
+		live := role == render.RoleLive
+		next, c := core.AdvancePlayback(*pb, frame, live)
 		if c {
+			*pb = next
+			changed = true
+		}
+		_, shown, _ := core.MonitorMedia(frame)
+		if next, c := core.CoverPlayback(*pb, !shown, live && a.settings.PauseOnBlack); c {
 			*pb = next
 			changed = true
 		}
@@ -169,13 +179,13 @@ func (a *App) togglePlay(role render.VideoRole) {
 	if pb.Key == "" {
 		return
 	}
-	pb.Playing = !pb.Playing
+	pb.SetPlaying(!pb.Playing)
 }
 
 // setPlaying plays or pauses the monitor's media.
 func (a *App) setPlaying(role render.VideoRole, on bool) {
 	if pb := a.playback(role); pb.Key != "" {
-		pb.Playing = on
+		pb.SetPlaying(on)
 	}
 }
 
@@ -251,6 +261,7 @@ func (a *App) playbackStateDoc(role render.VideoRole) core.PlaybackState {
 	st.Media, st.Hidden = true, !shown
 	st.Title = frame.Slide.Label
 	st.Playing, st.Loop, st.Volume = pb.Playing, pb.Loop, pb.Volume
+	st.ItemVolume, st.BlackPaused = pb.Own, pb.BlackPaused
 	if src := render.Source(role, bg.Path); src != nil {
 		p := src.State()
 		st.Position, st.Duration = p.Position, p.Duration

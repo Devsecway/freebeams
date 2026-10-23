@@ -838,6 +838,32 @@ Recorded 2026-10-22 on the same machine. Formats, policy and behaviour: [BIBLES.
 - `test/smoke.sh` (`FREEBEAMS_BIBLES_DIR`, the bundled checks now expect RVA, the `# ---- bible manager` block),
   `docs/BIBLES.md`.
 
+## Per-item volume / mute and Pause on Black
+
+Recorded 2026-10-24 on the same machine. Design: [MEDIA.md](MEDIA.md) ("Per-item volume and mute", "Pause on
+Black").
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Edit Properties… has Volume (Carry Over / Fixed 1..100 %) and Mute for videos and audio, saved per item | **pass** | `ui.MediaPropertiesDialog` (EasyWorship's `TrackBar_Volume` + `SpinEdit_Volume` + `CheckBox_Mute`; hidden for stills), `models.Media.Volume` / `Mute` (`TestMediaVolume`), migration 8, `store.SetMediaProperties` (targeted update; `SaveMedia` keeps them: `TestSetMediaProperties`). Screenshots `media-properties.png` (Carry Over, dimmed), `media-properties-volume.png` (Fixed 40 %), `media-properties-mute.png`. |
+| The item's volume is the start volume on a monitor; Carry Over keeps today's carry-over; an item volume is not passed on | **pass** | `core.StartVolume` / `PlaybackDefaults` / `Playback.CarriedVolume` (`TestPlaybackItemVolume`, `TestPlaybackItemVolumeKeptUnderBlack`, the existing `TestPlaybackDefaults` / `TestAdvancePlayback` unchanged). Library deck, Preview, resource preview and schedule snapshots through `Media.Background()`. |
+| Mute = 0 that the transport can raise for this playback | **pass** | `TestPlaybackItemVolume`; smoke "the transport can still raise a muted item". |
+| Pause on Black (Options ▸ Logo, persisted, off by default): Black / Logo pause the live file, leaving resumes it only if Black paused it | **pass** | `core.CoverPlayback` on `core.Playback.Hidden` / `BlackPaused`, `Playback.SetPlaying` (the operator's play / pause wins) (`TestCoverPlayback`: option off, on, paused before Black, play / pause under Black, the option turned off while paused, a new item under Black). `core.Settings.PauseOnBlack` / `playback.pauseOnBlack` (`TestSettingsDefaultsAndNormalized`). Screenshot `settings-pause-on-black.png`. |
+| Control, `/state`, smoke | **pass** | `media-properties {props: {…, volume, mute}}` (out of range refused), `set-setting {key: "playback.pauseOnBlack", value}`; `/state.media.{volume, mute}`, `/state.playback.*.{itemVolume, blackPaused}`, `/state.settings.pauseOnBlack`. The `# ---- per-item volume / mute and Pause on Black` smoke block: 74 checks. 2026-10-24: `test/smoke.sh` **1605/1605 PASS** (AVFoundation); `FREEBEAMS_PLAYER=ffmpeg test/smoke.sh` **1598/1598 PASS** (the no-ffmpeg AVFoundation rerun does not apply); log hygiene and keepalive walk clean. |
+
+Left out: a per-item volume for the audio playlist's tracks (the playlist has its own volume); pausing the audio
+playlist under Black (walk-in music under the Logo screen is the usual case). The volume is not audible-checked by
+the smoke test (it checks the state the player is given).
+
+### Shared files touched (per-item volume, Pause on Black)
+
+- New: `internal/app/core/playback_volume_test.go`.
+- `internal/models/media.go`, `slide.go` (`Background.Volume` / `Mute`, own block), `internal/store/media.go`,
+  `migrations.go` (8), `internal/app/core/playback.go`, `settings.go`, `state.go` (`MediaState` block),
+  `internal/app/playback.go`, `settings.go`, `mediaprops.go`, `media.go` (the pipeline's re-read),
+  `internal/ui/mediaprops.go`, `settings.go` (Logo page card, `SettingsValues` / callback blocks).
+- `test/smoke.sh` (the new block after `# ---- playback`), `docs/MEDIA.md`.
+
 ## Remaining for Phase 2
 
 - **Off macOS**: run the ffmpeg player and the bundled ffmpeg builds on real Windows and Linux machines (the

@@ -154,6 +154,14 @@ INSERT INTO alerts (name, json, created, updated) VALUES
 	`
 ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '';
 `,
+
+	// 8: a media item's own playback volume (percent, 0 = none: the
+	// monitor's volume carries over) and Mute (the Properties dialog's
+	// Volume / Mute, EasyWorship's Form_VideoProperties).
+	`
+ALTER TABLE media ADD COLUMN volume INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE media ADD COLUMN mute INTEGER NOT NULL DEFAULT 0;
+`,
 }
 
 // migrate brings the schema up to date. Each migration runs in its own
