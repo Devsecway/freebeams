@@ -190,3 +190,30 @@ func TestImportThemeFileRefuses(t *testing.T) {
 		}
 	}
 }
+
+func TestFrameMediaThemeBackground(t *testing.T) {
+	motion := models.DefaultSongTheme()
+	motion.Background = models.Background{Kind: models.BackgroundVideo, Path: "/sky.mp4", Loop: true}
+	text := &models.Slide{Kind: models.SlideSong, Text: "Amazing grace"}
+	still := &models.Background{Kind: models.BackgroundImage, Path: "/i.jpg"}
+	tests := []struct {
+		name string
+		f    models.Frame
+		want string
+	}{
+		{"a theme video plays behind the text", models.Frame{Mode: models.ModeNormal, Slide: text, Theme: motion}, "/sky.mp4"},
+		{"clear keeps it", models.Frame{Mode: models.ModeClear, Slide: text, Theme: motion}, "/sky.mp4"},
+		{"black stops it", models.Frame{Mode: models.ModeBlack, Slide: text, Theme: motion}, ""},
+		{"a slide's own still wins", models.Frame{Mode: models.ModeNormal, Slide: &models.Slide{Text: "x", Background: still}, Theme: motion}, ""},
+		{"a gradient theme plays nothing", models.Frame{Mode: models.ModeNormal, Slide: text, Theme: models.DefaultSongTheme()}, ""},
+	}
+	for _, tt := range tests {
+		bg, ok := FrameMedia(tt.f)
+		if bg.Path != tt.want || ok != (tt.want != "") {
+			t.Errorf("%s: FrameMedia = %q, %v", tt.name, bg.Path, ok)
+		}
+		if ok && !bg.Loop {
+			t.Errorf("%s: the theme's loop was lost", tt.name)
+		}
+	}
+}

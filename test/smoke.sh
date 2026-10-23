@@ -753,7 +753,11 @@ act "save the schedule (presentations)" save-schedule '{}' 'not s["schedule"]["d
 # background reaches the output through the songs-default setting and through
 # a per-item override, and editing a theme that is live re-renders the output.
 act "Themes tab" tab '{"tab":"themes"}' 's["tab"] == 4'
-act "themes listed (seeded defaults)" themes '' 's["themes"]["count"] == 2 and s["themes"]["songDefault"] == "Default Song" and s["themes"]["scriptureDefault"] == "Default Scripture"'
+# A new library has the two defaults and the four built-in themes (models.BuiltinThemes).
+act "themes listed (seeded defaults)" themes '' 's["themes"]["count"] == 6 and s["themes"]["songDefault"] == "Default Song" and s["themes"]["scriptureDefault"] == "Default Scripture"'
+check "the built-in themes are seeded" "$LAST" 'all(n in s["themes"]["names"] for n in ["Clean Dark", "Warm Light", "High Contrast", "Scripture Lower Third"])'
+grep -q 'added the built-in themes' "$LOG" || fail "no 'added the built-in themes' line in the log"
+log "ok: the log names the built-in themes"
 act "select the song default theme" select-theme '{"name":"Default Song"}' 's["themes"]["current"] == "Default Song" and s["resource"]["title"] == "Default Song" and s["resource"]["caption"] == "Verse 1 · 1 / 1"'
 wait_idle
 shot themes-tab main
@@ -770,7 +774,7 @@ c = sys.argv[3]
 t["background"] = {"kind": "color", "color": {"R": int(c[0:2], 16) / 255, "G": int(c[2:4], 16) / 255, "B": int(c[4:6], 16) / 255, "A": 1}}
 print(json.dumps({"theme": t}))' "$@"
 }
-act "save a new theme" save-theme "$(recolor "$THEME_JSON" "Smoke Magenta" 991a80 0)" 's["themes"]["count"] == 3 and "Smoke Magenta" in s["themes"]["names"] and s["themes"]["current"] == "Smoke Magenta"'
+act "save a new theme" save-theme "$(recolor "$THEME_JSON" "Smoke Magenta" 991a80 0)" 's["themes"]["count"] == 7 and "Smoke Magenta" in s["themes"]["names"] and s["themes"]["current"] == "Smoke Magenta"'
 act "make it the songs default" set-default-theme '{"name":"Smoke Magenta","kind":"song"}' 's["themes"]["songDefault"] == "Smoke Magenta" and s["themes"]["scriptureDefault"] == "Default Scripture"'
 act "search amazing (themes)" search-songs '{"q":"amazing"}' 's["songs"]["results"] >= 1'
 act "a new song deck picks up the default" select-song '{"title":"Amazing Grace"}' 's["preview"]["title"] == "Amazing Grace"'
@@ -781,7 +785,7 @@ shot theme-magenta-main main
 pixel "the output shows the theme background" "$OUT/theme-magenta-output.png" has 991a80 0.0 0.0 0.2 0.08 5000
 pixel "the live monitor shows the theme background" "$OUT/theme-magenta-main.png" has 991a80 0.68 0.42 0.91 0.61 2000
 # Editing the live theme (same id, teal background) re-renders the output.
-act "edit the live theme" save-theme "$(recolor "$(post get-theme '{"name":"Smoke Magenta"}')" "Smoke Magenta" 1a8099)" 's["themes"]["count"] == 3 and s["live"]["title"] == "Amazing Grace"'
+act "edit the live theme" save-theme "$(recolor "$(post get-theme '{"name":"Smoke Magenta"}')" "Smoke Magenta" 1a8099)" 's["themes"]["count"] == 7 and s["live"]["title"] == "Amazing Grace"'
 wait_idle
 shot theme-teal-output output
 pixel "the output follows the edited theme" "$OUT/theme-teal-output.png" has 1a8099 0.0 0.0 0.2 0.08 5000
@@ -802,10 +806,10 @@ pixel "the per-item override is live" "$OUT/theme-override-output.png" has 1a809
 # Defaults cannot be deleted; copies and the editor.
 act "deleting a default theme is refused" delete-theme '{"name":"Smoke Magenta","confirm":true}' 'not r["ok"] and "default theme" in r["error"]'
 wait_idle
-check "the refusal is shown to the operator" "$LAST" 's["dialog"]["message"]["title"] == "Delete Theme" and s["themes"]["count"] == 3'
+check "the refusal is shown to the operator" "$LAST" 's["dialog"]["message"]["title"] == "Delete Theme" and s["themes"]["count"] == 7'
 act "dismiss the refusal" dismiss '' 'not s["dialog"].get("message")'
 act "restore the songs default" set-default-theme '{"name":"Default Song","kind":"song"}' 's["themes"]["songDefault"] == "Default Song"'
-act "duplicate a theme" duplicate-theme '{"name":"Smoke Magenta"}' 's["themes"]["count"] == 4 and s["themes"]["current"] == "Smoke Magenta Copy"'
+act "duplicate a theme" duplicate-theme '{"name":"Smoke Magenta"}' 's["themes"]["count"] == 8 and s["themes"]["current"] == "Smoke Magenta Copy"'
 act "open the theme editor on it" editor '{"mode":"theme"}' 's["dialog"]["themeEditor"] and s["themes"]["editing"] == "Smoke Magenta Copy" and s["focus"] == "dialog"'
 wait_idle
 shot theme-editor theme-editor
@@ -813,9 +817,9 @@ pixel "theme editor has content" "$OUT/theme-editor.png" notblank
 act "hotkeys are off while the theme editor is open" key '{"name":"n"}' 'not d["consumed"]'
 act "close the theme editor" editor '{"mode":"close"}' 'not s["dialog"].get("themeEditor") and s["focus"] != "dialog"'
 act "delete asks first (theme)" delete-theme '{"name":"Smoke Magenta Copy"}' 's["dialog"]["confirm"] == "Delete Theme"'
-act "cancel the theme delete" dismiss '' 's["focus"] != "dialog" and s["themes"]["count"] == 4'
-act "delete the copy" delete-theme '{"name":"Smoke Magenta Copy","confirm":true}' 's["themes"]["count"] == 3'
-act "delete the smoke theme" delete-theme '{"name":"Smoke Magenta","confirm":true}' 's["themes"]["count"] == 2 and s["live"]["title"] == "John 3:16"'
+act "cancel the theme delete" dismiss '' 's["focus"] != "dialog" and s["themes"]["count"] == 8'
+act "delete the copy" delete-theme '{"name":"Smoke Magenta Copy","confirm":true}' 's["themes"]["count"] == 7'
+act "delete the smoke theme" delete-theme '{"name":"Smoke Magenta","confirm":true}' 's["themes"]["count"] == 6 and s["live"]["title"] == "John 3:16"'
 act "remove the scripture item (themes)" remove-schedule "{\"index\":$THEME_ROW}" "len(s[\"schedule\"][\"items\"]) == $THEME_ROW"
 act "save the schedule (themes)" save-schedule '{}' 'not s["schedule"]["dirty"]'
 act "Songs tab (themes)" tab '{"tab":"songs"}' 's["tab"] == 0'
@@ -1382,6 +1386,179 @@ else
 	log "playback: skipped (ffmpeg=$FFMPEG native=$PB_NATIVE player=$PB_PLAYER)"
 fi
 
+# ---- theme polish ------------------------------------------------------------------------------
+# Video theme backgrounds (Use As Theme Background, the editor's Library…), the editor's "Apply
+# changes to items in schedule" choice, the font search, theme files (export / import) and the
+# built-in themes on the output. Fixtures live in $OUT/theme-polish (recreated here).
+TP_DIR="$OUT/theme-polish"
+rm -rf "$TP_DIR"
+mkdir -p "$TP_DIR/clip" "$TP_DIR/imported"
+# tp_live THEME: the theme on a fresh Amazing Grace schedule item, sent live; sets TP_ROW.
+tp_live() {
+	act "Songs tab ($1)" tab '{"tab":"songs"}' 's["tab"] == 0'
+	act "Amazing Grace in Preview ($1)" select-song '{"title":"Amazing Grace"}' 's["preview"]["title"] == "Amazing Grace"'
+	act "add it to the schedule ($1)" add-to-schedule '{"source":"song"}' 's["schedule"]["items"][-1] == "Amazing Grace"'
+	TP_ROW=$(( $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])["data"]["schedule"]["items"]))' "$LAST") - 1 ))
+	act "apply $1 to it" apply-theme "{\"name\":\"$1\",\"row\":$TP_ROW}" 'r["ok"]'
+	act "select the $1 item" select-schedule "{\"index\":$TP_ROW}" "s[\"preview\"][\"theme\"] == \"$1\""
+	act "the $1 item goes live" go-live '' "s[\"live\"][\"theme\"] == \"$1\""
+	wait_idle
+}
+# luma FILE X0 Y0 X1 Y1: the mean luminance (0..255) of a region of a screenshot.
+luma() {
+	python3 -I - "$ROOT/test" "$@" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+import pngcheck
+path, x0, y0, x1, y1 = sys.argv[2], *map(float, sys.argv[3:7])
+w, h, bpp, rows = pngcheck.read_png(path)
+px = list(pngcheck.pixels(w, h, bpp, rows, x0, y0, x1, y1, step=3))
+print(int(sum(0.2126 * r + 0.7152 * g + 0.0722 * b for r, g, b in px) / max(1, len(px))))
+PY
+}
+
+# The built-in themes render on the output.
+for TP_THEME in "Clean Dark" "Warm Light" "High Contrast" "Scripture Lower Third"; do
+	tp_live "$TP_THEME"
+	TP_SHOT="builtin-$(echo "$TP_THEME" | tr 'A-Z ' 'a-z-')"
+	shot "$TP_SHOT" output
+	pixel "$TP_THEME: the output has content" "$OUT/$TP_SHOT.png" notblank
+	act "remove the $TP_THEME item" remove-schedule "{\"index\":$TP_ROW}" "len(s[\"schedule\"][\"items\"]) == $TP_ROW"
+done
+pixel "Clean Dark: the dark gradient at the top" "$OUT/builtin-clean-dark.png" has 141b2d 0.0 0.0 1.0 0.01 500
+pixel "Warm Light: the cream gradient at the top" "$OUT/builtin-warm-light.png" has fbf5ea 0.0 0.0 1.0 0.01 500
+pixel "High Contrast: black around the words" "$OUT/builtin-high-contrast.png" has 000000 0.0 0.0 1.0 0.05 5000
+pixel "High Contrast: white words" "$OUT/builtin-high-contrast.png" has ffffff 0.1 0.2 0.9 0.8 2000
+TP_TOP="$(luma "$OUT/builtin-scripture-lower-third.png" 0.0 0.55 1.0 0.62)"
+TP_BAND="$(luma "$OUT/builtin-scripture-lower-third.png" 0.0 0.66 0.04 0.98)"
+log "lower third: luminance above the band $TP_TOP, in the band (left edge) $TP_BAND"
+[ "$TP_BAND" -lt "$TP_TOP" ] || fail "the lower third's band does not darken the bottom of the slide"
+log "ok: the lower third draws its band"
+pixel "Scripture Lower Third: the words sit in the bottom third" "$OUT/builtin-scripture-lower-third.png" lacks ffffff 0.0 0.0 1.0 0.6 20
+pixel "Scripture Lower Third: white words in the band" "$OUT/builtin-scripture-lower-third.png" has ffffff 0.0 0.66 1.0 1.0 300
+
+# Duplicate, export, delete, import: the round trip keeps the look.
+act "Themes tab (polish)" tab '{"tab":"themes"}' 's["tab"] == 4'
+TP_COUNT="$(field "$LAST" themes.count)"
+act "duplicate Clean Dark" duplicate-theme '{"name":"Clean Dark"}' "s[\"themes\"][\"count\"] == $TP_COUNT + 1 and s[\"themes\"][\"current\"] == \"Clean Dark Copy\""
+TP_ORIG="$(post get-theme '{"name":"Clean Dark Copy"}')"
+act "export the copy" export-theme "{\"name\":\"Clean Dark Copy\",\"path\":\"$TP_DIR/shared\"}" "d[\"path\"] == \"$TP_DIR/shared.fbtheme\""
+[ -s "$TP_DIR/shared.fbtheme" ] || fail "export-theme wrote no file"
+python3 -I -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); sys.exit(0 if "theme.json" in z.namelist() else 1)' "$TP_DIR/shared.fbtheme" || fail "the theme file has no theme.json"
+log "ok: the theme file is a zip with theme.json"
+act "delete the copy (polish)" delete-theme '{"name":"Clean Dark Copy","confirm":true}' "s[\"themes\"][\"count\"] == $TP_COUNT"
+act "import it back" import-theme "{\"path\":\"$TP_DIR/shared.fbtheme\",\"mediaDir\":\"$TP_DIR/imported\"}" "s[\"themes\"][\"count\"] == $TP_COUNT + 1 and s[\"themes\"][\"current\"] == \"Clean Dark Copy\""
+TP_BACK="$(post get-theme '{"name":"Clean Dark Copy"}')"
+python3 -I - "$TP_ORIG" "$TP_BACK" <<'PY' || fail "the imported theme does not look like the exported one" "$TP_BACK"
+import json, sys
+a, b = (json.loads(x)["data"]["theme"] for x in sys.argv[1:3])
+for t in (a, b):
+    t.pop("id"); t.pop("name")
+sys.exit(0 if a == b else 1)
+PY
+log "ok: the imported theme looks like the exported one"
+act "a second import gets its own name" import-theme "{\"path\":\"$TP_DIR/shared.fbtheme\",\"mediaDir\":\"$TP_DIR/imported\"}" '"Clean Dark Copy 2" in s["themes"]["names"]'
+act "importing a file that is not a theme is refused" import-theme "{\"path\":\"$LOG\"}" 'not r["ok"] and "not a theme file" in r["error"]'
+act "dismiss the import refusal" dismiss '' 'not s["dialog"].get("message")'
+act "delete the imported copy" delete-theme '{"name":"Clean Dark Copy","confirm":true}' 'r["ok"]'
+act "delete the second import" delete-theme '{"name":"Clean Dark Copy 2","confirm":true}' "s[\"themes\"][\"count\"] == $TP_COUNT"
+
+# The font search filters the list; a pick changes the edited theme.
+act "open the editor on Warm Light" select-theme '{"name":"Warm Light"}' 's["themes"]["current"] == "Warm Light"'
+act "edit it" editor '{"mode":"theme"}' 's["dialog"]["themeEditor"] and s["themes"]["editing"] == "Warm Light"'
+act "the font list holds every family" theme-font-search '{"q":""}' 'd["open"] and len(d["matches"]) == d["total"] and d["total"] > 20'
+TP_TOTAL="$(field "$LAST" total)"
+act "search geor" theme-font-search '{"q":"geor"}' "d[\"open\"] and 0 < len(d[\"matches\"]) < $TP_TOTAL and all(\"geor\" in m.lower() or m.startswith(\"Default\") for m in d[\"matches\"])"
+check "/state counts the matches" "$(state)" "s[\"themes\"][\"fontList\"] and 0 < s[\"themes\"][\"fontMatches\"] < $TP_TOTAL"
+act "a search with no match keeps the theme's own font" theme-font-search '{"q":"zzzz no such font"}' 'd["matches"] == ["Default (Helvetica Neue)"]'
+act "search georgia" theme-font-search '{"q":"georgia"}' '"Georgia" in d["matches"]'
+wait_idle
+shot theme-editor-fonts theme-editor
+pixel "the editor with the font search has content" "$OUT/theme-editor-fonts.png" notblank
+act "pick Georgia" theme-font '{"family":"Georgia"}' 'd["family"] == "Georgia" and not d["open"]'
+check "the edited theme uses Georgia" "$(state)" 's["themes"]["editFont"] == "Georgia"'
+act "close the editor without saving (fonts)" editor '{"mode":"close"}' 'not s["dialog"].get("themeEditor")'
+act "Warm Light keeps its font" get-theme '{"name":"Warm Light"}' 'd["theme"]["font"]["family"] == ""'
+
+# "Apply changes to items in schedule": off keeps the schedule item's look, on restyles it.
+act "save a theme for the apply choice" save-theme "$(recolor "$(post get-theme '{"name":"Default Song"}')" "Smoke Apply" 3355aa 0)" '"Smoke Apply" in s["themes"]["names"] and s["themes"]["applyToSchedule"]'
+tp_live "Smoke Apply"
+TP_APPLY_ROW=$TP_ROW
+act "uncheck Apply changes to items in schedule" theme-apply-to-schedule '{"on":false}' 'not s["themes"]["applyToSchedule"]'
+act "the editor shows the choice" editor '{"mode":"theme"}' 's["dialog"]["themeEditor"] and not s["themes"]["applyToSchedule"]'
+wait_idle
+shot theme-editor-apply theme-editor
+act "close the editor (apply)" editor '{"mode":"close"}' 'not s["dialog"].get("themeEditor")'
+act "edit the theme with apply off" save-theme "$(recolor "$(post get-theme '{"name":"Smoke Apply"}')" "Smoke Apply" aa5533)" 'r["ok"]'
+wait_idle
+check "the schedule item keeps its look" "$LAST" "s[\"live\"][\"theme\"] == \"Smoke Apply\" and s[\"live\"][\"style\"][\"backgroundColor\"] == \"#3355aa\""
+shot theme-apply-off-output output
+pixel "the output keeps the old background" "$OUT/theme-apply-off-output.png" has 3355aa 0.0 0.0 0.2 0.08 5000
+act "the schedule snapshot is unchanged" select-schedule "{\"index\":$TP_APPLY_ROW}" 's["preview"]["style"]["backgroundColor"] == "#3355aa"'
+act "the Themes tab shows the new look" select-theme '{"name":"Smoke Apply"}' 'r["ok"]'
+act "check Apply changes to items in schedule" theme-apply-to-schedule '{"on":true}' 's["themes"]["applyToSchedule"]'
+act "save the theme again with apply on" save-theme "$(post get-theme '{"name":"Smoke Apply"}' | python3 -c 'import json,sys; print(json.dumps({"theme": json.load(sys.stdin)["data"]["theme"]}))')" 'r["ok"]'
+wait_idle
+check "now the schedule item follows" "$LAST" 's["live"]["style"]["backgroundColor"] == "#aa5533"'
+shot theme-apply-on-output output
+pixel "the output follows with apply on" "$OUT/theme-apply-on-output.png" has aa5533 0.0 0.0 0.2 0.08 5000
+act "remove the apply item" remove-schedule "{\"index\":$TP_APPLY_ROW}" "len(s[\"schedule\"][\"items\"]) == $TP_APPLY_ROW"
+act "delete the apply theme" delete-theme '{"name":"Smoke Apply","confirm":true}' '"Smoke Apply" not in s["themes"]["names"]'
+
+# A video theme: Use As Theme Background on a clip whose hue turns, the text over the moving video.
+LAST="$(state)"
+if [ "$FFMPEG" = "True" ] && [ "$(field "$LAST" playback.live.native)" = "True" ]; then
+	ffmpeg -v error -y -f lavfi -i "color=c=0xc02020:s=320x180:r=30:d=4,hue=h=t*90" \
+		-vf "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
+		-c:v libx264 -preset veryfast "$TP_DIR/clip/theme-clip.mp4" || fail "ffmpeg could not make the theme clip"
+	act "Media tab (video theme)" tab '{"tab":"media"}' 's["tab"] == 2'
+	TP_MEDIA="$(field "$LAST" media.count)"
+	act "add the theme clip" add-media "{\"path\":\"$TP_DIR/clip\"}" "s[\"media\"][\"count\"] == $TP_MEDIA + 1"
+	wait_idle
+	act "Use As Theme Background opens a new theme on it" use-as-theme-background '{"title":"theme-clip"}' 's["dialog"]["themeEditor"] and s["themes"]["editing"] == "theme-clip" and s["themes"]["editBackground"]["kind"] == "video" and s["themes"]["editBackground"]["loop"]'
+	act "the editor's Library… takes the clip with a fit" theme-editor-media '{"title":"theme-clip","fit":"fit","loop":true}' 's["themes"]["editBackground"]["fit"] == "fit" and s["themes"]["editBackground"]["path"].endswith("theme-clip.mp4")'
+	act "back to fill" theme-editor-media '{"title":"theme-clip","fit":"fill"}' 's["themes"]["editBackground"]["fit"] == "fill"'
+	wait_idle
+	shot theme-editor-video theme-editor
+	pixel "the editor shows the video theme" "$OUT/theme-editor-video.png" notblank
+	act "OK saves the video theme" accept '' 'r["ok"]'
+	wait_idle
+	check "the video theme is saved" "$LAST" '"theme-clip" in s["themes"]["names"] and not s["dialog"].get("themeEditor")'
+	act "Themes tab (video theme)" tab '{"tab":"themes"}' 's["tab"] == 4'
+	act "select the video theme" select-theme '{"name":"theme-clip"}' 's["themes"]["current"] == "theme-clip"'
+	wait_idle
+	shot theme-video-tab main
+	tp_live "theme-clip"
+	pb_wait "the theme video plays live" 's["playback"]["live"]["media"] and s["playback"]["live"]["playing"] and s["playback"]["live"]["position"] > 0.3'
+	shot theme-video-1 output
+	sleep 0.7
+	shot theme-video-2 output
+	shot theme-video-main main
+	if python3 "$ROOT/test/pngcheck.py" "$OUT/theme-video-1.png" same "$OUT/theme-video-2.png" 2>/dev/null; then
+		fail "the video theme's background does not move between frames"
+	fi
+	log "ok: the video background moves between frames"
+	pixel "the text is drawn over the video" "$OUT/theme-video-2.png" has ffffff 0.1 0.2 0.9 0.8 2000
+	pixel "the video is behind it (no theme gradient)" "$OUT/theme-video-2.png" lacks 0b1d3a 0.0 0.0 0.2 0.08 50
+	act "export the video theme" export-theme "{\"name\":\"theme-clip\",\"path\":\"$TP_DIR/video.fbtheme\"}" 'd["report"]["background"].startswith("media/")'
+	act "import the video theme" import-theme "{\"path\":\"$TP_DIR/video.fbtheme\",\"mediaDir\":\"$TP_DIR/imported\"}" '"theme-clip 2" in s["themes"]["names"]'
+	TP_VBACK="$(post get-theme '{"name":"theme-clip 2"}')"
+	check "the imported video theme plays its own copy" "$TP_VBACK" "d[\"theme\"][\"background\"][\"kind\"] == \"video\" and d[\"theme\"][\"background\"][\"path\"].startswith(\"$TP_DIR/imported/\")"
+	cmp -s "$TP_DIR/clip/theme-clip.mp4" "$(field "$TP_VBACK" theme.background.path)" || fail "the imported clip differs from the exported one"
+	log "ok: the imported clip is the exported one"
+	act "Black (video theme)" black '' 's["mode"] == "black"'
+	act "remove the video theme item" remove-schedule "{\"index\":$TP_ROW}" "len(s[\"schedule\"][\"items\"]) == $TP_ROW"
+	act "delete the imported video theme" delete-theme '{"name":"theme-clip 2","confirm":true}' 'r["ok"]'
+	act "delete the video theme" delete-theme '{"name":"theme-clip","confirm":true}' '"theme-clip" not in s["themes"]["names"]'
+	act "Media tab (video theme cleanup)" tab '{"tab":"media"}' 's["tab"] == 2'
+	act "remove the theme clip" remove-media '{"title":"theme-clip","confirm":true}' "s[\"media\"][\"count\"] == $TP_MEDIA"
+	act "Black off (video theme)" black '' 's["mode"] == "normal"'
+else
+	log "video theme: skipped (needs ffmpeg and the native player)"
+fi
+act "save the schedule (theme polish)" save-schedule '{}' 'not s["schedule"]["dirty"]'
+act "Songs tab (theme polish)" tab '{"tab":"songs"}' 's["tab"] == 0'
+
 # ---- song themes -----------------------------------------------------------------------------
 # A song's own theme (Song.ThemeID) wins over the songs default, from save-song (the editor's
 # OK path), the editor's Theme picker and the Songs list's Theme ▸ submenu. The theme has a
@@ -1447,7 +1624,7 @@ act "save the schedule (song themes)" save-schedule '{}' 'not s["schedule"]["dir
 # Deleting the theme sends the song back to the default: no dangling id.
 act "theme the song once more" set-song-theme '{"title":"Smoke Theme Song","themeName":"Smoke Song Theme"}' 's["songs"]["theme"] == "Smoke Song Theme"'
 act "select the themed song (before the delete)" select-song '{"title":"Smoke Theme Song"}' 's["preview"]["theme"] == "Smoke Song Theme"'
-act "delete the song's theme" delete-theme '{"name":"Smoke Song Theme","confirm":true}' 's["themes"]["count"] == 2 and "Smoke Song Theme" not in s["themes"]["names"]'
+act "delete the song's theme" delete-theme '{"name":"Smoke Song Theme","confirm":true}' 's["themes"]["count"] == 6 and "Smoke Song Theme" not in s["themes"]["names"]'
 check "the song falls back to the default" "$LAST" 's["songs"]["theme"] == ""'
 act "a new deck of the song uses the default" select-song '{"title":"Smoke Theme Song"}' 's["preview"]["title"] == "Smoke Theme Song" and s["preview"]["theme"] == "Default Song"'
 act "the editor shows (Default) after the delete" editor '{"mode":"edit"}' 's["dialog"]["songEditorTheme"] == "(Default)"'
