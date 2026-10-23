@@ -21,11 +21,17 @@ import (
 // time and the volume. It previews a clip before it goes live: it drives the
 // resource preview's own player, never the Preview or Live ones. Dumb view
 // like Transport: SetState, and the shared TransportCallbacks (OnLoop is
-// never called: the mini bar has no loop button).
+// never called: the mini bar has no loop button). The resource pane is
+// narrow, so the bar does not ask for the width of all its parts: it clips
+// them and drops the volume, then the time, when they do not fit (fit).
 type MiniTransport struct {
 	TransportCallbacks
 
 	root    PanelContainer.Instance
+	clip    Control.Instance
+	core    []Control.Instance // always shown: the buttons and the progress slider
+	timeBox []Control.Instance // the time and the spacer before it
+	volBox  []Control.Instance // the volume icon, its slider and the spacer before them
 	play    *transportButton
 	back    *miniButton
 	fwd     *miniButton
@@ -43,8 +49,19 @@ func NewMiniTransport() *MiniTransport {
 	t := &MiniTransport{}
 	t.root = panel(vMiniBarTL)
 	t.root.AsControl().SetCustomMinimumSize(Vector2.New(0, 28))
-	row := hbox(2)
-	add(t.root, withMargins(row.AsControl(), 4, 6))
+	// A plain Control does not pass its children's minimum width up, so the
+	// bar never widens the resource pane; the row fills it and is clipped.
+	t.clip = Control.New()
+	t.clip.SetClipContents(true)
+	t.clip.SetMouseFilter(Control.MouseFilterIgnore)
+	t.clip.SetCustomMinimumSize(Vector2.New(0, 24))
+	add(t.root, t.clip)
+	row := hbox(miniSeparation)
+	row.AsControl().SetSizeFlagsHorizontal(Control.SizeExpandFill)
+	bar := withMargins(row.AsControl(), miniMarginLeft, miniMarginRight)
+	t.clip.AsNode().AddChild(bar.AsNode())
+	bar.SetAnchorsAndOffsetsPreset(Control.PresetFullRect)
+	t.clip.OnResized(t.fit)
 
 	t.back = newMiniButton(miniPlain, "skip_back", 22, 24, "Skip to Start")
 	t.back.AsBaseButton().OnPressed(func() {
@@ -69,7 +86,7 @@ func NewMiniTransport() *MiniTransport {
 	t.seek = HSlider.New()
 	t.seek.AsControl().SetSizeFlagsHorizontal(Control.SizeExpandFill)
 	t.seek.AsControl().SetSizeFlagsVertical(Control.SizeShrinkCenter)
-	t.seek.AsControl().SetCustomMinimumSize(Vector2.New(60, 16))
+	t.seek.AsControl().SetCustomMinimumSize(Vector2.New(40, 16))
 	t.seek.AsControl().SetFocusMode(Control.FocusNone)
 	rg := t.seek.AsRange()
 	rg.SetMinValue(0)
@@ -114,8 +131,12 @@ func NewMiniTransport() *MiniTransport {
 			t.OnVolume(float64(v))
 		}
 	})
-	add(row, t.back.AsControl(), t.play.AsControl(), t.fwd.AsControl(), fixed(4, 0), t.seek.AsControl(),
-		fixed(4, 0), t.time.AsControl(), fixed(4, 0), t.volIcon.AsControl(), t.volume.AsControl())
+	t.core = []Control.Instance{t.back.AsControl(), t.play.AsControl(), t.fwd.AsControl(), fixed(4, 0), t.seek.AsControl()}
+	t.timeBox = []Control.Instance{fixed(4, 0), t.time.AsControl()}
+	t.volBox = []Control.Instance{fixed(4, 0), t.volIcon.AsControl(), t.volume.AsControl()}
+	add(row, t.core...)
+	add(row, t.timeBox...)
+	add(row, t.volBox...)
 	t.state.Volume = 1
 	t.render()
 	return t
@@ -156,5 +177,38 @@ func (t *MiniTransport) render() {
 		b.SetDisabled(!s.Enabled)
 	}
 	t.seek.AsSlider().SetEditable(s.Enabled && s.Duration > 0)
+	t.fit() // the time's width follows its text
 	flushCalls(t.root.AsControl())
+}
+
+// The row's spacing (fit adds it up).
+const (
+	miniSeparation  = 2
+	miniMarginLeft  = 4
+	miniMarginRight = 6
+)
+
+// fit shows the time and the volume only when the bar is wide enough for
+// them, the volume going first. It reads the bar's width, which the resource
+// pane decides alone (the clip has no minimum width), so it cannot loop.
+func (t *MiniTransport) fit() {
+	t.time.GetLineCount() // shape the new text before reading its minimum width
+	width := func(parts []Control.Instance) float32 {
+		w := float32(0)
+		for _, c := range parts {
+			w += c.GetCombinedMinimumSize().X + miniSeparation
+		}
+		return w
+	}
+	avail := t.clip.Size().X
+	need := miniMarginLeft + miniMarginRight - miniSeparation + width(t.core) + width(t.timeBox)
+	showTime := need <= avail
+	showVol := showTime && need+width(t.volBox) <= avail
+	for _, c := range t.timeBox {
+		c.AsCanvasItem().SetVisible(showTime)
+	}
+	for _, c := range t.volBox {
+		c.AsCanvasItem().SetVisible(showVol)
+	}
+	flushCalls(t.clip)
 }

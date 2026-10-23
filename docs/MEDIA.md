@@ -186,7 +186,9 @@ the track or a keyboard step seeks at once. Icons: `play`, `pause`, `skip_back`,
 
 EasyWorship's `Frame_VideoControlsMini` under the resource preview: a 28 px mini toolbar with skip to start, a round
 24 px play / pause, skip to end, the progress slider, `0:00 / 0:30` and the volume (an icon and a slider: the
-mute button and the volume dropdown of EasyWorship are folded into it). It is shown while the resource preview
+mute button and the volume dropdown of EasyWorship are folded into it). The bar clips its parts instead of
+widening the pane: when the pane is too narrow it drops the volume, then the time (`MiniTransport.fit`; at the
+default split it shows the time but not the volume). It is shown while the resource preview
 shows a video or audio file (also a theme's video) and drives `RoleResource`: its own decoder, paused at 0, its own
 volume, never the Preview or Live players nor the output. Same dumb-view contract as `ui.Transport`
 (`ui.TransportCallbacks`, `SetState`); the state is `App.pb.resource`, `/state.playback.resource`, and the

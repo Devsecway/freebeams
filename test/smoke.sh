@@ -2706,7 +2706,8 @@ if [ "${PB_PLAYER:-}" = "avfoundation" ] && [ -f "$OUT/playback/smoke-clip.mp4" 
 		fi
 		NOFF_PATH="${NOFF_PATH:+$NOFF_PATH:}$d"
 	done
-	PATH="$NOFF_PATH" command -v ffmpeg >/dev/null && fail "could not hide ffmpeg from PATH"
+	# A subshell: bash answers `PATH=… command -v` from its hash, which still has the ffmpeg run above.
+	(PATH="$NOFF_PATH" && command -v ffmpeg >/dev/null) && fail "could not hide ffmpeg from PATH"
 	NOFF_LIB="$(mktemp -t freebeams-noffmpeg)"
 	NOFF_CACHE="$OUT/noffmpeg-cache"
 	NOFF_LOG="$OUT/app-noffmpeg.log"
