@@ -223,6 +223,7 @@ func (a *App) buildUI() {
 	a.wireAudio()    // the audio playlist under the schedule (audio.go)
 
 	a.wirePreviewStyle() // the Preview Output monitor's context menu (previewstyle.go)
+	a.wireThemePolish()  // video backgrounds, apply-to-schedule, theme files (themepolish.go)
 
 	a.wireDragDrop() // drag and drop into and within the schedule (dragdrop.go)
 
@@ -496,6 +497,7 @@ func (a *App) render() {
 
 	// The Preview Output menu and its media picker (previewstyle.go).
 	a.renderPreviewStyle()
+	a.renderThemePolish()
 
 	// The Bible Manager (biblemanager.go).
 	a.renderBibleManager(&v.bibleMgr)
