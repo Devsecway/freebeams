@@ -23,6 +23,12 @@ const (
 	themeMenuApply
 )
 
+// Sharing themes (theme files, core/themefile.go).
+const (
+	themeMenuExport = iota + 100
+	themeMenuImport
+)
+
 // ThemeRow is one tile of the themes grid.
 type ThemeRow struct {
 	Name string
@@ -49,6 +55,10 @@ type ThemePanel struct {
 	OnSetDefault func(i int, kind models.ItemKind) `gd:"-"`
 	// OnApply applies theme i to the selected schedule item (see SetApplyTarget).
 	OnApply func(i int) `gd:"-"`
+
+	// OnExport saves theme i as a theme file; OnImport adds one.
+	OnExport func(i int) `gd:"-"`
+	OnImport func()      `gd:"-"`
 
 	split    *Splitter
 	library  Tree.Instance
@@ -142,6 +152,9 @@ func (p *ThemePanel) buildMenu(withNew bool) PopupMenu.Instance {
 	m.MoreArgs().AddItem("Edit Theme…", themeMenuEdit, 0)
 	m.MoreArgs().AddItem("Duplicate Theme", themeMenuDuplicate, 0)
 	m.MoreArgs().AddItem("Delete Theme", themeMenuDelete, 0)
+	m.AddSeparator()
+	m.MoreArgs().AddItem("Export Theme…", themeMenuExport, 0)
+	m.MoreArgs().AddItem("Import Theme…", themeMenuImport, 0)
 	m.AddSeparator()
 	m.MoreArgs().AddItem("Set as Songs Default", themeMenuSongDefault, 0)
 	m.MoreArgs().AddItem("Set as Scripture Default", themeMenuScriptureDefault, 0)
@@ -252,7 +265,7 @@ func (p *ThemePanel) enableMenu(m PopupMenu.Instance) {
 	none := p.selected < 0 || p.selected >= len(p.rows)
 	for idx := 0; idx < m.ItemCount(); idx++ {
 		switch m.GetItemId(idx) {
-		case themeMenuEdit, themeMenuDuplicate, themeMenuDelete, themeMenuSongDefault, themeMenuScriptureDefault:
+		case themeMenuEdit, themeMenuDuplicate, themeMenuDelete, themeMenuSongDefault, themeMenuScriptureDefault, themeMenuExport:
 			m.SetItemDisabled(idx, none)
 		case themeMenuApply:
 			m.SetItemDisabled(idx, none || p.applyTarget == "")
@@ -284,6 +297,12 @@ func (p *ThemePanel) menuPressed(id int) {
 		call(func(i int) { p.setDefault(i, models.ItemScripture) })
 	case themeMenuApply:
 		call(p.OnApply)
+	case themeMenuExport:
+		call(p.OnExport)
+	case themeMenuImport:
+		if p.OnImport != nil {
+			p.OnImport()
+		}
 	}
 }
 
