@@ -123,6 +123,11 @@ type MediaState struct {
 
 	// Tags are the selected item's tags (the Properties dialog).
 	Tags string `json:"tags,omitempty"`
+
+	// Volume and Mute are the selected item's own volume (percent; 0 =
+	// none, the monitor's carries over) and Mute (the Properties dialog).
+	Volume int  `json:"volume"`
+	Mute   bool `json:"mute"`
 }
 
 // PresentationsState summarises the Presentations tab.

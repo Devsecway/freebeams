@@ -24,21 +24,101 @@ type Playback struct {
 	Volume  float64 // 0..1
 	SeekSeq int     // bumped by every seek request; render applies SeekTo once per bump
 	SeekTo  float64 // seconds
+
+	// Own reports a playback that started at its item's own volume or Mute
+	// (Background.Volume / Mute). The operator's volume changes stay with
+	// it: the next item without a volume of its own starts at Carry, the
+	// volume the monitor had before (CarriedVolume).
+	Own   bool
+	Carry float64
+
+	// Hidden records whether Black or Logo covered the file when the app
+	// last looked (MonitorMedia's shown, inverted; CoverPlayback acts on
+	// its changes). BlackPaused reports that the Pause on Black option
+	// paused the file then, so leaving Black plays it again.
+	Hidden      bool
+	BlackPaused bool
+}
+
+// NewPlayback is a monitor's playback before anything played: full volume.
+func NewPlayback() Playback { return Playback{Volume: 1} }
+
+// CarriedVolume is the volume the monitor's next item without a volume of
+// its own starts at: the operator's volume, unless this playback runs at
+// its item's own volume (then the volume from before it).
+func (pb Playback) CarriedVolume() float64 {
+	if pb.Own {
+		return pb.Carry
+	}
+	return pb.Volume
+}
+
+// SetPlaying is the operator's play / pause: it also forgets a pause the
+// Pause on Black option made, so leaving Black keeps the operator's choice.
+func (pb *Playback) SetPlaying(on bool) {
+	pb.Playing, pb.BlackPaused = on, false
+}
+
+// StartVolume is the volume bg starts at on a monitor whose carried volume
+// is carry: muted 0, else the item's own volume (percent), else carry. own
+// reports that the item decided it (Mute or a volume of its own).
+func StartVolume(bg models.Background, carry float64) (v float64, own bool) {
+	switch {
+	case bg.Mute:
+		return 0, true
+	case bg.Volume > 0:
+		return ClampVolume(float64(models.ClampMediaVolume(bg.Volume)) / models.MaxMediaVolume), true
+	}
+	return ClampVolume(carry), false
 }
 
 // PlaybackDefaults is the playback a monitor starts with when bg (a video or
 // audio background) arrives: live autoplays, preview waits paused at 0; the
-// item's Loop is the default; the volume carries over from the previous
-// playback (the app starts each monitor at 1.0). A seek request that was
-// never applied stays counted (SeekSeq) so render does not replay it.
+// item's Loop is the default; the volume is the item's (StartVolume: Mute,
+// else its own volume) or carries over from the previous playback (the app
+// starts each monitor at 1.0; an item with a volume of its own does not
+// pass it on). A seek request that was never applied stays counted
+// (SeekSeq) so render does not replay it.
 func PlaybackDefaults(bg models.Background, live bool, prev Playback) Playback {
-	return Playback{Key: bg.Path, Playing: live, Loop: bg.Loop, Volume: prev.Volume, SeekSeq: prev.SeekSeq}
+	carry := prev.CarriedVolume()
+	v, own := StartVolume(bg, carry)
+	pb := Playback{Key: bg.Path, Playing: live, Loop: bg.Loop, Volume: v, SeekSeq: prev.SeekSeq, Own: own}
+	if own {
+		pb.Carry = carry // only kept while the item decides the volume
+	}
+	return pb
 }
 
 // NoPlayback is the playback of a monitor that shows no video or audio: the
-// volume and the seek count carry over for the next item.
+// carried volume and the seek count carry over for the next item.
 func NoPlayback(prev Playback) Playback {
-	return Playback{Volume: prev.Volume, SeekSeq: prev.SeekSeq}
+	return Playback{Volume: prev.CarriedVolume(), SeekSeq: prev.SeekSeq}
+}
+
+// CoverPlayback applies Black and Logo to a monitor's playback (after
+// AdvancePlayback): hidden is whether they cover its file now. With
+// pauseOnBlack (the Pause on Black option, live only) covering a playing
+// file pauses it (BlackPaused), and uncovering plays it again if that
+// pause is still the one Black made; an operator's play or pause in
+// between (SetPlaying) wins. Without the option Black leaves the file
+// playing (EasyWorship's behaviour), but a pause Black made earlier is
+// still undone. Only a change of hidden acts, so the operator can play a
+// file under Black. changed reports a new state.
+func CoverPlayback(pb Playback, hidden, pauseOnBlack bool) (next Playback, changed bool) {
+	if pb.Key == "" {
+		hidden = false
+	}
+	if hidden == pb.Hidden {
+		return pb, false
+	}
+	pb.Hidden = hidden
+	switch {
+	case hidden && pauseOnBlack && pb.Playing:
+		pb.Playing, pb.BlackPaused = false, true
+	case !hidden && pb.BlackPaused:
+		pb.Playing, pb.BlackPaused = true, false
+	}
+	return pb, true
 }
 
 // FrameMedia returns the video or audio background a frame shows, if any: a
@@ -131,6 +211,12 @@ type PlaybackState struct {
 	// Hidden reports a file that plays on under Black or Logo (MonitorMedia):
 	// the output does not show it, the sound and the position go on.
 	Hidden bool `json:"hidden,omitempty"`
+
+	// ItemVolume reports a playback that started at its item's own volume
+	// or Mute (Playback.Own); BlackPaused one that the Pause on Black option
+	// paused and leaving Black plays again.
+	ItemVolume  bool `json:"itemVolume,omitempty"`
+	BlackPaused bool `json:"blackPaused,omitempty"`
 }
 
 // PlaybackStates is the /state document's "playback" object.

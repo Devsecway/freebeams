@@ -42,6 +42,10 @@ type SettingsValues struct {
 
 	// Alerts is Options ▸ Alerts (alertsettings.go).
 	Alerts models.AlertStyles
+
+	// PauseOnBlack is the Logo page's "Pause video and audio under Black
+	// and Logo".
+	PauseOnBlack bool
 }
 
 // ScreenRow is one display in the output picker.
@@ -109,6 +113,9 @@ type SettingsDialog struct {
 	// OnAlertStyles reports a change on the Alerts page.
 	OnAlertStyles func(models.AlertStyles)
 
+	// OnPauseOnBlack reports the Logo page's Pause on Black switch.
+	OnPauseOnBlack func(bool)
+
 	// LogoPreview hosts the app's render of the logo screen (a SlideView).
 	LogoPreview *MonitorHost
 
@@ -134,6 +141,8 @@ type SettingsDialog struct {
 	remoteStatus Label.Instance
 
 	alertCtl alertControls // the Alerts page (alertsettings.go)
+
+	pauseOnBlack CheckBox.Instance // the Logo page's Black and Logo card
 
 	values      SettingsValues
 	screens     []ScreenRow
@@ -323,11 +332,22 @@ func (d *SettingsDialog) buildLogoPage() Control.Instance {
 	add(buttons, choose.AsControl(), def.AsControl())
 	preview := hbox(0)
 	add(preview, d.LogoPreview.AsControl(), spacer())
+	d.pauseOnBlack = CheckBox.New()
+	d.pauseOnBlack.AsButton().SetText("Pause video and audio under Black and Logo")
+	d.pauseOnBlack.AsBaseButton().OnToggled(func(on bool) {
+		if !d.rendering && d.OnPauseOnBlack != nil {
+			d.OnPauseOnBlack(on)
+		}
+	})
 	return page(card("Logo Screen",
 		preview.AsControl(),
 		settingRow("Image", d.logoLbl.AsControl()),
 		buttons.AsControl(),
 		hint("The Logo button (Ctrl+L) shows this image full screen instead of the live slide."),
+	), card("Black and Logo",
+		d.pauseOnBlack.AsControl(),
+		hint("Off: a live clip plays on, with its sound, while Black or Logo covers it (as in EasyWorship). On: Black "+
+			"and Logo pause it, and turning them off plays it again if it was playing."),
 	))
 }
 
@@ -506,6 +526,7 @@ func (d *SettingsDialog) render() {
 	d.logoLbl.SetText(d.values.Logo)
 	d.libLbl.SetText(d.values.LibraryPath)
 	d.importBtn.AsBaseButton().SetDisabled(!d.importAvail)
+	d.pauseOnBlack.AsBaseButton().SetPressedNoSignal(d.values.PauseOnBlack)
 
 	// Remote.
 	d.remoteOn.AsBaseButton().SetPressedNoSignal(d.values.RemoteEnabled)

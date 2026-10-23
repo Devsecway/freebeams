@@ -46,13 +46,15 @@ func (a *App) loadSettings() {
 		get(core.SettingInterfaceColor, &a.settings.InterfaceColor)
 		get(core.SettingAlertStyles, &a.settings.Alerts)
 		get(core.SettingHotkeys, &a.settings.Hotkeys) // hotkeys.go
+		get(core.SettingPauseOnBlack, &a.settings.PauseOnBlack)
 		get(core.SettingRecent, &a.recent)
 	}
 	a.settings = a.settings.Normalized(a.logoDir)
 	a.pres.SetLogo(a.settings.Logo)
 	a.keys.SetKeymap(a.settings.Hotkeys)
-	log.Printf("[freebeams] settings: transition %s; output screen %d; logo %s; %s interface",
-		a.settings.Transition, a.settings.OutputScreen, core.LogoDescription(a.settings.Logo), a.settings.InterfaceColor)
+	log.Printf("[freebeams] settings: transition %s; output screen %d; logo %s; %s interface; pause on black %v",
+		a.settings.Transition, a.settings.OutputScreen, core.LogoDescription(a.settings.Logo), a.settings.InterfaceColor,
+		a.settings.PauseOnBlack)
 }
 
 // saveSetting persists one setting off the main thread.
@@ -145,6 +147,16 @@ func (a *App) setInterfaceColor(color string) error {
 	return nil
 }
 
+// setPauseOnBlack switches Options ▸ Logo's Pause on Black.
+func (a *App) setPauseOnBlack(on bool) {
+	if a.settings.PauseOnBlack == on {
+		return
+	}
+	a.settings.PauseOnBlack = on
+	a.settingsVer++
+	a.saveSetting(core.SettingPauseOnBlack, on)
+}
+
 // openSettings shows the Options dialog on a section (ui.SettingsPage…),
 // remembering the settings so Cancel can restore them. On an open dialog it
 // only switches the section.
@@ -186,6 +198,7 @@ func (a *App) closeSettings(cancel bool) {
 	}
 	a.setAlertStyles(s.Alerts)
 	a.setHotkeys(s.Hotkeys)
+	a.setPauseOnBlack(s.PauseOnBlack)
 }
 
 // logoFilters are the native dialog filters for Choose Image….
@@ -271,6 +284,7 @@ func (a *App) wireSettings() {
 	d.OnChooseLogo = func() { a.event(a.chooseLogoDialog) }
 	d.OnDefaultLogo = func() { a.event(func() { a.setLogo(core.LogoBackground(a.logoDir)) }) }
 	d.OnImportCopyrighted = func() { a.event(func() { a.importCopyrightedBibles(nil, false) }) }
+	d.OnPauseOnBlack = func(on bool) { a.event(func() { a.setPauseOnBlack(on) }) }
 	d.OnOK = func() { a.event(func() { a.closeSettings(false) }) }
 	d.OnCancel = func() { a.event(func() { a.closeSettings(true) }) }
 
@@ -290,6 +304,7 @@ func (a *App) settingsValues() ui.SettingsValues {
 		LibraryPath:  "Library unavailable",
 		Alerts:       a.settings.Alerts,
 	}
+	v.PauseOnBlack = a.settings.PauseOnBlack
 	if a.st() != nil {
 		v.LibraryPath = a.st().Path()
 	}
@@ -415,8 +430,8 @@ func (a *App) handleSettingsCommand(cmd *control.Command, args actionArgs) bool 
 
 // applySetting sets one setting from its JSON value (set-setting {key, value}).
 // Keys are the stored keys or their short forms: transition, output.screen,
-// output.logo (an image path, "" for the default, or a background object) and
-// ui.interfaceColor.
+// output.logo (an image path, "" for the default, or a background object),
+// ui.interfaceColor and playback.pauseOnBlack.
 func (a *App) applySetting(key string, raw json.RawMessage) error {
 	if len(raw) == 0 {
 		return errors.New("set-setting: value is required")
@@ -466,10 +481,16 @@ func (a *App) applySetting(key string, raw json.RawMessage) error {
 		return a.setInterfaceColor(c)
 	case core.SettingStage, "stage":
 		return a.applyStageSetting(raw) // stage.go
+	case core.SettingPauseOnBlack, "pauseOnBlack":
+		var on bool
+		if err := json.Unmarshal(raw, &on); err != nil {
+			return fmt.Errorf("set-setting %s: %w", key, err)
+		}
+		a.setPauseOnBlack(on)
 	case core.SettingAlertStyles, "alerts":
 		return a.applyAlertStyles(key, raw)
 	default:
-		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, stage, remote.enabled, remote.port, alerts)", key)
+		return fmt.Errorf("set-setting: unknown key %q (transition, output.screen, output.logo, ui.interfaceColor, stage, remote.enabled, remote.port, alerts, playback.pauseOnBlack)", key)
 	}
 	return nil
 }

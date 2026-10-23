@@ -56,6 +56,13 @@ type Background struct {
 	// transport bar). A snapshot saved without it does not loop.
 	Fit  MediaAspect `json:"fit,omitempty"`
 	Loop bool        `json:"loop,omitempty"`
+
+	// Volume and Mute are the media item's own starting volume (percent,
+	// 1..100; 0 = none, the monitor's volume carries over) and its Mute
+	// (start silent): see Media.Volume. Like Loop they are defaults the
+	// transport bar can change while the item plays.
+	Volume int  `json:"volume,omitempty"`
+	Mute   bool `json:"mute,omitempty"`
 }
 
 // SlideKind tells the renderer and UI what produced a slide.
