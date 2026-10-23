@@ -132,7 +132,7 @@ Recorded 2026-10-19 on the same machine. "smoke: X" names a check in the `# ----
 | Criterion | Status | Verification |
 |---|---|---|
 | `themes` table (id, name, json of `models.Theme`, created, updated) with CRUD and list | **pass** | Migration 3 (`internal/store/migrations.go`), `internal/store/themes.go`: `SaveTheme` (insert / update, name required, `ErrNotFound` for a missing id), `GetTheme`, `ListThemes` (by name, case-insensitively), `DeleteTheme`, `CountThemes`. `TestThemeCRUD`, `TestListThemesOrder`. |
-| Default theme per item type: settings `theme.default.song` / `theme.default.scripture` | **pass** | `DefaultThemeID`, `SetDefaultTheme` (the theme must exist; only song / scripture), `GetDefaultTheme` (falls back to the built-in `models.Default*Theme()` with ID 0). Deleting a default theme clears its setting. `TestDefaultThemeSettings`. |
+| Default theme per item type: settings `theme.default.song` / `theme.default.scripture` (media and presentations have none on purpose, see "Theme polish") | **pass** | `DefaultThemeID`, `SetDefaultTheme` (the theme must exist; only song / scripture), `GetDefaultTheme` (falls back to the built-in `models.Default*Theme()` with ID 0). Deleting a default theme clears its setting. `TestDefaultThemeSettings`. |
 | Seeded with the built-in defaults on first launch | **pass** | `EnsureDefaultThemes` inserts "Default Song" and "Default Scripture" into an empty library and points the two settings at them; a later launch writes nothing; a cleared setting is re-pointed at the theme of that name (re-inserted when missing). `TestEnsureDefaultThemes`. Smoke: `themes listed (seeded defaults)`; log: `seeded the default themes`. |
 
 ### Themes tab (UI)
@@ -149,7 +149,7 @@ Recorded 2026-10-19 on the same machine. "smoke: X" names a check in the `# ----
 
 | Criterion | Status | Verification |
 |---|---|---|
-| Dialog with background (color / gradient / image via the native file dialog), font family (installed system fonts), size, shrink-to minimum, bold / italic, color, line spacing, outline (on / size / color), shadow (on / offset / blur / color), horizontal / vertical alignment, margins, footer size / color | **pass** | `ui.ThemeEditor` (`internal/ui/themeeditor.go`), a 1020 × 620 `dialogWindow` like the song editor. The font list is `OS.GetSystemFonts()` (hidden "." families dropped, the theme's own family appended when not installed); `Browse…` goes through `OnBrowseImage` → `App.browseThemeImage` (`DisplayServer.FileDialogShow`) → `SetBackgroundImage`. Screenshot `test/out/theme-editor.png`. Smoke: `open the theme editor on it`, `theme editor has content`, `hotkeys are off while the theme editor is open`, `close the theme editor`. Video backgrounds are not offered in the editor (see Remaining). |
+| Dialog with background (color / gradient / image via the native file dialog), font family (installed system fonts), size, shrink-to minimum, bold / italic, color, line spacing, outline (on / size / color), shadow (on / offset / blur / color), horizontal / vertical alignment, margins, footer size / color | **pass** | `ui.ThemeEditor` (`internal/ui/themeeditor.go`), a 1020 × 620 `dialogWindow` like the song editor. The font list is `OS.GetSystemFonts()` (hidden "." families dropped, the theme's own family appended when not installed); `Browse…` goes through `OnBrowseImage` → `App.browseThemeImage` (`DisplayServer.FileDialogShow`) → `SetBackgroundImage`. Screenshot `test/out/theme-editor.png`. Smoke: `open the theme editor on it`, `theme editor has content`, `hotkeys are off while the theme editor is open`, `close the theme editor`. Video backgrounds, the text box band, the font search and the apply choice: see "Theme polish" below. |
 | Field values live in plain Go; the dialog is a projection | **pass** | `ThemeEditor.theme` is the state; every widget signal mutates it through `change()` and one `render()` projects it back with no-signal setters (`set_value_no_signal`, `set_pressed_no_signal`, `OptionButton.select`, `LineEdit.set_text`, `ColorPickerButton.set_pick_color`), ending with a getter so graphics.gd's buffered calls apply at once. |
 | Live preview inside the dialog: a sample lyric with a footer | **pass** | `ThemeEditor.Preview` is a `MonitorHost` slot; the app puts a cut (0 ms) `render.SlideView` in it and `render()` feeds it `editorFrame(a.th.editing)` (Seq 0: compared by content) on every edit (`OnChange`). Visible in `theme-editor.png`. |
 | OK / Cancel / Apply | **pass** | OK validates (name required), hides and calls `OnSave`; Apply calls `OnApply` and stays open (a new theme learns its id from the save, so OK then updates instead of inserting again); Cancel / Esc / the close button call `OnCancel`. `editor {mode: "theme" \| "new-theme" \| "close"}` drive the same paths. |
@@ -347,6 +347,43 @@ the schedule keep their snapshots (EasyWorship's behaviour). The Songs and Scrip
   `RowThumbW`, `Label`); `ui/media.go` and `ui/presentations.go` rebuilt around one menu builder each;
   `ui/itemmenus.go` is new. `mainwindow.go`, `splitter.go`, `monitor.go`, `events.go`, `icons.go` are untouched.
 - `test/smoke.sh`: the `# ---- item menus` block before `# ---- quit`.
+
+### Theme polish
+
+Recorded 2026-10-23 on the same machine. "smoke: X" names a check in the `# ---- theme polish` section of
+`test/smoke.sh` (after `# ---- playback`, before `# ---- song themes`).
+
+| Criterion | Status | Verification |
+|---|---|---|
+| Video backgrounds: a Video option in the editor's background picker (with Library… through the media picker, Browse… for a file outside the library, Clear), a Scale choice (Fill / Fit / Stretch, images too) and Loop | **pass** | `ui.ThemeEditor` (`bgKinds` gains `video`; the File and Scale rows, `SetBackgroundMedia`, `OnPickMedia` / `OnBrowseVideo`); `App.openEditorMediaPicker` reuses `ui.MediaPicker` (its OK is routed to the editor while `thp.pickForEditor`), `core.WithMediaBackground` (`TestMediaTheme`). Smoke: `the editor's Library… takes the clip with a fit`, `back to fill`, `the editor shows the video theme`; screenshot `theme-editor-video.png`. |
+| "Use As Theme Background" on a media tile (images and videos; audio greyed out) | **pass** | `MediaPanel.OnThemeBackground` (`mediaMenuThemeBackground`, own const block). With the editor open it takes the item as the edited background; otherwise a new theme opens on it (the default song theme's text, named after the item, `core.MediaTheme` / `core.UniqueName`). Smoke: `Use As Theme Background opens a new theme on it`, `OK saves the video theme`. Control: `use-as-theme-background {title\|index}` (not a `media-menu` item, to keep that shared switch untouched). |
+| A theme video plays on the output and the live monitor with the text over it; the Themes grid shows the poster | **pass** | `core.FrameMedia` now returns the theme's motion background behind a text slide (the slide's own background still wins), so the playback state machine autoplays it live and keeps the preview monitor paused at frame 0, like a media item; slides of one song share the key, so the video runs on across verses (`TestFrameMediaThemeBackground`). Thumbnails draw the poster (`core.StillBackground`, unchanged). Smoke: `the theme video plays live` (`/state.playback.live` position > 0.3), `the video background moves between frames` (two output captures 0.7 s apart differ), `the text is drawn over the video` (white glyph pixels), `the video is behind it`. Screenshots `theme-video-1.png`, `theme-video-2.png`, `theme-video-main.png`, `theme-video-tab.png`. |
+| EasyWorship's "Apply changes to items in schedule" (UI-SPEC §3 Theme editor footer, `CheckBox_ApplyToSchedule`), remembered | **pass** | A checkbox at the left of the editor footer (hidden in Edit Theme for This Item…), projected from `thp.keepSchedule`, saved as the setting `theme.applyToSchedule` (default on, which is what FreeBeams always did). Off: `App.applyThemeChange` skips `core.RestyleSchedule` and restyles only library decks (`core.ThemeRestyler` / `RestyleLibraryByThemeID`, `TestThemeRestyler`), so a schedule item in Live or Preview keeps its snapshot. Smoke: `uncheck Apply changes to items in schedule`, `the schedule item keeps its look`, `the output keeps the old background`, `the schedule snapshot is unchanged`, `check Apply changes …`, `now the schedule item follows`, `the output follows with apply on`; screenshot `theme-editor-apply.png`. Control: `theme-apply-to-schedule {on}`, `/state.themes.applyToSchedule`. |
+| Font picker with search, each family in its own face | **pass** | `ui.fontPicker` (`internal/ui/fontpicker.go`) replaces the `OptionButton`: a button showing the font in its face, and below the row a search field and a `Tree` of the installed families, each row drawn in its own `SystemFont` (built on first open, owned by the rows). Typing filters (`uicore.FilterFonts`: every word, name-prefix matches first, the theme's own font always kept, `TestFilterFonts`); Enter picks the first match. Godot's `OptionButton.search_bar_enabled` was not used: its popup cannot draw names in their faces and its filtering is invisible to automation. Smoke: `the font list holds every family`, `search geor`, `/state counts the matches`, `a search with no match keeps the theme's own font`, `pick Georgia`; screenshot `theme-editor-fonts.png`. Control: `theme-font-search {q}`, `theme-font {family}`. |
+| Duplicate theme | **pass** | Already there (tile menu and gear, `core.CopyName`); smoke `duplicate Clean Dark`. |
+| Export / import a theme as a `.fbtheme` file, background included | **pass** | `core.ExportThemeFile` / `ImportThemeFile` (`internal/app/core/themefile.go`): a zip with `theme.json` (format, version, theme) and the image or video and a video's poster under `media/` (stored, not recompressed). Import extracts them into `<config>/FreeBeams/Theme Media/<theme name>/` and points the theme there; a background that was missing at export is named in `missing` and the receiver is told which file. Names are made unique ("X 2"). Zip-slip paths, other formats and newer versions are refused (`TestThemeFileRoundTrip`, `TestImportThemeFileRefuses`). UI: Export Theme… / Import Theme… in the tile menu and gear (native Save / Open dialogs). Smoke: `export the copy`, `the theme file is a zip with theme.json`, `import it back`, `the imported theme looks like the exported one`, `a second import gets its own name`, `importing a file that is not a theme is refused`, `export the video theme`, `the imported clip is the exported one`. Control: `export-theme {name, path}`, `import-theme {path, mediaDir}`. |
+| Built-in themes: Clean Dark, Warm Light, High Contrast, Scripture Lower Third | **pass** | `models.BuiltinThemes` (own gradients and colours, no licensed media; every one ≥ 7:1 text contrast, `TestBuiltinThemes`), added once per library by `store.EnsureBuiltinThemes` (setting `theme.builtins` = `models.BuiltinThemesVersion`; a deleted or same-named theme is not re-added, `TestEnsureBuiltinThemes`). The lower third uses the new text box band. Smoke: `the built-in themes are seeded`, per theme `…: the output has content`, `Clean Dark: the dark gradient at the top`, `Warm Light: the cream gradient at the top`, `High Contrast: white words`, `the lower third draws its band`, `the words sit in the bottom third`. Screenshots `builtin-*.png`. |
+| Text box position / size, and a band behind the text | **pass** | Position and size were already there: the four margins are the text box. The editor now states the resulting box ("1728 × 912 at 96, 72", `ui.TextBoxCaption`). New: `models.Theme.Box` (`TextBox`: enabled, colour with alpha, padding, full width; own block, `omitzero`), drawn by `render` as a `ColorRect` between the background / video and the text (`render/textbox.go`, `layout.BandRect`, `TestBandRect`), edited in the editor's Text Box section. |
+| Default themes for media and presentations | **not needed** | A media item is a full-screen image or video with no text, and a presentation page is an image: a theme would contribute only the letterbox colour behind a Fit item, which is black on purpose (`models.DefaultMediaTheme`, `DefaultPresentationTheme`). `store.DefaultThemeKinds` stays songs and scriptures; Options ▸ Themes and `set-default-theme {kind:"media"}` keep refusing them. |
+
+### Shared files touched (theme polish)
+
+- New: `internal/app/themepolish.go`, `internal/app/core/themepolish.go` and `themefile.go` (+ tests),
+  `internal/models/builtinthemes.go` (+ test), `internal/store/builtinthemes.go` (+ test),
+  `internal/render/textbox.go`, `internal/render/layout/textbox.go` (+ test), `internal/ui/fontpicker.go`,
+  `internal/ui/themeeditor_polish.go`, `internal/ui/uicore/fontfilter.go` (+ test).
+- `internal/models/theme.go` (`Theme.Box` in its own block). `models.Background` is unchanged (its `Fit` / `Loop` are
+  what the editor sets).
+- `internal/render/slideview.go` (the `band` field in its own block, one line each in `newLayer` and `apply`).
+- `internal/app/core/playback.go` (`FrameMedia` reads the theme background), `core/themes.go` (`ThemesState` block).
+- `internal/app/app.go` (the `thp` field), `view.go` (`wireThemePolish`, `renderThemePolish`), `themes.go`
+  (`seedThemePolish` in `initThemes`, the apply choice in `applyThemeChange`, `handleThemePolishCommand`,
+  `themePolishStateDoc`).
+- `internal/ui/themeeditor.go` (the font picker, Video / Scale rows, the footer checkbox), `themes.go` (Export /
+  Import entries, own const block), `media.go` (Use As Theme Background: own const and field blocks, one case each
+  in `enableMenu` / `menuPressed`).
+- `test/smoke.sh`: theme counts in `# ---- themes` and `# ---- song themes` (6 seeded themes), the new
+  `# ---- theme polish` block.
 
 ## Per-song themes
 
@@ -805,14 +842,14 @@ Recorded 2026-10-22 on the same machine. Formats, policy and behaviour: [BIBLES.
   thumbnail), a per-item Repeat / Aspect property (`models.Background.Loop` is the hook), keeping a video's
   position across Black (today a Black longer than the fade re-opens the file from 0), a transport in the resource
   preview (UI-SPEC §3 mentions mini controls there).
-- **Themes polish**: a video background in the editor ("use as background" from the Media tab is the natural
-  hook: `Media.Background()`), the font picker's search bar (`OptionButton.search_bar_enabled`, Godot 4.7) once the
-  list grows, importing EasyWorship's per-song themes (needs a library whose songs have them, see "Per-song
-  themes"), and EasyWorship's "Apply changes to items in schedule" choice (today a saved theme always
-  restyles the schedule items that use it).
+- **Themes polish**: importing EasyWorship's per-song themes (needs a library whose songs have them, see
+  "Per-song themes"); a theme video off macOS (the ffmpeg player plays the source, the Theora fallback needs a
+  transcode that theme backgrounds do not look up yet); a poster for a theme video browsed from outside the
+  library (its tiles show the plain colour); a drag handle for the text box on the preview (the margins are
+  numbers only).
 - **Settings**: the Options dialog has Output, Transition (with Zoom), Logo, Library, editable Hotkeys and default
   Themes per item type. Still open: EasyWorship's separate Black / Clear / Logo transitions (one transition serves
-  all), default themes for media and presentations (they have no theme setting yet), per-item transitions, and
+  all), per-item transitions (default themes for media and presentations are not needed, see "Theme polish"), and
   telling ⌘ and Ctrl apart in a binding (they are one chord). The native menus cannot be driven by automation (the
   `menu {item}` action covers the handlers).
 - **Packaging** (PLAN §4 M6): the release build, scripts, CI workflows and docs are in place, see
