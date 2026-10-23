@@ -209,3 +209,24 @@ func TestMediaAspectAndRepeat(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeTagsAndProperties(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"", ""},
+		{"intro", "intro"},
+		{" walk  in ,Calm;calm\nIntro", "walk in, Calm, Intro"},
+		{",,", ""},
+	} {
+		if got := NormalizeTags(tc.in); got != tc.want {
+			t.Errorf("NormalizeTags(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	m := Media{Title: "Clip", Kind: MediaAudio}
+	if p := m.Properties(); p.Aspect != AspectFill || p.Repeat != RepeatOnce {
+		t.Fatalf("audio properties = %+v (play once by default)", p)
+	}
+	n := m.WithProperties(MediaProperties{Title: "  ", Tags: "a,A", Aspect: "zoom", Repeat: RepeatLoop})
+	if n.Title != "Clip" || n.Tags != "a" || n.Aspect != "" || n.Repeat != RepeatLoop {
+		t.Fatalf("WithProperties = %+v", n)
+	}
+}

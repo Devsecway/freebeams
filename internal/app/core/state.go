@@ -120,6 +120,9 @@ type MediaState struct {
 	// "avfoundation" (macOS, ffmpeg for what it cannot read), "ffmpeg" or ""
 	// (none: videos show a plain tile).
 	Posters string `json:"posters"`
+
+	// Tags are the selected item's tags (the Properties dialog).
+	Tags string `json:"tags,omitempty"`
 }
 
 // PresentationsState summarises the Presentations tab.
@@ -172,6 +175,9 @@ type DialogState struct {
 
 	// StageMessage reports Live ▸ Stage Message… being open.
 	StageMessage bool `json:"stageMessage,omitempty"`
+
+	// MediaProperties reports the media tile's Edit Properties… being open.
+	MediaProperties bool `json:"mediaProperties,omitempty"`
 
 	// AlertDialog names the topmost open alert dialog: alert-manager,
 	// alert-editor, alert-fill, nursery or countdown ("" when none).

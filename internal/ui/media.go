@@ -38,6 +38,9 @@ const (
 // Use As Theme Background (images and videos; app/themepolish.go).
 const mediaMenuThemeBackground = 200
 
+// Edit Properties… (EasyWorship's Edit Video / Audio Properties; mediaprops.go).
+const mediaMenuProperties = 201
+
 // MediaRow is one tile of the media grid.
 type MediaRow struct {
 	Title string
@@ -98,6 +101,9 @@ type MediaPanel struct {
 	OnView           func(view string)
 	OnSort           func(sort string)
 	OnRefresh        func()
+
+	// OnProperties opens Edit Properties… for tile i.
+	OnProperties func(i int)
 
 	// OnAddToPlaylist is Add to Audio Playlist (audio tiles only).
 	OnAddToPlaylist func(i int)
@@ -230,6 +236,7 @@ func (p *MediaPanel) buildMenu() *mediaMenu {
 	pm.MoreArgs().AddItem("Go Live", mediaMenuGoLive, 0)
 	pm.MoreArgs().AddItem("Add to Audio Playlist", mediaMenuAddToPlaylist, 0)
 	pm.AddSeparator()
+	pm.MoreArgs().AddItem("Edit Properties…", mediaMenuProperties, 0)
 	m.aspect = newRadioMenu(pm, "AspectRatio", "Aspect Ratio", mediaMenuAspect, aspectChoices, func(v string) {
 		p.withSelected(func(i int) {
 			if p.OnAspect != nil {
@@ -409,7 +416,7 @@ func (p *MediaPanel) render() {
 func (p *MediaPanel) projectMenu(m *mediaMenu, sel *MediaRow) {
 	aspect, repeat, video := models.AspectFill, models.RepeatLoop, false
 	if sel != nil {
-		aspect, repeat, video = sel.Aspect.Normalized(), sel.Repeat.Normalized(), sel.Kind == models.MediaVideo
+		aspect, repeat, video = sel.Aspect.Normalized(), sel.Repeat.Normalized(), sel.Kind.Plays()
 	}
 	m.aspect.setChecked(string(aspect))
 	m.repeat.setChecked(string(repeat))
@@ -422,11 +429,11 @@ func (p *MediaPanel) projectMenu(m *mediaMenu, sel *MediaRow) {
 // Repeating ▸ for a still) before the menu opens.
 func (p *MediaPanel) enableMenu(m *mediaMenu) {
 	none := p.selected < 0 || p.selected >= len(p.rows)
-	video := !none && p.rows[p.selected].Kind == models.MediaVideo
+	video := !none && p.rows[p.selected].Kind.Plays() // Repeating: videos and audio
 	for idx := 0; idx < m.menu.ItemCount(); idx++ {
 		switch m.menu.GetItemId(idx) {
 		case mediaMenuAddToSchedule, mediaMenuGoLive, mediaMenuRemove, mediaMenuDeleteFile, mediaMenuLogo,
-			mediaMenuUpdateSchedule, mediaMenuReveal, mediaMenuAspect:
+			mediaMenuUpdateSchedule, mediaMenuReveal, mediaMenuAspect, mediaMenuProperties:
 			m.menu.SetItemDisabled(idx, none)
 		case mediaMenuRepeat:
 			m.menu.SetItemDisabled(idx, !video)
@@ -470,6 +477,8 @@ func (p *MediaPanel) menuPressed(id int) {
 		call(p.OnAddToPlaylist)
 	case mediaMenuThemeBackground:
 		call(p.OnThemeBackground)
+	case mediaMenuProperties:
+		call(p.OnProperties)
 	case mediaMenuRefresh:
 		if p.OnRefresh != nil {
 			p.OnRefresh()

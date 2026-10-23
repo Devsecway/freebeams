@@ -89,6 +89,9 @@ type MainWindow struct {
 	// StageMessage is Live ▸ Stage Message… (stage_message.go).
 	StageMessage *StageMessageDialog `gd:"-"`
 
+	// MediaProperties is the media tile menu's Edit Properties… (mediaprops.go).
+	MediaProperties *MediaPropertiesDialog `gd:"-"`
+
 	// AudioPlaylist is the background audio under the schedule (playlist.go).
 	AudioPlaylist *AudioPlaylist `gd:"-"`
 
@@ -160,6 +163,7 @@ func NewMainWindow(p Palette) *MainWindow {
 	w.buildAlertDialogs()
 	w.buildPreviewMenu()
 	w.BibleManager = NewBibleManager()
+	w.MediaProperties = NewMediaPropertiesDialog()
 	for _, d := range w.dialogs() {
 		d.host = w.dialogHost
 		d.setTheme(theme)
@@ -172,7 +176,7 @@ func NewMainWindow(p Palette) *MainWindow {
 // dialogs lists the dialog windows.
 func (w *MainWindow) dialogs() []*dialogWindow {
 	return append([]*dialogWindow{w.Editor.dlg, w.ThemeEditor.dlg, w.Settings.dlg, w.Confirm.dlg, w.Message.dlg, w.StageMessage.dlg, w.Remote.dlg},
-		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg, w.Editor.sp.dlg.dlg, w.BibleManager.dlg)...)
+		append(w.alertDialogs(), w.ColorDialog.dlg, w.MediaPicker.dlg, w.Editor.sp.dlg.dlg, w.BibleManager.dlg, w.MediaProperties.dlg)...)
 }
 
 // dialogName names a dialog window node for TopDialogHost.
@@ -207,6 +211,9 @@ func (w *MainWindow) dialogName(n Node.Instance) string {
 	}
 	if n.ID() == w.BibleManager.dlg.win.AsNode().ID() {
 		return "bible-manager"
+	}
+	if n.ID() == w.MediaProperties.dlg.win.AsNode().ID() {
+		return "media-properties"
 	}
 	return "other"
 }

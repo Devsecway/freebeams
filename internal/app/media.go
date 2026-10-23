@@ -189,6 +189,7 @@ func (a *App) mediaStateDoc() core.MediaState {
 	if a.md.item != nil {
 		st.Current = a.md.item.Title
 		st.Aspect, st.Repeat = string(a.md.item.Aspect.Normalized()), string(a.md.item.Repeat.Normalized())
+		st.Tags = a.md.item.Tags
 	}
 	st.View, st.Sort = string(a.md.view), string(a.md.sort)
 	for _, m := range a.md.list {
@@ -524,6 +525,7 @@ func (a *App) runMediaWork(ctx context.Context, st *store.Store, proc *media.Pro
 		// since this pass read it (menus_items.go): keep the current choices.
 		if cur, err := st.GetMedia(ctx, m.ID); err == nil {
 			m.Aspect, m.Repeat = cur.Aspect, cur.Repeat
+			m.Title, m.Tags = cur.Title, cur.Tags // the Properties dialog too
 		}
 		if err := st.SaveMedia(ctx, &m); err != nil {
 			a.post(func() { a.fail("save media "+m.Title, err) })

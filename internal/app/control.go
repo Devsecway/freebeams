@@ -50,6 +50,7 @@ func (a *App) state() core.State {
 		dialog.SongEditorTheme = a.win.Editor.ThemeName()
 	}
 	dialog.StageMessage = a.win.StageMessage.Visible()
+	dialog.MediaProperties = a.win.MediaProperties.Visible()
 	if m := a.win.Message; m.Visible() {
 		dialog.Message = &core.Alert{Title: m.Title(), Message: m.Text()}
 	}
@@ -227,6 +228,11 @@ type actionArgs struct {
 	// The Bible Manager (biblemanager.go): bible-add / bible-remove /
 	// bible-save-package / bible-select {abbrev}.
 	Abbrev string `json:"abbrev"`
+
+	// The media Properties dialog (mediaprops.go): media-properties {props}
+	// fills it and presses OK, {cancel: true} presses Cancel.
+	Props  *models.MediaProperties `json:"props"`
+	Cancel bool                    `json:"cancel"`
 }
 
 var errArgs = errors.New("missing or invalid arguments")
@@ -585,7 +591,7 @@ func (a *App) handleCommand(cmd *control.Command) {
 		if a.handleBibleManagerCommand(cmd, args) { // biblemanager.go
 			return
 		}
-		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleStageCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleAudioCommand(cmd, args) && !a.handleHook(cmd, args) {
+		if !a.handleThemeCommand(cmd, args) && !a.handleSettingsCommand(cmd, args) && !a.handleItemMenuCommand(cmd, args) && !a.handleMediaPropsCommand(cmd, args) && !a.handlePlaybackCommand(cmd, args) && !a.handleStageCommand(cmd, args) && !a.handleRemoteCommand(cmd, args) && !a.handleAlertsCommand(cmd, args) && !a.handleAudioCommand(cmd, args) && !a.handleHook(cmd, args) {
 			cmd.RespondErr(fmt.Errorf("unknown action %q", cmd.Action))
 		}
 	}

@@ -128,6 +128,9 @@ type App struct {
 	songRes resourcePreview // the Scriptures preview derives from verseSelection
 
 	md mediaState // the Media tab (media.go)
+
+	mdProps propsFor // the media item the Properties dialog edits (mediaprops.go)
+
 	th themeState // the Themes tab and theme editor (themes.go)
 
 	pr presentationState // the Presentations tab (presentations.go)
