@@ -17,6 +17,7 @@ bin/release-dmg         # the app + an Applications link as releases/FreeBeams-<
 bin/version             # the release version (config/version in graphics/project.godot)
 test/smoke.sh           # end to end through the control API; screenshots and app.log in test/out/
 test/splitters.sh       # drags every splitter through Godot's input pipeline (the layout-crash regression test)
+test/rehearsal.sh       # a whole Sunday service on a fresh library, 3 passes: memory, log and clean-quit checks
 ```
 Releases: `docs/RELEASE.md` (scripts in `bin/`, Inno Setup and AppImage recipes in `packaging/`, GitHub Actions in
 `.github/workflows/`). The icon set is generated from `graphics/icon.svg` by `packaging/icons/make-icons.sh`.
